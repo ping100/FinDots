@@ -19,6 +19,7 @@ import { formatMoney, monthLabel, monthRange } from "@/lib/money";
 import type { Category, DragPayload, Wallet, WalletKind } from "@/lib/types";
 import { useStore } from "./DataProvider";
 import { AmountSheet } from "./AmountSheet";
+import { DailyAllowance } from "./DailyAllowance";
 import { CategoryEditor } from "./CategoryEditor";
 import { WalletEditor } from "./WalletEditor";
 import { WalletSheet } from "./WalletSheet";
@@ -203,6 +204,10 @@ export function HomeScreen() {
             <span className="text-lg leading-none">···</span>
           </button>
         </header>
+
+        {/* Только для текущего месяца: для прошедших «сколько можно сегодня»
+            смысла не имеет. */}
+        {offset === 0 && moneyWallets.length > 0 ? <DailyAllowance /> : null}
 
         <Section
           title="Доходы"

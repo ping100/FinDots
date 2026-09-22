@@ -774,21 +774,34 @@ function DragGhost({ payload }: { payload: DragPayload }) {
       : categories.find((c) => c.id === payload.categoryId);
   if (!item) return null;
 
-  // Призрак — плотная «монета» с суммой: подпись цели под ним остаётся читаемой.
+  // dnd-kit растягивает слой перетаскивания по рамке исходной кнопки, а не
+  // по содержимому. Поэтому призрак не рисуем в потоке, а центрируем внутри
+  // этой рамки — иначе он съезжает вниз-вправо и налезает на сам кружок.
   return (
-    <div
-      className="pointer-events-none flex items-center gap-2 rounded-full py-1.5 pl-1.5 pr-3.5 shadow-2xl"
-      style={{ background: "var(--surface)", border: `2px solid ${item.color}` }}
-    >
-      <span
-        className="flex h-11 w-11 items-center justify-center rounded-full text-white"
-        style={{ background: item.color }}
+    <div className="pointer-events-none relative h-full w-full">
+      {/* Приподнят над точкой касания: иначе палец и сам призрак закрывают
+          кружок, на который целишься. Попадание считается по указателю,
+          так что сдвиг ни на что не влияет. */}
+      <div
+        className="absolute left-1/2 top-1/2 flex flex-col items-center gap-1.5"
+        style={{ transform: "translate(-50%, calc(-50% - 26px))" }}
       >
-        <Icon name={item.icon} size={22} />
-      </span>
-      <span className="whitespace-nowrap text-sm font-bold tabular-nums">
-        {formatMoney(payload.available, payload.currency)}
-      </span>
+        <span
+          className="flex h-[60px] w-[60px] items-center justify-center rounded-full text-white"
+          style={{
+            background: item.color,
+            boxShadow: `0 10px 26px ${item.color}66, 0 0 0 4px var(--surface)`,
+          }}
+        >
+          <Icon name={item.icon} size={28} />
+        </span>
+        <span
+          className="whitespace-nowrap rounded-full px-2.5 py-1 text-[12px] font-bold tabular-nums shadow-lg"
+          style={{ background: "var(--surface)", border: `1px solid ${item.color}` }}
+        >
+          {formatMoney(payload.available, payload.currency)}
+        </span>
+      </div>
     </div>
   );
 }

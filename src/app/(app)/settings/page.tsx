@@ -3,17 +3,20 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AI_MODELS } from "@/lib/aiModels";
-import { CURRENCIES, parseAmount } from "@/lib/money";
+import { Icon } from "@/lib/icons";
+import { CURRENCIES, parseAmount, symbolOf } from "@/lib/money";
 import { createClient } from "@/lib/supabase/client";
 import { useStore } from "@/components/DataProvider";
-import { Button, Field, inputClass, inputStyle } from "@/components/ui";
+import { Button, Field, Sheet, inputClass, inputStyle } from "@/components/ui";
 
 export default function SettingsPage() {
   const router = useRouter();
   const { profile, rates, saveProfile, saveRate } = useStore();
+  const [sheet, setSheet] = useState<"currency" | "rates" | "theme" | "model" | null>(null);
   const [model, setModel] = useState(profile?.ai_model ?? AI_MODELS[0].id);
 
   const base = profile?.base_currency ?? "KZT";
+  const modelLabel = AI_MODELS.find((m) => m.id === profile?.ai_model)?.label ?? profile?.ai_model;
 
   const signOut = async () => {
     await createClient().auth.signOut();
@@ -22,19 +25,62 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-md px-4 pb-28 pt-3">
-      <h1 className="mb-4 text-xl font-bold">Настройки</h1>
+    <div className="mx-auto w-full max-w-md px-4 pb-32">
+      <h1 className="py-2 text-[26px] font-bold">Настройки</h1>
 
-      <Card title="Основная валюта" hint="В ней считаются итоги и сравнение месяцев">
-        <div className="flex gap-2">
+      <Group>
+        <Row
+          label="Аккаунт"
+          value={profile?.display_name ?? undefined}
+          hint="Данные привязаны к этой учётной записи и видны только вам"
+        />
+        <Row
+          label="Основная валюта"
+          value={`${symbolOf(base)} ${base}`}
+          onClick={() => setSheet("currency")}
+        />
+        <Row
+          label="Курсы валют"
+          hint="Задаются вручную — автоподгрузки курсов нет"
+          onClick={() => setSheet("rates")}
+        />
+        <Row
+          label="Тема"
+          value={profile?.theme === "dark" ? "Тёмная" : "Светлая"}
+          onClick={() => setSheet("theme")}
+        />
+      </Group>
+
+      <Group>
+        <Row
+          label="Модель для разбора бюджета"
+          value={modelLabel}
+          hint="Через OpenRouter, есть бесплатные"
+          onClick={() => setSheet("model")}
+        />
+      </Group>
+
+      <Group>
+        <Row label="Выйти" danger onClick={signOut} />
+      </Group>
+
+      <p className="mt-5 text-center text-[11px]" style={{ color: "var(--muted)" }}>
+        Кошельки и категории правятся на «Панели»: тап по кошельку, долгое
+        нажатие на категории расхода, «Настроить категорию» в окне дохода.
+      </p>
+
+      <Sheet open={sheet === "currency"} title="Основная валюта" onClose={() => setSheet(null)}>
+        <div className="flex gap-2 pb-2">
           {CURRENCIES.map((c) => (
             <button
               key={c.code}
-              onClick={() => saveProfile({ base_currency: c.code })}
-              className="flex-1 rounded-2xl border px-3 py-2.5 text-sm"
+              onClick={() => {
+                void saveProfile({ base_currency: c.code });
+                setSheet(null);
+              }}
+              className="flex-1 rounded-2xl px-3 py-3 text-sm"
               style={{
                 background: base === c.code ? "var(--accent)" : "var(--surface-2)",
-                borderColor: base === c.code ? "var(--accent)" : "var(--border)",
                 color: base === c.code ? "#fff" : "inherit",
               }}
             >
@@ -42,12 +88,12 @@ export default function SettingsPage() {
             </button>
           ))}
         </div>
-      </Card>
+      </Sheet>
 
-      <Card
-        title="Курсы валют"
-        hint={`Сколько ${base} стоит одна единица валюты. Правится вручную — автоподгрузки курсов нет.`}
-      >
+      <Sheet open={sheet === "rates"} title="Курсы валют" onClose={() => setSheet(null)}>
+        <p className="mb-3 text-xs" style={{ color: "var(--muted)" }}>
+          Сколько {base} стоит одна единица валюты.
+        </p>
         {CURRENCIES.filter((c) => c.code !== base).map((c) => (
           <RateRow
             key={c.code}
@@ -57,18 +103,20 @@ export default function SettingsPage() {
             onSave={(v) => saveRate(c.code, v)}
           />
         ))}
-      </Card>
+      </Sheet>
 
-      <Card title="Тема">
-        <div className="flex gap-2">
-          {(["dark", "light"] as const).map((theme) => (
+      <Sheet open={sheet === "theme"} title="Тема" onClose={() => setSheet(null)}>
+        <div className="flex gap-2 pb-2">
+          {(["light", "dark"] as const).map((theme) => (
             <button
               key={theme}
-              onClick={() => saveProfile({ theme })}
-              className="flex-1 rounded-2xl border px-3 py-2.5 text-sm"
+              onClick={() => {
+                void saveProfile({ theme });
+                setSheet(null);
+              }}
+              className="flex-1 rounded-2xl px-3 py-3 text-sm"
               style={{
                 background: profile?.theme === theme ? "var(--accent)" : "var(--surface-2)",
-                borderColor: profile?.theme === theme ? "var(--accent)" : "var(--border)",
                 color: profile?.theme === theme ? "#fff" : "inherit",
               }}
             >
@@ -76,75 +124,121 @@ export default function SettingsPage() {
             </button>
           ))}
         </div>
-      </Card>
+      </Sheet>
 
-      <Card title="Модель для разбора бюджета" hint="Через OpenRouter. Со значком «free» — бесплатные.">
-        <select
-          className={inputClass + " mb-2"}
-          style={inputStyle}
-          value={AI_MODELS.some((m) => m.id === model) ? model : "custom"}
-          onChange={(e) => {
-            if (e.target.value === "custom") return;
-            setModel(e.target.value);
-            void saveProfile({ ai_model: e.target.value });
-          }}
-        >
+      <Sheet
+        open={sheet === "model"}
+        title="Модель"
+        onClose={() => setSheet(null)}
+        footer={
+          <Button
+            onClick={() => {
+              void saveProfile({ ai_model: model });
+              setSheet(null);
+            }}
+          >
+            Сохранить
+          </Button>
+        }
+      >
+        <div className="mb-3 space-y-2">
           {AI_MODELS.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.label}
-              {m.free ? " · free" : ""}
-            </option>
+            <button
+              key={m.id}
+              onClick={() => setModel(m.id)}
+              className="flex w-full items-center gap-2 rounded-2xl px-4 py-3 text-left text-sm"
+              style={{
+                background: model === m.id ? "var(--accent)" : "var(--surface-2)",
+                color: model === m.id ? "#fff" : "inherit",
+              }}
+            >
+              <span className="flex-1">{m.label}</span>
+              {m.free ? (
+                <span
+                  className="rounded-full px-2 py-0.5 text-[10px] font-bold"
+                  style={{
+                    background: model === m.id ? "rgba(255,255,255,0.25)" : "var(--ok)",
+                    color: "#fff",
+                  }}
+                >
+                  free
+                </span>
+              ) : null}
+            </button>
           ))}
-          <option value="custom">Другая — вписать вручную</option>
-        </select>
-        <input
-          className={inputClass}
-          style={inputStyle}
-          value={model}
-          onChange={(e) => setModel(e.target.value)}
-          onBlur={() => saveProfile({ ai_model: model })}
-          placeholder="идентификатор модели OpenRouter"
-        />
-      </Card>
-
-      <Card title="Аккаунт" hint={profile?.display_name ?? undefined}>
-        <Button variant="ghost" onClick={signOut}>
-          Выйти
-        </Button>
-      </Card>
-
-      <p className="mt-6 text-center text-[11px]" style={{ color: "var(--muted)" }}>
-        Категории и кошельки правятся на главном экране: тап по кошельку, долгое
-        нажатие на категорию.
-      </p>
+        </div>
+        <Field
+          label="Или вписать идентификатор вручную"
+          hint="Пригодится, когда OpenRouter переименует модель"
+        >
+          <input
+            className={inputClass}
+            style={inputStyle}
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+          />
+        </Field>
+      </Sheet>
     </div>
   );
 }
 
-function Card({
-  title,
-  hint,
-  children,
-}: {
-  title: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
+function Group({ children }: { children: React.ReactNode }) {
   return (
-    <section
-      className="mb-4 rounded-3xl p-4"
-      style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
-    >
-      <h2 className="text-sm font-semibold">{title}</h2>
-      {hint ? (
-        <p className="mb-3 mt-0.5 text-[11px]" style={{ color: "var(--muted)" }}>
-          {hint}
-        </p>
-      ) : (
-        <div className="mb-3" />
-      )}
+    <div className="mb-4 overflow-hidden rounded-2xl" style={{ background: "var(--surface)" }}>
       {children}
-    </section>
+    </div>
+  );
+}
+
+function Row({
+  label,
+  value,
+  hint,
+  danger,
+  onClick,
+}: {
+  label: string;
+  value?: string;
+  hint?: string;
+  danger?: boolean;
+  onClick?: () => void;
+}) {
+  const content = (
+    <>
+      <span className="flex-1">
+        <span className="block text-[15px]" style={{ color: danger ? "var(--danger)" : undefined }}>
+          {label}
+        </span>
+        {hint ? (
+          <span className="mt-0.5 block text-[11px] leading-snug" style={{ color: "var(--muted)" }}>
+            {hint}
+          </span>
+        ) : null}
+      </span>
+      {value ? (
+        <span className="text-[15px]" style={{ color: "var(--muted)" }}>
+          {value}
+        </span>
+      ) : null}
+      {onClick && !danger ? (
+        <Icon name="chevron-right" size={16} className="opacity-30" />
+      ) : null}
+    </>
+  );
+
+  const className =
+    "flex w-full items-center gap-3 px-4 py-3.5 text-left [&:not(:first-child)]:border-t";
+  const style = { borderColor: "var(--border)" };
+
+  return onClick ? (
+    <button onClick={onClick} className={className} style={style}>
+      {content}
+    </button>
+  ) : (
+    <div className={className} style={style}>
+      {content}
+    </div>
   );
 }
 

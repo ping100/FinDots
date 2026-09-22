@@ -14,12 +14,12 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   viewportFit: "cover",
-  themeColor: "#0b0f16",
+  themeColor: "#f2f2f7",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ru" className="dark">
+    <html lang="ru">
       <body>
         {children}
         <RegisterSW />

@@ -71,7 +71,10 @@ export function monthRange(offset = 0): { from: Date; to: Date } {
   return { from, to };
 }
 
-export function monthLabel(offset = 0): string {
+/** «сентябрь» или «сентябрь 2025», без хвоста « г.» из локали. */
+export function monthLabel(offset = 0, withYear = false): string {
   const { from } = monthRange(offset);
-  return from.toLocaleDateString("ru-RU", { month: "long", year: "numeric" });
+  const name = from.toLocaleDateString("ru-RU", { month: "long" });
+  const sameYear = from.getFullYear() === new Date().getFullYear();
+  return withYear || !sameYear ? `${name} ${from.getFullYear()}` : name;
 }

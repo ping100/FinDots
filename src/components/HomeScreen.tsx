@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
   DndContext,
   DragOverlay,
@@ -14,14 +15,14 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { Icon } from "@/lib/icons";
-import { formatCompact, formatMoney, monthRange } from "@/lib/money";
-import type { Category, DragPayload, Wallet } from "@/lib/types";
+import { formatCompact, formatMoney, monthLabel, monthRange } from "@/lib/money";
+import type { Category, DragPayload, Wallet, WalletKind } from "@/lib/types";
 import { useStore } from "./DataProvider";
 import { AmountSheet } from "./AmountSheet";
 import { CategoryEditor } from "./CategoryEditor";
 import { WalletEditor } from "./WalletEditor";
 import { WalletSheet } from "./WalletSheet";
-import { Bubble } from "./ui";
+import { AddBubble, Bubble, Button, PickerSheet, Sheet } from "./ui";
 
 type Dialog =
   | { kind: "income"; category: Category }
@@ -30,23 +31,36 @@ type Dialog =
   | { kind: "transfer"; from: Wallet; to: Wallet }
   | null;
 
+/** Долги показаны на главной двумя сводными кружками, как в референсе. */
+type DebtGroup = "debt_out" | "debt_in";
+
+const DEBT_GROUP: Record<DebtGroup, { label: string; icon: string; color: string }> = {
+  debt_out: { label: "Долги −", icon: "cash", color: "#e5383b" },
+  debt_in: { label: "Долги +", icon: "cash", color: "#e5383b" },
+};
+
 export function HomeScreen() {
-  const store = useStore();
   const {
     profile, wallets, categories, transactions,
     balanceOf, poolOf, toBase,
-    addIncome, allocate, addExpense, addTransfer,
-  } = store;
+    addIncome, allocate, addExpense, addTransfer, saveProfile,
+  } = useStore();
 
+  const [offset, setOffset] = useState(0);
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [dragging, setDragging] = useState<DragPayload | null>(null);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [walletSheet, setWalletSheet] = useState<Wallet | null>(null);
-  const [walletEditor, setWalletEditor] = useState<{ wallet?: Wallet | null } | null>(null);
+  const [walletEditor, setWalletEditor] =
+    useState<{ wallet?: Wallet | null; kind?: WalletKind } | null>(null);
   const [categoryEditor, setCategoryEditor] =
     useState<{ kind: "income" | "expense"; category?: Category | null } | null>(null);
+  const [debtPicker, setDebtPicker] =
+    useState<{ group: DebtGroup; payFrom?: Wallet } | null>(null);
+  const [monthPicker, setMonthPicker] = useState(false);
+  const [menu, setMenu] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
-  // Подсказка о запрещённом переносе гаснет сама.
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(null), 3500);
@@ -61,56 +75,53 @@ export function HomeScreen() {
     }),
   );
 
+  const base = profile?.base_currency ?? "KZT";
   const incomeCats = categories.filter((c) => c.kind === "income");
   const expenseCats = categories.filter((c) => c.kind === "expense");
   const moneyWallets = wallets.filter((w) => w.kind === "cash" || w.kind === "card");
+  const debts = useMemo(
+    () => ({
+      debt_out: wallets.filter((w) => w.kind === "debt_out"),
+      debt_in: wallets.filter((w) => w.kind === "debt_in"),
+    }),
+    [wallets],
+  );
 
-  /** Траты текущего и прошлого месяца в базовой валюте, по категориям. */
-  const spend = useMemo(() => {
-    const current = new Map<string, number>();
-    const previous = new Map<string, number>();
-    const thisMonth = monthRange(0);
-    const lastMonth = monthRange(-1);
-
+  /** Суммы выбранного месяца по категориям, в базовой валюте. */
+  const month = useMemo(() => {
+    const { from, to } = monthRange(offset);
+    const income = new Map<string, number>();
+    const expense = new Map<string, number>();
     for (const t of transactions) {
-      if (t.type !== "expense" || !t.category_id) continue;
       const at = new Date(t.occurred_at);
+      if (at < from || at >= to) continue;
       const value = toBase(Number(t.amount), t.currency);
-      if (at >= thisMonth.from && at < thisMonth.to) {
-        current.set(t.category_id, (current.get(t.category_id) ?? 0) + value);
-      } else if (at >= lastMonth.from && at < lastMonth.to) {
-        previous.set(t.category_id, (previous.get(t.category_id) ?? 0) + value);
+      if (t.type === "income" && t.category_id) {
+        income.set(t.category_id, (income.get(t.category_id) ?? 0) + value);
+      }
+      if (t.type === "expense" && t.category_id) {
+        expense.set(t.category_id, (expense.get(t.category_id) ?? 0) + value);
       }
     }
-    return { current, previous };
-  }, [transactions, toBase]);
+    const sum = (map: Map<string, number>) => [...map.values()].reduce((a, b) => a + b, 0);
+    return { income, expense, incomeTotal: sum(income), expenseTotal: sum(expense) };
+  }, [transactions, offset, toBase]);
 
-  const totals = useMemo(() => {
-    const available = moneyWallets.reduce(
-      (sum, w) => sum + toBase(balanceOf(w.id), w.currency),
-      0,
-    );
-    const unallocated = incomeCats.reduce((sum, c) => {
-      const pool = poolOf(c.id);
-      return sum + toBase(pool.amount, pool.currency);
-    }, 0);
-    const spentThisMonth = [...spend.current.values()].reduce((a, b) => a + b, 0);
-    const spentLastMonth = [...spend.previous.values()].reduce((a, b) => a + b, 0);
-    return { available, unallocated, spentThisMonth, spentLastMonth };
-  }, [moneyWallets, incomeCats, balanceOf, poolOf, toBase, spend]);
+  const walletsTotal = moneyWallets.reduce(
+    (sum, w) => sum + toBase(balanceOf(w.id), w.currency),
+    0,
+  );
+  const debtTotal = (group: DebtGroup) =>
+    debts[group].reduce((sum, w) => sum + toBase(balanceOf(w.id), w.currency), 0);
 
-  const base = profile?.base_currency ?? "KZT";
-
-  const onDragStart = (event: DragStartEvent) => {
-    setDragging(event.active.data.current as DragPayload);
-    if (navigator.vibrate) navigator.vibrate(8);
-  };
+  // ─────────────────────────── перетаскивание ───────────────────────────
 
   const onDragEnd = (event: DragEndEvent) => {
     const payload = event.active.data.current as DragPayload | undefined;
     const target = event.over?.data.current as
       | { target: "wallet"; walletId: string }
       | { target: "category"; categoryId: string }
+      | { target: "debts"; group: DebtGroup }
       | undefined;
     setDragging(null);
     if (!payload || !target) return;
@@ -130,12 +141,22 @@ export function HomeScreen() {
     if (!from) return;
 
     if (target.target === "category") {
-      if (from.kind === "debt_out" || from.kind === "debt_in") {
-        setToast("Тратить можно из наличных или с карты — долг не источник денег");
-        return;
-      }
       const category = expenseCats.find((c) => c.id === target.categoryId);
       if (category) setDialog({ kind: "expense", category, wallet: from });
+      return;
+    }
+
+    if (target.target === "debts") {
+      const list = debts[target.group];
+      if (list.length === 0) {
+        setWalletEditor({ wallet: null, kind: target.group });
+        return;
+      }
+      if (list.length === 1) {
+        setDialog({ kind: "transfer", from, to: list[0] });
+        return;
+      }
+      setDebtPicker({ group: target.group, payFrom: from });
       return;
     }
 
@@ -150,65 +171,112 @@ export function HomeScreen() {
       id="money-grid"
       sensors={sensors}
       collisionDetection={pointerWithin}
-      onDragStart={onDragStart}
+      onDragStart={(event: DragStartEvent) => {
+        setDragging(event.active.data.current as DragPayload);
+        if (navigator.vibrate) navigator.vibrate(8);
+      }}
       onDragEnd={onDragEnd}
       onDragCancel={() => setDragging(null)}
     >
-      <div className="mx-auto w-full max-w-md px-4 pb-28 pt-3">
-        <Summary
-          base={base}
-          available={totals.available}
-          unallocated={totals.unallocated}
-          spent={totals.spentThisMonth}
-          spentLast={totals.spentLastMonth}
-        />
+      <div className="mx-auto w-full max-w-md px-4 pb-32">
+        <header className="flex items-center justify-between py-2">
+          <Link
+            href="/settings"
+            className="flex h-10 w-10 items-center justify-center rounded-full text-base font-medium"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+          >
+            {(profile?.display_name ?? "?").slice(0, 1).toUpperCase()}
+          </Link>
+          <button
+            onClick={() => setMonthPicker(true)}
+            className="flex items-center gap-1.5 text-[15px] font-semibold uppercase tracking-wide"
+          >
+            {monthLabel(offset)}
+            <Icon name="chevron-down" size={14} className="opacity-50" />
+          </button>
+          <button
+            onClick={() => setMenu(true)}
+            aria-label="Меню"
+            className="flex h-10 w-10 items-center justify-center rounded-full"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+          >
+            <span className="text-lg leading-none">···</span>
+          </button>
+        </header>
 
-        <Section title="Доходы" hint="Тап — записать доход. Потяни — разнести по кошелькам.">
-          {incomeCats.map((category) => {
-            const pool = poolOf(category.id);
-            return (
-              <IncomeBubble
-                key={category.id}
-                category={category}
-                pool={pool}
-                onTap={() => setDialog({ kind: "income", category })}
-              />
-            );
-          })}
-          <AddBubble
-            label="Добавить"
-            onClick={() => setCategoryEditor({ kind: "income", category: null })}
-          />
+        <Section
+          title="Доходы"
+          total={formatMoney(month.incomeTotal, base)}
+          hint={incomeCats.length === 0 ? "Нажми «+» и заведи источник дохода: название, цвет, иконка." : undefined}
+          collapsed={!!collapsed.income}
+          onToggle={() => setCollapsed((c) => ({ ...c, income: !c.income }))}
+        >
+          {incomeCats.map((category) => (
+            <IncomeBubble
+              key={category.id}
+              category={category}
+              amount={month.income.get(category.id) ?? 0}
+              pool={poolOf(category.id)}
+              base={base}
+              onTap={() => setDialog({ kind: "income", category })}
+            />
+          ))}
+          <button onClick={() => setCategoryEditor({ kind: "income", category: null })}>
+            <AddBubble />
+          </button>
         </Section>
 
-        <Section title="Кошельки" hint="Тап — баланс. Потяни на расход или другой кошелёк.">
-          {wallets.map((wallet) => (
+        <Section
+          title="Кошельки"
+          total={formatMoney(walletsTotal, base)}
+          hint={wallets.length === 0 ? "Нажми «+»: наличные, карта или долг — что заведёшь, то и будет." : undefined}
+          collapsed={!!collapsed.wallets}
+          onToggle={() => setCollapsed((c) => ({ ...c, wallets: !c.wallets }))}
+        >
+          {moneyWallets.map((wallet) => (
             <WalletBubble
               key={wallet.id}
               wallet={wallet}
               balance={balanceOf(wallet.id)}
-              dragActive={dragging?.source === "wallet" && dragging.walletId === wallet.id}
               onTap={() => setWalletSheet(wallet)}
             />
           ))}
-          <AddBubble label="Добавить" onClick={() => setWalletEditor({ wallet: null })} />
+          {(["debt_out", "debt_in"] as DebtGroup[])
+            .filter((group) => debts[group].length > 0)
+            .map((group) => (
+              <DebtBubble
+                key={group}
+                group={group}
+                amount={debtTotal(group)}
+                base={base}
+                onTap={() => setDebtPicker({ group })}
+              />
+            ))}
+          <button onClick={() => setWalletEditor({ wallet: null, kind: "card" })}>
+            <AddBubble />
+          </button>
         </Section>
 
-        <Section title="Расходы" hint="Тап — записать трату. Или перетащи сюда кошелёк.">
+        <Section
+          title="Расходы"
+          total={formatMoney(month.expenseTotal, base)}
+          hint={expenseCats.length === 0 ? "Нажми «+» и создай категорию трат — можно задать лимит на месяц." : undefined}
+          collapsed={!!collapsed.expenses}
+          onToggle={() => setCollapsed((c) => ({ ...c, expenses: !c.expenses }))}
+        >
           {expenseCats.map((category) => (
             <ExpenseBubble
               key={category.id}
               category={category}
-              spent={spend.current.get(category.id) ?? 0}
+              spent={month.expense.get(category.id) ?? 0}
               base={base}
               onTap={() => setDialog({ kind: "expense", category })}
               onHold={() => setCategoryEditor({ kind: "expense", category })}
             />
           ))}
-          <AddBubble
-            label="Добавить"
-            onClick={() => setCategoryEditor({ kind: "expense", category: null })}
-          />
+          <button onClick={() => setCategoryEditor({ kind: "expense", category: null })}>
+            <AddBubble />
+          </button>
         </Section>
       </div>
 
@@ -220,13 +288,13 @@ export function HomeScreen() {
         <button
           onClick={() => setToast(null)}
           className="animate-rise fixed inset-x-4 bottom-24 z-50 mx-auto max-w-sm rounded-2xl px-4 py-3 text-center text-sm text-white"
-          style={{ background: "#334155" }}
+          style={{ background: "#3a3a3c" }}
         >
           {toast}
         </button>
       ) : null}
 
-      {/* ─────────────── листы ввода ─────────────── */}
+      {/* ─────────────────────────── листы ─────────────────────────── */}
 
       <AmountSheet
         open={dialog?.kind === "income"}
@@ -263,11 +331,7 @@ export function HomeScreen() {
 
       <AmountSheet
         open={dialog?.kind === "allocate"}
-        title={
-          dialog?.kind === "allocate"
-            ? `${dialog.category.name} → ${dialog.wallet.name}`
-            : ""
-        }
+        title={dialog?.kind === "allocate" ? `${dialog.category.name} → ${dialog.wallet.name}` : ""}
         subtitle="Сколько из этого дохода положить в кошелёк"
         currency={dialog?.kind === "allocate" ? poolOf(dialog.category.id).currency : base}
         initial={dialog?.kind === "allocate" ? poolOf(dialog.category.id).amount : undefined}
@@ -350,6 +414,83 @@ export function HomeScreen() {
         }}
       />
 
+      <PickerSheet
+        open={!!debtPicker}
+        title={
+          debtPicker?.payFrom
+            ? `Погасить с «${debtPicker.payFrom.name}»`
+            : debtPicker?.group === "debt_in"
+              ? "Мне должны"
+              : "Я должен"
+        }
+        options={(debtPicker ? debts[debtPicker.group] : []).map((w) => ({
+          id: w.id,
+          name: w.name,
+          caption: formatMoney(balanceOf(w.id), w.currency),
+          color: w.color,
+          icon: w.icon,
+        }))}
+        empty="Здесь пока пусто"
+        addLabel="Добавить долг"
+        onAdd={() => {
+          const kind = debtPicker?.group;
+          setDebtPicker(null);
+          setWalletEditor({ wallet: null, kind });
+        }}
+        onPick={(id) => {
+          const target = wallets.find((w) => w.id === id);
+          const payFrom = debtPicker?.payFrom;
+          setDebtPicker(null);
+          if (!target) return;
+          if (payFrom) setDialog({ kind: "transfer", from: payFrom, to: target });
+          else setWalletSheet(target);
+        }}
+        onClose={() => setDebtPicker(null)}
+      />
+
+      <Sheet open={monthPicker} title="Месяц" onClose={() => setMonthPicker(false)}>
+        <div className="grid grid-cols-2 gap-2 pb-2">
+          {Array.from({ length: 18 }, (_, i) => -i).map((value) => (
+            <button
+              key={value}
+              onClick={() => {
+                setOffset(value);
+                setMonthPicker(false);
+              }}
+              className="rounded-2xl px-3 py-2.5 text-sm capitalize"
+              style={{
+                background: offset === value ? "var(--accent)" : "var(--surface-2)",
+                color: offset === value ? "#fff" : "inherit",
+              }}
+            >
+              {monthLabel(value, true)}
+            </button>
+          ))}
+        </div>
+      </Sheet>
+
+      <Sheet open={menu} title="Ещё" onClose={() => setMenu(false)}>
+        <div className="space-y-2 pb-2">
+          <Button
+            variant="ghost"
+            onClick={() =>
+              saveProfile({ theme: profile?.theme === "dark" ? "light" : "dark" })
+            }
+          >
+            {profile?.theme === "dark" ? "Светлая тема" : "Тёмная тема"}
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => setCollapsed({ income: true, wallets: true, expenses: true })}
+          >
+            Свернуть все блоки
+          </Button>
+          <Link href="/settings" className="block">
+            <Button variant="ghost">Настройки</Button>
+          </Link>
+        </div>
+      </Sheet>
+
       <WalletSheet
         wallet={walletSheet}
         onClose={() => setWalletSheet(null)}
@@ -362,6 +503,7 @@ export function HomeScreen() {
       <WalletEditor
         open={!!walletEditor}
         wallet={walletEditor?.wallet}
+        defaultKind={walletEditor?.kind ?? "card"}
         onClose={() => setWalletEditor(null)}
       />
 
@@ -375,78 +517,59 @@ export function HomeScreen() {
   );
 }
 
-// ───────────────────────────── блоки ─────────────────────────────
-
-function Summary({
-  base,
-  available,
-  unallocated,
-  spent,
-  spentLast,
-}: {
-  base: string;
-  available: number;
-  unallocated: number;
-  spent: number;
-  spentLast: number;
-}) {
-  const diff = spent - spentLast;
-  const share = spentLast > 0 ? Math.round((diff / spentLast) * 100) : null;
-
-  return (
-    <div
-      className="mb-4 rounded-3xl p-4"
-      style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
-    >
-      <p className="text-xs" style={{ color: "var(--muted)" }}>
-        Доступно в кошельках
-      </p>
-      <p className="text-3xl font-bold tabular-nums">{formatMoney(available, base)}</p>
-      <div className="mt-3 flex gap-4 text-xs" style={{ color: "var(--muted)" }}>
-        <span>
-          Не разнесено: <b className="tabular-nums">{formatCompact(unallocated, base)}</b>
-        </span>
-        <span>
-          Потрачено: <b className="tabular-nums">{formatCompact(spent, base)}</b>
-          {share != null ? (
-            <b style={{ color: diff > 0 ? "var(--danger)" : "var(--ok)" }}>
-              {" "}
-              {diff > 0 ? "+" : ""}
-              {share}%
-            </b>
-          ) : null}
-        </span>
-      </div>
-    </div>
-  );
-}
+// ───────────────────────────── раскладка ─────────────────────────────
 
 function Section({
   title,
+  total,
+  collapsed,
+  onToggle,
   hint,
   children,
 }: {
   title: string;
-  hint: string;
+  total: string;
+  collapsed: boolean;
+  onToggle: () => void;
+  /** Подсказка рядом с «+», пока в блоке нет ни одного кружка. */
+  hint?: string;
   children: React.ReactNode;
 }) {
   return (
-    <section className="mb-5">
-      <h2 className="mb-0.5 text-sm font-semibold">{title}</h2>
-      <p className="mb-2.5 text-[11px]" style={{ color: "var(--muted)" }}>
-        {hint}
-      </p>
-      <div className="grid grid-cols-4 gap-y-3 justify-items-center">{children}</div>
+    <section className="mb-4">
+      <div className="mb-1.5 flex items-center gap-2 px-1">
+        <button onClick={onToggle} className="flex items-center gap-2" aria-expanded={!collapsed}>
+          <Icon
+            name={collapsed ? "chevron-right" : "chevron-down"}
+            size={15}
+            style={{ color: "var(--muted)" }}
+          />
+          <h2 className="text-[17px] font-bold">{title}</h2>
+        </button>
+        <span className="ml-auto text-[15px] font-semibold tabular-nums">{total}</span>
+      </div>
+      {collapsed ? null : (
+        <div
+          className="flex items-center rounded-2xl px-2 py-3"
+          style={{ background: "var(--surface)" }}
+        >
+          <div className="grid flex-1 grid-cols-5 gap-x-1 gap-y-3">{children}</div>
+          {hint ? (
+            <p className="max-w-[58%] shrink-0 pl-1 pr-2 text-[12px] leading-snug" style={{ color: "var(--muted)" }}>
+              {hint}
+            </p>
+          ) : null}
+        </div>
+      )}
     </section>
   );
 }
 
 // ──────────────────────────── пузырьки ───────────────────────────
 
-/** Долгий тап по категории открывает её настройки. */
-function useLongPress(onHold?: () => void) {
+/** Долгое нажатие открывает настройки — только там, где жест не занят перетаскиванием. */
+function useLongPress(onHold: () => void) {
   const [timer, setTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
-  if (!onHold) return {};
   const clear = () => {
     if (timer) clearTimeout(timer);
     setTimer(null);
@@ -464,11 +587,15 @@ function useLongPress(onHold?: () => void) {
 
 function IncomeBubble({
   category,
+  amount,
   pool,
+  base,
   onTap,
 }: {
   category: Category;
+  amount: number;
   pool: { amount: number; currency: string };
+  base: string;
   onTap: () => void;
 }) {
   const draggable = pool.amount > 0;
@@ -482,11 +609,11 @@ function IncomeBubble({
       available: pool.amount,
     },
   });
+
   return (
     <button
       ref={setNodeRef}
       onClick={onTap}
-      className="touch-none"
       style={{ touchAction: draggable ? "none" : undefined }}
       {...attributes}
       {...listeners}
@@ -495,7 +622,8 @@ function IncomeBubble({
         icon={category.icon}
         color={category.color}
         label={category.name}
-        caption={draggable ? formatCompact(pool.amount, pool.currency) : undefined}
+        amount={formatCompact(amount, base)}
+        badge={draggable}
         dimmed={isDragging}
       />
     </button>
@@ -505,12 +633,10 @@ function IncomeBubble({
 function WalletBubble({
   wallet,
   balance,
-  dragActive,
   onTap,
 }: {
   wallet: Wallet;
   balance: number;
-  dragActive: boolean;
   onTap: () => void;
 }) {
   const { attributes, listeners, setNodeRef: dragRef, isDragging } = useDraggable({
@@ -527,8 +653,6 @@ function WalletBubble({
     data: { target: "wallet", walletId: wallet.id },
   });
 
-  const isDebt = wallet.kind === "debt_out" || wallet.kind === "debt_in";
-
   return (
     <button
       ref={(node) => {
@@ -544,10 +668,42 @@ function WalletBubble({
         icon={wallet.icon}
         color={wallet.color}
         label={wallet.name}
-        caption={formatCompact(balance, wallet.currency)}
-        dimmed={isDragging || dragActive}
+        amount={formatCompact(balance, wallet.currency)}
+        dimmed={isDragging}
         highlighted={isOver}
-        badge={isDebt ? (wallet.kind === "debt_out" ? "долг" : "вернут") : undefined}
+      />
+    </button>
+  );
+}
+
+function DebtBubble({
+  group,
+  amount,
+  base,
+  onTap,
+}: {
+  group: DebtGroup;
+  amount: number;
+  base: string;
+  onTap: () => void;
+}) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `drop-debts:${group}`,
+    data: { target: "debts", group },
+  });
+  const style = DEBT_GROUP[group];
+  // «Я должен» показываем со знаком минус — это обязательство, а не деньги.
+  const shown = group === "debt_out" ? -amount : amount;
+
+  return (
+    <button ref={setNodeRef} onClick={onTap}>
+      <Bubble
+        icon={style.icon}
+        color={style.color}
+        label={style.label}
+        amount={amount === 0 ? formatCompact(0, base) : formatCompact(shown, base)}
+        muted={group === "debt_out"}
+        highlighted={isOver}
       />
     </button>
   );
@@ -582,12 +738,12 @@ function ExpenseBubble({
         icon={category.icon}
         color={category.color}
         label={category.name}
-        caption={spent > 0 ? formatCompact(spent, base) : undefined}
+        amount={formatCompact(spent, base)}
         highlighted={isOver}
       />
       {limit ? (
         <span
-          className="mx-auto mt-1 block h-1 w-12 overflow-hidden rounded-full"
+          className="mx-auto -mt-0.5 block h-1 w-10 overflow-hidden rounded-full"
           style={{ background: "var(--surface-2)" }}
         >
           <span
@@ -599,24 +755,6 @@ function ExpenseBubble({
           />
         </span>
       ) : null}
-    </button>
-  );
-}
-
-function AddBubble({ label, onClick }: { label: string; onClick: () => void }) {
-  return (
-    <button onClick={onClick}>
-      <div className="flex w-[76px] flex-col items-center gap-1.5">
-        <span
-          className="flex h-[62px] w-[62px] items-center justify-center rounded-full border-2 border-dashed"
-          style={{ borderColor: "var(--border)", color: "var(--muted)" }}
-        >
-          <Icon name="plus" size={24} />
-        </span>
-        <span className="text-[11px]" style={{ color: "var(--muted)" }}>
-          {label}
-        </span>
-      </div>
     </button>
   );
 }
@@ -636,8 +774,8 @@ function DragGhost({ payload }: { payload: DragPayload }) {
       style={{ background: "var(--surface)", border: `2px solid ${item.color}` }}
     >
       <span
-        className="flex h-11 w-11 items-center justify-center rounded-full"
-        style={{ background: item.color, color: "#fff" }}
+        className="flex h-11 w-11 items-center justify-center rounded-full text-white"
+        style={{ background: item.color }}
       >
         <Icon name={item.icon} size={22} />
       </span>

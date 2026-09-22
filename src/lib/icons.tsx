@@ -164,6 +164,44 @@ const PATHS: Record<string, ReactNode> = {
   heart: <path d="M12 20s-7-4.3-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.7-7 9-7 9z" />,
   chart: <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />,
   plus: <path d="M12 6v12M6 12h12" />,
+  search: (
+    <>
+      <circle cx="11" cy="11" r="6.5" />
+      <path d="M16 16l4.5 4.5" />
+    </>
+  ),
+  filter: <path d="M3.5 6h17M6.5 12h11M10 18h4" />,
+  close: <path d="M6 6l12 12M18 6L6 18" />,
+  "chevron-down": <path d="M6 9.5l6 6 6-6" />,
+  "chevron-right": <path d="M9.5 6l6 6-6 6" />,
+  "chevron-left": <path d="M14.5 6l-6 6 6 6" />,
+  grid: (
+    <>
+      {[6, 12, 18].map((y) =>
+        [6, 12, 18].map((x) => <circle key={`${x}-${y}`} cx={x} cy={y} r="1.7" fill="currentColor" stroke="none" />),
+      )}
+    </>
+  ),
+  list: (
+    <>
+      <path d="M9 6h11M9 12h11M9 18h11" />
+      <circle cx="4.5" cy="6" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="4.5" cy="12" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="4.5" cy="18" r="1.4" fill="currentColor" stroke="none" />
+    </>
+  ),
+  pie: (
+    <>
+      <path d="M12 3a9 9 0 1 0 9 9h-9z" />
+      <path d="M14 2.2A9 9 0 0 1 21.8 10H14z" />
+    </>
+  ),
+  gear: (
+    <>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 2.5l1.4 2.4 2.7-.5.6 2.7 2.5 1.1-1.2 2.5 1.2 2.5-2.5 1.1-.6 2.7-2.7-.5L12 21.5l-1.4-2.4-2.7.5-.6-2.7L4.8 15.8 6 13.3 4.8 10.8l2.5-1.1.6-2.7 2.7.5z" />
+    </>
+  ),
 };
 
 export const ICON_NAMES = Object.keys(PATHS).filter((n) => n !== "plus");
@@ -178,10 +216,12 @@ export function Icon({
   name,
   size = 24,
   className,
+  style,
 }: {
   name: string;
   size?: number;
   className?: string;
+  style?: React.CSSProperties;
 }) {
   return (
     <svg
@@ -194,6 +234,7 @@ export function Icon({
       strokeLinecap="round"
       strokeLinejoin="round"
       className={className}
+      style={style}
       aria-hidden="true"
     >
       {PATHS[name] ?? PATHS.circle}

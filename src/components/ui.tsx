@@ -50,7 +50,7 @@ export function Sheet({
             className="-mr-2 rounded-full p-2 opacity-60 active:opacity-100"
             aria-label="Закрыть"
           >
-            <Icon name="plus" size={20} className="rotate-45" />
+            <Icon name="close" size={20} />
           </button>
         </div>
         <div className="flex-1 overflow-y-auto px-5 pb-2">{children}</div>
@@ -134,59 +134,163 @@ export function Bubble({
   icon,
   color,
   label,
-  caption,
-  size = 62,
+  amount,
+  size = 58,
   dimmed,
   highlighted,
   badge,
+  muted,
 }: {
   icon: string;
   color: string;
   label: string;
-  caption?: string;
+  /** Подпись под кружком: сумма за месяц или баланс. */
+  amount?: string;
   size?: number;
   dimmed?: boolean;
   highlighted?: boolean;
-  badge?: string;
+  /** Точка-маркер: у категории есть нераспределённый доход, его можно утащить. */
+  badge?: boolean;
+  muted?: boolean;
 }) {
   return (
     <div
-      className={`flex w-[76px] flex-col items-center gap-1.5 transition ${
-        dimmed ? "opacity-35" : ""
+      className={`flex w-full flex-col items-center gap-1 transition ${
+        dimmed ? "opacity-30" : ""
       }`}
     >
-      <div
-        className="relative flex items-center justify-center rounded-full transition"
+      <span className="flex h-[26px] w-full items-end justify-center overflow-hidden">
+        <span
+          className="line-clamp-2 w-full break-words text-center leading-[1.15]"
+          style={{
+            color: "var(--muted)",
+            // длинные названия ужимаются, а не обрезаются посреди слова
+            fontSize: label.length > 9 ? 9.5 : 11,
+          }}
+        >
+          {label}
+        </span>
+      </span>
+      <span
+        className="relative flex items-center justify-center rounded-full text-white transition"
         style={{
           width: size,
           height: size,
-          background: color + "26",
-          color,
+          background: color,
           boxShadow: highlighted
-            ? `0 0 0 3px ${color}, 0 8px 24px ${color}55`
-            : `inset 0 0 0 1.5px ${color}55`,
-          transform: highlighted ? "scale(1.08)" : undefined,
+            ? `0 0 0 3px var(--surface), 0 0 0 6px ${color}, 0 10px 22px ${color}66`
+            : "0 1px 2px rgba(0,0,0,0.12)",
+          transform: highlighted ? "scale(1.06)" : undefined,
         }}
       >
-        <Icon name={icon} size={size * 0.44} />
+        <Icon name={icon} size={size * 0.46} />
         {badge ? (
           <span
-            className="absolute -bottom-1 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-1.5 py-0.5 text-[10px] font-bold text-white"
-            style={{ background: color }}
-          >
-            {badge}
-          </span>
+            className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full"
+            style={{ background: "var(--accent)", boxShadow: "0 0 0 2px var(--surface)" }}
+          />
         ) : null}
-      </div>
-      <span className="w-full truncate text-center text-[11px] leading-tight">{label}</span>
-      {caption ? (
-        <span
-          className="-mt-1 w-full truncate text-center text-[10px] leading-tight"
-          style={{ color: "var(--muted)" }}
-        >
-          {caption}
-        </span>
-      ) : null}
+      </span>
+      <span
+        className="w-full truncate text-center text-[11px] font-semibold tabular-nums"
+        style={{ color: muted ? "var(--muted)" : "var(--text)" }}
+      >
+        {amount ?? "\u00a0"}
+      </span>
     </div>
+  );
+}
+
+/** Пустой кружок «добавить» в конце каждой сетки. */
+export function AddBubble({ size = 58 }: { size?: number }) {
+  return (
+    <div className="flex w-full flex-col items-center gap-1">
+      <span className="h-[26px] text-[11px] leading-[1.15]">&nbsp;</span>
+      <span
+        className="flex items-center justify-center rounded-full border"
+        style={{
+          width: size,
+          height: size,
+          borderColor: "var(--border)",
+          background: "var(--surface)",
+          color: "var(--muted)",
+          boxShadow: "0 1px 2px rgba(0,0,0,0.10)",
+        }}
+      >
+        <Icon name="plus" size={24} />
+      </span>
+      <span className="text-[11px]">&nbsp;</span>
+    </div>
+  );
+}
+
+/** Выбор из списка — например, какой именно долг гасить. */
+export function PickerSheet({
+  open,
+  title,
+  options,
+  onPick,
+  onClose,
+  addLabel,
+  onAdd,
+  empty,
+}: {
+  open: boolean;
+  title: string;
+  options: { id: string; name: string; caption?: string; color?: string; icon?: string }[];
+  onPick: (id: string) => void;
+  onClose: () => void;
+  addLabel?: string;
+  onAdd?: () => void;
+  empty?: string;
+}) {
+  return (
+    <Sheet
+      open={open}
+      title={title}
+      onClose={onClose}
+      footer={
+        onAdd ? (
+          <Button variant="ghost" onClick={onAdd}>
+            {addLabel ?? "Добавить"}
+          </Button>
+        ) : undefined
+      }
+    >
+      {options.length === 0 ? (
+        <p className="py-6 text-center text-sm" style={{ color: "var(--muted)" }}>
+          {empty ?? "Пока пусто"}
+        </p>
+      ) : (
+        <div
+          className="mb-2 overflow-hidden rounded-2xl"
+          style={{ border: "1px solid var(--border)" }}
+        >
+          {options.map((option, index) => (
+            <button
+              key={option.id}
+              onClick={() => onPick(option.id)}
+              className="flex w-full items-center gap-3 px-4 py-3 text-left"
+              style={{ borderTop: index ? "1px solid var(--border)" : undefined }}
+            >
+              {option.icon ? (
+                <span
+                  className="flex h-9 w-9 items-center justify-center rounded-full text-white"
+                  style={{ background: option.color ?? "var(--accent)" }}
+                >
+                  <Icon name={option.icon} size={17} />
+                </span>
+              ) : null}
+              <span className="flex-1 text-sm font-medium">{option.name}</span>
+              {option.caption ? (
+                <span className="text-sm tabular-nums" style={{ color: "var(--muted)" }}>
+                  {option.caption}
+                </span>
+              ) : null}
+            </button>
+          ))}
+        </div>
+      )}
+    </Sheet>
   );
 }

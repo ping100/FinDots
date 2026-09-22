@@ -7,15 +7,15 @@
 }
 
 :root {
-  --bg: #f4f5f7;
+  --bg: #f2f2f7;
   --surface: #ffffff;
-  --surface-2: #eceef2;
-  --text: #0f172a;
-  --muted: #64748b;
-  --border: #dfe3ea;
-  --accent: #3b82f6;
-  --danger: #ef4444;
-  --ok: #22c55e;
+  --surface-2: #eceef3;
+  --text: #0b0b0d;
+  --muted: #8a8a8f;
+  --border: #e3e4e9;
+  --accent: #007aff;
+  --danger: #e5383b;
+  --ok: #34c759;
 }
 
 .dark {
@@ -52,19 +52,23 @@ body {
   padding-top: env(safe-area-inset-top);
 }
 
-input,
-select,
-textarea,
-button {
-  font: inherit;
-  color: inherit;
-}
+/* В @layer base, иначе эти правила оказываются приоритетнее утилит
+   Tailwind и затирают, например, text-white на кнопке. */
+@layer base {
+  input,
+  select,
+  textarea,
+  button {
+    font: inherit;
+    color: inherit;
+  }
 
-/* iOS зумит страницу на фокусе, если шрифт поля мельче 16px */
-input,
-select,
-textarea {
-  font-size: 16px;
+  /* iOS зумит страницу на фокусе, если шрифт поля мельче 16px */
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }
 
 @keyframes rise {

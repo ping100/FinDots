@@ -9,7 +9,7 @@ create table public.profiles (
   id            uuid primary key references auth.users (id) on delete cascade,
   display_name  text,
   base_currency text        not null default 'KZT',
-  theme         text        not null default 'dark' check (theme in ('dark', 'light')),
+  theme         text        not null default 'light' check (theme in ('dark', 'light')),
   ai_model      text        not null default 'meta-llama/llama-3.3-70b-instruct:free',
   created_at    timestamptz not null default now()
 );
@@ -228,8 +228,9 @@ grant select on public.wallet_balances to authenticated;
 grant select on public.income_pools   to authenticated;
 grant execute on function public.convert_amount(uuid, numeric, text, text) to authenticated;
 
--- ──────────────── стартовый набор при регистрации ──────────────────
--- Банков и карт по умолчанию нет: пользователь заводит их сам.
+-- ─────────────── что заводится при регистрации ────────────────
+-- Только профиль и курсы валют. Ни категорий, ни кошельков, ни банков:
+-- пользователь создаёт каждый кружок сам через «+».
 
 create or replace function public.handle_new_user()
 returns trigger
@@ -240,22 +241,6 @@ begin
 
   insert into public.exchange_rates (user_id, code, rate_to_base) values
     (new.id, 'KZT', 1), (new.id, 'RUB', 5.8), (new.id, 'USD', 520);
-
-  insert into public.categories (user_id, kind, name, icon, color, sort_order) values
-    (new.id, 'income',  'Работа',       'briefcase', '#22c55e', 0),
-    (new.id, 'income',  'Подработка',   'hammer',    '#14b8a6', 1),
-    (new.id, 'income',  'Подарок',      'gift',      '#a855f7', 2),
-    (new.id, 'expense', 'Еда',          'food',      '#f97316', 0),
-    (new.id, 'expense', 'Транспорт',    'transport', '#3b82f6', 1),
-    (new.id, 'expense', 'Жильё',        'home',      '#8b5cf6', 2),
-    (new.id, 'expense', 'Развлечения',  'fun',       '#ec4899', 3),
-    (new.id, 'expense', 'Здоровье',     'health',    '#ef4444', 4),
-    (new.id, 'expense', 'Связь',        'phone',     '#06b6d4', 5),
-    (new.id, 'expense', 'Одежда',       'clothes',   '#eab308', 6),
-    (new.id, 'expense', 'Прочее',       'circle',    '#64748b', 7);
-
-  insert into public.wallets (user_id, kind, name, icon, color, sort_order) values
-    (new.id, 'cash', 'Наличные', 'cash', '#22c55e', 0);
 
   return new;
 end;

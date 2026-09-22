@@ -19,6 +19,8 @@ function daysLeft(date: string): number {
 export default function DebtsPage() {
   const { wallets, balanceOf, addTransfer } = useStore();
   const [paying, setPaying] = useState<Wallet | null>(null);
+  // Возврат долга мне: деньги идут из долга в выбранный кошелёк.
+  const [returning, setReturning] = useState<Wallet | null>(null);
   const [editor, setEditor] = useState<{ wallet?: Wallet | null } | null>(null);
 
   const owed = wallets.filter((w) => w.kind === "debt_out");
@@ -52,6 +54,8 @@ export default function DebtsPage() {
             key={w.id}
             wallet={w}
             amount={balanceOf(w.id)}
+            actionLabel="Мне вернули"
+            onPay={() => setReturning(w)}
             onEdit={() => setEditor({ wallet: w })}
           />
         ))}
@@ -117,6 +121,33 @@ export default function DebtsPage() {
         }}
       />
 
+      <AmountSheet
+        open={!!returning}
+        title={returning ? `Вернул: ${returning.name}` : ""}
+        subtitle="Деньги придут в выбранный кошелёк"
+        currency={returning?.currency ?? "KZT"}
+        max={returning ? Math.max(balanceOf(returning.id), 0) : undefined}
+        options={moneyWallets.map((w) => ({
+          id: w.id,
+          name: w.name,
+          caption: formatMoney(balanceOf(w.id), w.currency),
+        }))}
+        optionLabel="Куда зачислить"
+        submitLabel="Записать возврат"
+        onClose={() => setReturning(null)}
+        onSubmit={async ({ amount, note, occurredAt, optionId }) => {
+          if (!returning || !optionId) throw new Error("Выбери кошелёк");
+          await addTransfer({
+            fromWalletId: returning.id,
+            toWalletId: optionId,
+            amount,
+            currency: returning.currency,
+            note: note || "Возврат долга",
+            occurredAt,
+          });
+        }}
+      />
+
       <WalletEditor
         open={!!editor}
         wallet={editor?.wallet}
@@ -155,11 +186,13 @@ function DebtCard({
   wallet,
   amount,
   onPay,
+  actionLabel = "Внести платёж",
   onEdit,
 }: {
   wallet: Wallet;
   amount: number;
   onPay?: () => void;
+  actionLabel?: string;
   onEdit: () => void;
 }) {
   const left = wallet.due_date ? daysLeft(wallet.due_date) : null;
@@ -211,7 +244,7 @@ function DebtCard({
           className="mt-3 w-full rounded-xl py-2 text-sm font-semibold"
           style={{ background: "var(--surface-2)" }}
         >
-          Внести платёж
+          {actionLabel}
         </button>
       ) : null}
     </div>

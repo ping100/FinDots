@@ -6,11 +6,11 @@ import { Icon } from "@/lib/icons";
 import { useStore } from "./DataProvider";
 
 const TABS = [
-  { href: "/", label: "Главная", icon: "wallet" },
-  { href: "/operations", label: "Операции", icon: "chart" },
+  { href: "/", label: "Панель", icon: "grid" },
+  { href: "/operations", label: "История", icon: "list" },
+  { href: "/analytics", label: "Отчет", icon: "pie" },
   { href: "/debts", label: "Долги", icon: "debt_out" },
-  { href: "/analytics", label: "Анализ", icon: "star" },
-  { href: "/settings", label: "Ещё", icon: "repair" },
+  { href: "/settings", label: "Настройки", icon: "gear" },
 ];
 
 export function Shell({ children }: { children: React.ReactNode }) {
@@ -38,21 +38,29 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
       {children}
 
-      <nav
-        className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t backdrop-blur"
-        style={{ background: "color-mix(in srgb, var(--surface) 88%, transparent)", borderColor: "var(--border)" }}
-      >
-        <div className="mx-auto flex max-w-md justify-around px-2 pt-2">
+      <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 px-3 pb-2">
+        <div
+          className="mx-auto flex max-w-md justify-around rounded-[22px] px-1 py-1.5"
+          style={{
+            background: "color-mix(in srgb, var(--surface) 92%, transparent)",
+            border: "1px solid var(--border)",
+            backdropFilter: "blur(12px)",
+            boxShadow: "0 4px 18px rgba(0,0,0,0.10)",
+          }}
+        >
           {TABS.map((tab) => {
             const active = pathname === tab.href;
             return (
               <Link
                 key={tab.href}
                 href={tab.href}
-                className="flex flex-1 flex-col items-center gap-0.5 py-1"
-                style={{ color: active ? "var(--accent)" : "var(--muted)" }}
+                className="flex flex-1 flex-col items-center gap-0.5 rounded-2xl py-1.5"
+                style={{
+                  color: active ? "var(--accent)" : "var(--muted)",
+                  background: active ? "var(--surface-2)" : undefined,
+                }}
               >
-                <Icon name={tab.icon} size={22} />
+                <Icon name={tab.icon} size={21} />
                 <span className="text-[10px]">{tab.label}</span>
               </Link>
             );

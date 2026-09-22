@@ -147,7 +147,7 @@ export function AmountSheet({
             className="flex h-12 items-center justify-center rounded-2xl text-xl font-semibold active:scale-95"
             style={{ background: "var(--surface-2)" }}
           >
-            {key === "del" ? <Icon name="plus" size={20} className="rotate-45" /> : key}
+            {key === "del" ? <Icon name="close" size={20} /> : key}
           </button>
         ))}
       </div>

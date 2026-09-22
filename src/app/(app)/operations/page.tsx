@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { Icon } from "@/lib/icons";
-import { formatMoney, parseAmount } from "@/lib/money";
+import { formatMoney, monthLabel, monthRange, parseAmount } from "@/lib/money";
 import type { Transaction, TxType } from "@/lib/types";
 import { useStore } from "@/components/DataProvider";
 import { Button, Field, Sheet, inputClass, inputStyle } from "@/components/ui";
@@ -24,12 +25,16 @@ const FILTERS: { id: "all" | TxType; label: string }[] = [
 ];
 
 export default function OperationsPage() {
-  const { transactions, categories, wallets, updateTransaction, deleteTransaction } = useStore();
+  const { transactions, categories, wallets, toBase, profile, updateTransaction, deleteTransaction } =
+    useStore();
   const [filter, setFilter] = useState<"all" | TxType>("all");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [offset, setOffset] = useState(0);
   const [editing, setEditing] = useState<Transaction | null>(null);
 
-  const nameOfCategory = (id: string | null) =>
-    categories.find((c) => c.id === id)?.name ?? "—";
+  const base = profile?.base_currency ?? "KZT";
+  const nameOfCategory = (id: string | null) => categories.find((c) => c.id === id)?.name ?? "—";
   const nameOfWallet = (id: string | null) => wallets.find((w) => w.id === id)?.name ?? "—";
 
   const describe = (t: Transaction) => {
@@ -49,55 +54,111 @@ export default function OperationsPage() {
     }
   };
 
-  const groups = useMemo(() => {
-    const visible = transactions.filter((t) => filter === "all" || t.type === filter);
+  const { groups, saldo } = useMemo(() => {
+    const { from, to } = monthRange(offset);
+    const needle = query.trim().toLowerCase();
+
+    const visible = transactions.filter((t) => {
+      const at = new Date(t.occurred_at);
+      if (at < from || at >= to) return false;
+      if (filter !== "all" && t.type !== filter) return false;
+      if (needle && !(t.note ?? "").toLowerCase().includes(needle)) return false;
+      return true;
+    });
+
+    // Сальдо месяца — доходы минус траты, переносы внутри своих кошельков не в счёт.
+    let balance = 0;
+    for (const t of visible) {
+      const value = toBase(Number(t.amount), t.currency);
+      if (t.type === "income") balance += value;
+      if (t.type === "expense") balance -= value;
+    }
+
     const byDay = new Map<string, Transaction[]>();
     for (const t of visible) {
       const day = t.occurred_at.slice(0, 10);
       byDay.set(day, [...(byDay.get(day) ?? []), t]);
     }
-    return [...byDay.entries()].sort((a, b) => b[0].localeCompare(a[0]));
-  }, [transactions, filter]);
+    return {
+      groups: [...byDay.entries()].sort((a, b) => b[0].localeCompare(a[0])),
+      saldo: balance,
+    };
+  }, [transactions, filter, query, offset, toBase]);
 
   return (
-    <div className="mx-auto w-full max-w-md px-4 pb-28 pt-3">
-      <h1 className="mb-3 text-xl font-bold">Операции</h1>
+    <div className="mx-auto w-full max-w-md px-4 pb-32">
+      <header className="relative flex items-center justify-center py-2">
+        <h1 className="text-[17px] font-bold">История</h1>
+        <button
+          onClick={() => setFiltersOpen(true)}
+          aria-label="Фильтр"
+          className="absolute right-0 flex h-10 w-10 items-center justify-center rounded-full"
+          style={{
+            background: "var(--surface)",
+            border: `1px solid ${filter === "all" ? "var(--border)" : "var(--accent)"}`,
+            color: filter === "all" ? "var(--muted)" : "var(--accent)",
+          }}
+        >
+          <Icon name="filter" size={18} />
+        </button>
+      </header>
 
-      <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
-        {FILTERS.map((f) => (
-          <button
-            key={f.id}
-            onClick={() => setFilter(f.id)}
-            className="shrink-0 rounded-full px-3.5 py-1.5 text-sm"
-            style={{
-              background: filter === f.id ? "var(--accent)" : "var(--surface-2)",
-              color: filter === f.id ? "#fff" : "inherit",
-            }}
-          >
-            {f.label}
-          </button>
-        ))}
+      <label className="mb-3 flex items-center gap-2 rounded-2xl px-3.5 py-2.5" style={{ background: "var(--surface-2)" }}>
+        <Icon name="search" size={17} style={{ color: "var(--muted)" }} />
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Поиск по примечаниям"
+          className="w-full bg-transparent outline-none"
+          style={{ fontSize: 15 }}
+        />
+      </label>
+
+      <div className="mb-1 flex items-center justify-between">
+        <button onClick={() => setOffset((o) => o - 1)} aria-label="Раньше" style={{ color: "var(--accent)" }}>
+          <Icon name="chevron-left" size={22} />
+        </button>
+        <span className="text-[15px] font-semibold first-letter:uppercase">{monthLabel(offset, true)}</span>
+        <button
+          onClick={() => setOffset((o) => Math.min(0, o + 1))}
+          disabled={offset >= 0}
+          aria-label="Позже"
+          className="disabled:opacity-25"
+          style={{ color: "var(--accent)" }}
+        >
+          <Icon name="chevron-right" size={22} />
+        </button>
       </div>
 
+      <p className="text-center text-[11px]" style={{ color: "var(--muted)" }}>
+        сальдо
+      </p>
+      <p
+        className="mb-4 text-center text-3xl font-bold tabular-nums"
+        style={{ color: saldo < 0 ? "var(--danger)" : "var(--text)" }}
+      >
+        {formatMoney(saldo, base)}
+      </p>
+
       {groups.length === 0 ? (
-        <p className="py-10 text-center text-sm" style={{ color: "var(--muted)" }}>
-          Пока пусто
-        </p>
+        <div className="py-12 text-center">
+          <p className="text-[15px] font-semibold">За этот период данных нет</p>
+          <p className="mt-1 text-sm" style={{ color: "var(--muted)" }}>
+            добавлять операции можно в разделе «Панель»
+          </p>
+        </div>
       ) : null}
 
       {groups.map(([day, items]) => (
         <section key={day} className="mb-4">
-          <h2 className="mb-1.5 text-xs" style={{ color: "var(--muted)" }}>
+          <h2 className="mb-1.5 px-1 text-xs" style={{ color: "var(--muted)" }}>
             {new Date(day).toLocaleDateString("ru-RU", {
               day: "numeric",
               month: "long",
               weekday: "short",
             })}
           </h2>
-          <div
-            className="overflow-hidden rounded-2xl"
-            style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
-          >
+          <div className="overflow-hidden rounded-2xl" style={{ background: "var(--surface)" }}>
             {items.map((t, index) => (
               <button
                 key={t.id}
@@ -126,12 +187,42 @@ export default function OperationsPage() {
                   {t.type === "expense" ? "−" : t.type === "income" ? "+" : ""}
                   {formatMoney(Math.abs(Number(t.amount)), t.currency)}
                 </span>
-                <Icon name="plus" size={14} className="-rotate-45 opacity-30" />
+                <Icon name="chevron-right" size={15} className="opacity-30" />
               </button>
             ))}
           </div>
         </section>
       ))}
+
+      <Link
+        href="/"
+        aria-label="Добавить операцию"
+        className="fixed bottom-24 right-5 flex h-14 w-14 items-center justify-center rounded-full text-white"
+        style={{ background: "var(--accent)", boxShadow: "0 6px 20px rgba(0,0,0,0.22)" }}
+      >
+        <Icon name="plus" size={26} />
+      </Link>
+
+      <Sheet open={filtersOpen} title="Показывать" onClose={() => setFiltersOpen(false)}>
+        <div className="grid grid-cols-2 gap-2 pb-2">
+          {FILTERS.map((f) => (
+            <button
+              key={f.id}
+              onClick={() => {
+                setFilter(f.id);
+                setFiltersOpen(false);
+              }}
+              className="rounded-2xl px-3 py-2.5 text-sm"
+              style={{
+                background: filter === f.id ? "var(--accent)" : "var(--surface-2)",
+                color: filter === f.id ? "#fff" : "inherit",
+              }}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+      </Sheet>
 
       <EditSheet
         transaction={editing}

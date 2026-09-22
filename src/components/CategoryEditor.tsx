@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ICON_NAMES, Icon, PALETTE } from "@/lib/icons";
+import { PALETTE } from "@/lib/icons";
 import { parseAmount } from "@/lib/money";
 import type { Category, CategoryKind } from "@/lib/types";
 import { useStore } from "./DataProvider";
-import { Button, Field, Sheet, inputClass, inputStyle } from "./ui";
+import { Button, ColorPicker, Field, IconPicker, Sheet, inputClass, inputStyle } from "./ui";
 
 export function CategoryEditor({
   open,
@@ -104,38 +104,8 @@ export function CategoryEditor({
         </Field>
       ) : null}
 
-      <Field label="Цвет">
-        <div className="flex flex-wrap gap-2">
-          {PALETTE.map((c) => (
-            <button
-              key={c}
-              onClick={() => setColor(c)}
-              aria-label={c}
-              className="h-8 w-8 rounded-full"
-              style={{ background: c, outline: color === c ? "2px solid var(--text)" : "none", outlineOffset: 2 }}
-            />
-          ))}
-        </div>
-      </Field>
-
-      <Field label="Иконка">
-        <div className="grid grid-cols-6 gap-2">
-          {ICON_NAMES.map((n) => (
-            <button
-              key={n}
-              onClick={() => setIcon(n)}
-              className="flex h-11 items-center justify-center rounded-xl"
-              style={{
-                background: icon === n ? color + "33" : "var(--surface-2)",
-                color: icon === n ? color : "var(--muted)",
-              }}
-              aria-label={n}
-            >
-              <Icon name={n} size={20} />
-            </button>
-          ))}
-        </div>
-      </Field>
+      <ColorPicker value={color} onChange={setColor} />
+      <IconPicker value={icon} color={color} onChange={setIcon} />
     </Sheet>
   );
 }

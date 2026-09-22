@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
-import { Icon } from "@/lib/icons";
+import { ICON_GROUPS, Icon, PALETTE } from "@/lib/icons";
 
 export function Sheet({
   open,
@@ -306,5 +306,75 @@ export function PickerSheet({
         </div>
       )}
     </Sheet>
+  );
+}
+
+/** Выбор цвета — одинаковый для категорий и кошельков. */
+export function ColorPicker({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (color: string) => void;
+}) {
+  return (
+    <Field label="Цвет">
+      <div className="flex flex-wrap gap-2">
+        {PALETTE.map((color) => (
+          <button
+            key={color}
+            onClick={() => onChange(color)}
+            aria-label={color}
+            className="h-8 w-8 rounded-full"
+            style={{
+              background: color,
+              outline: value === color ? "2px solid var(--text)" : "none",
+              outlineOffset: 2,
+            }}
+          />
+        ))}
+      </div>
+    </Field>
+  );
+}
+
+/** Иконок под сотню, поэтому они разложены по группам, а не одной простынёй. */
+export function IconPicker({
+  value,
+  color,
+  onChange,
+}: {
+  value: string;
+  color: string;
+  onChange: (icon: string) => void;
+}) {
+  return (
+    <Field label="Иконка">
+      <div className="space-y-3">
+        {ICON_GROUPS.map((group) => (
+          <div key={group.title}>
+            <p className="mb-1.5 text-[11px]" style={{ color: "var(--muted)" }}>
+              {group.title}
+            </p>
+            <div className="grid grid-cols-6 gap-2">
+              {group.icons.map((name) => (
+                <button
+                  key={name}
+                  onClick={() => onChange(name)}
+                  aria-label={name}
+                  className="flex h-11 items-center justify-center rounded-xl transition"
+                  style={{
+                    background: value === name ? color : "var(--surface-2)",
+                    color: value === name ? "#fff" : "var(--muted)",
+                  }}
+                >
+                  <Icon name={name} size={21} />
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </Field>
   );
 }

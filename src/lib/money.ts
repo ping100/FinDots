@@ -39,19 +39,6 @@ export function formatMoney(amount: number, currency: CurrencyCode): string {
   );
 }
 
-/** Компактная запись для подписи под иконкой: 1 250 000 → 1,25 млн */
-export function formatCompact(amount: number, currency: CurrencyCode): string {
-  const abs = Math.abs(amount);
-  if (abs >= 1_000_000) {
-    return (amount / 1_000_000).toFixed(abs >= 10_000_000 ? 0 : 1).replace(".", ",") +
-      " млн " + symbolOf(currency);
-  }
-  if (abs >= 10_000) {
-    return Math.round(amount / 1000).toLocaleString("ru-RU") + " тыс " + symbolOf(currency);
-  }
-  return formatMoney(amount, currency);
-}
-
 export function parseAmount(input: string): number | null {
   const normalized = input.replace(/\s/g, "").replace(",", ".");
   if (!normalized) return null;

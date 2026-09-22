@@ -192,13 +192,27 @@ export function Bubble({
         ) : null}
       </span>
       <span
-        className="w-full truncate text-center text-[11px] font-semibold tabular-nums"
-        style={{ color: muted ? "var(--muted)" : "var(--text)" }}
+        className="w-full whitespace-nowrap text-center font-semibold tabular-nums"
+        style={{
+          color: muted ? "var(--muted)" : "var(--text)",
+          // Баланс показываем полностью: длинную сумму ужимаем по размеру,
+          // а не округляем — 19 532,55 не должно превращаться в «20 тыс».
+          fontSize: amountFontSize(amount),
+        }}
       >
         {amount ?? "\u00a0"}
       </span>
     </div>
   );
+}
+
+/** Ширина ячейки в сетке 5 колонок — около 68px; под неё и подбираем кегль. */
+function amountFontSize(amount?: string): number {
+  const length = amount?.length ?? 0;
+  if (length > 15) return 7.5;
+  if (length > 12) return 8.5;
+  if (length > 9) return 9.5;
+  return 11;
 }
 
 /** Пустой кружок «добавить» в конце каждой сетки. */

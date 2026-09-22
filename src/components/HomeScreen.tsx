@@ -15,7 +15,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { Icon } from "@/lib/icons";
-import { formatCompact, formatMoney, monthLabel, monthRange } from "@/lib/money";
+import { formatMoney, monthLabel, monthRange } from "@/lib/money";
 import type { Category, DragPayload, Wallet, WalletKind } from "@/lib/types";
 import { useStore } from "./DataProvider";
 import { AmountSheet } from "./AmountSheet";
@@ -622,7 +622,7 @@ function IncomeBubble({
         icon={category.icon}
         color={category.color}
         label={category.name}
-        amount={formatCompact(amount, base)}
+        amount={formatMoney(amount, base)}
         badge={draggable}
         dimmed={isDragging}
       />
@@ -668,7 +668,7 @@ function WalletBubble({
         icon={wallet.icon}
         color={wallet.color}
         label={wallet.name}
-        amount={formatCompact(balance, wallet.currency)}
+        amount={formatMoney(balance, wallet.currency)}
         dimmed={isDragging}
         highlighted={isOver}
       />
@@ -701,7 +701,7 @@ function DebtBubble({
         icon={style.icon}
         color={style.color}
         label={style.label}
-        amount={amount === 0 ? formatCompact(0, base) : formatCompact(shown, base)}
+        amount={amount === 0 ? formatMoney(0, base) : formatMoney(shown, base)}
         muted={group === "debt_out"}
         highlighted={isOver}
       />
@@ -738,7 +738,7 @@ function ExpenseBubble({
         icon={category.icon}
         color={category.color}
         label={category.name}
-        amount={formatCompact(spent, base)}
+        amount={formatMoney(spent, base)}
         highlighted={isOver}
       />
       {limit ? (
@@ -780,7 +780,7 @@ function DragGhost({ payload }: { payload: DragPayload }) {
         <Icon name={item.icon} size={22} />
       </span>
       <span className="whitespace-nowrap text-sm font-bold tabular-nums">
-        {formatCompact(payload.available, payload.currency)}
+        {formatMoney(payload.available, payload.currency)}
       </span>
     </div>
   );

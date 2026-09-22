@@ -238,6 +238,38 @@ export function HomeScreen() {
 
         <Section
           columns={columns}
+          title="Накопления"
+          total={formatMoney(savingsTotal, base)}
+          note={ripe > 0 ? "Созрели проценты — открой вклад" : undefined}
+          hint={
+            savings.length === 0
+              ? "Вклад или копилка. Эти деньги не считаются свободными и не попадают в «можно тратить сегодня»."
+              : undefined
+          }
+          collapsed={!!collapsed.savings}
+          onToggle={() => setCollapsed((c) => ({ ...c, savings: !c.savings }))}
+        >
+          {savings.map((wallet) => (
+            <SavingsBubble
+              key={wallet.id}
+              wallet={wallet}
+              balance={balanceOf(wallet.id)}
+              size={bubble}
+              ripe={
+                !!pendingAccrual(wallet, transactions, (amount, currency) =>
+                  convert(amount, currency, wallet.currency, rates),
+                )
+              }
+              onTap={() => setWalletSheet(wallet)}
+            />
+          ))}
+          <button onClick={() => setWalletEditor({ wallet: null, kind: "savings" })} className="transition-transform duration-100 active:scale-95">
+            <AddBubble size={bubble} />
+          </button>
+        </Section>
+
+        <Section
+          columns={columns}
           title="Доходы"
           total={formatMoney(month.incomeTotal, base)}
           hint={incomeCats.length === 0 ? "Нажми «+» и заведи источник дохода: название, цвет, иконка." : undefined}
@@ -290,38 +322,6 @@ export function HomeScreen() {
               />
             ))}
           <button onClick={() => setWalletEditor({ wallet: null, kind: "card" })} className="transition-transform duration-100 active:scale-95">
-            <AddBubble size={bubble} />
-          </button>
-        </Section>
-
-        <Section
-          columns={columns}
-          title="Накопления"
-          total={formatMoney(savingsTotal, base)}
-          note={ripe > 0 ? "Созрели проценты — открой вклад" : undefined}
-          hint={
-            savings.length === 0
-              ? "Вклад или копилка. Эти деньги не считаются свободными и не попадают в «можно тратить сегодня»."
-              : undefined
-          }
-          collapsed={!!collapsed.savings}
-          onToggle={() => setCollapsed((c) => ({ ...c, savings: !c.savings }))}
-        >
-          {savings.map((wallet) => (
-            <SavingsBubble
-              key={wallet.id}
-              wallet={wallet}
-              balance={balanceOf(wallet.id)}
-              size={bubble}
-              ripe={
-                !!pendingAccrual(wallet, transactions, (amount, currency) =>
-                  convert(amount, currency, wallet.currency, rates),
-                )
-              }
-              onTap={() => setWalletSheet(wallet)}
-            />
-          ))}
-          <button onClick={() => setWalletEditor({ wallet: null, kind: "savings" })} className="transition-transform duration-100 active:scale-95">
             <AddBubble size={bubble} />
           </button>
         </Section>

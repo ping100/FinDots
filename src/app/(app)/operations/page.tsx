@@ -88,7 +88,7 @@ export default function OperationsPage() {
   return (
     <div className="mx-auto w-full max-w-md px-4 pb-32">
       <header className="relative flex items-center justify-center py-2">
-        <h1 className="text-[17px] font-bold">История</h1>
+        <h1 className="text-[17px] font-semibold">История</h1>
         <button
           onClick={() => setFiltersOpen(true)}
           aria-label="Фильтр"

@@ -131,7 +131,7 @@ export default function AnalyticsPage() {
 
   return (
     <div className="mx-auto w-full max-w-md px-4 pb-32">
-      <h1 className="py-2 text-[26px] font-bold">Отчет</h1>
+      <h1 className="py-2 text-[26px] font-semibold">Отчет</h1>
 
       {/* Сначала период и итоги — это контекст. Выбор разреза идёт после. */}
       <div className="mb-3 flex items-center justify-between">
@@ -405,7 +405,7 @@ function Stat({
       <p className="text-[11px]" style={{ color: "var(--muted)" }}>
         {label}
       </p>
-      <p className="text-[15px] font-bold tabular-nums" style={{ color }}>
+      <p className="text-[15px] font-semibold tabular-nums" style={{ color }}>
         {value}
       </p>
       {hint ? (

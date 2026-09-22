@@ -30,7 +30,7 @@ export default function SettingsPage() {
 
   return (
     <div className="mx-auto w-full max-w-md px-4 pb-32">
-      <h1 className="py-2 text-[26px] font-bold">Настройки</h1>
+      <h1 className="py-2 text-[26px] font-semibold">Настройки</h1>
 
       <Group>
         <Row
@@ -254,7 +254,7 @@ export default function SettingsPage() {
               <span className="flex-1">{m.label}</span>
               {m.free ? (
                 <span
-                  className="rounded-full px-2 py-0.5 text-[10px] font-bold"
+                  className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
                   style={{
                     background: model === m.id ? "rgba(255,255,255,0.25)" : "var(--ok)",
                     color: "#fff",

@@ -549,7 +549,7 @@ function Section({
             size={15}
             style={{ color: "var(--muted)" }}
           />
-          <h2 className="text-[17px] font-bold">{title}</h2>
+          <h2 className="text-[17px] font-semibold">{title}</h2>
         </button>
         <span className="ml-auto text-[15px] font-semibold tabular-nums">{total}</span>
       </div>
@@ -796,7 +796,7 @@ function DragGhost({ payload }: { payload: DragPayload }) {
           <Icon name={item.icon} size={28} />
         </span>
         <span
-          className="whitespace-nowrap rounded-full px-2.5 py-1 text-[12px] font-bold tabular-nums shadow-lg"
+          className="whitespace-nowrap rounded-full px-2.5 py-1 text-[12px] font-semibold tabular-nums shadow-lg"
           style={{ background: "var(--surface)", border: `1px solid ${item.color}` }}
         >
           {formatMoney(payload.available, payload.currency)}

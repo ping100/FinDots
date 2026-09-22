@@ -164,7 +164,7 @@ function Row({
     <div className="flex items-baseline justify-between gap-3">
       <span style={{ color: muted ? "var(--muted)" : undefined }}>{label}</span>
       <span
-        className={`tabular-nums ${strong ? "text-base font-bold" : ""}`}
+        className={`tabular-nums ${strong ? "text-base font-semibold" : ""}`}
         style={{ color: muted && !value ? "var(--muted)" : undefined }}
       >
         {value}

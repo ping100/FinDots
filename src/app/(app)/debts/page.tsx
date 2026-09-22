@@ -30,7 +30,7 @@ export default function DebtsPage() {
 
   return (
     <div className="mx-auto w-full max-w-md px-4 pb-28 pt-3">
-      <h1 className="mb-1 text-xl font-bold">Долги и обязательные платежи</h1>
+      <h1 className="mb-1 text-xl font-semibold">Долги и обязательные платежи</h1>
       <p className="mb-4 text-xs" style={{ color: "var(--muted)" }}>
         Долг гасится переносом денег из кошелька — здесь или перетаскиванием на
         главном экране.
@@ -228,7 +228,7 @@ function DebtCard({
           ) : null}
         </button>
         <span className="text-right">
-          <span className="block text-base font-bold tabular-nums">
+          <span className="block text-base font-semibold tabular-nums">
             {formatMoney(amount, wallet.currency)}
           </span>
           {wallet.monthly_payment ? (

@@ -36,7 +36,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
         </p>
       ) : null}
 
-      {children}
+      {/* key по маршруту — иначе анимация не повторится при смене вкладки */}
+      <div key={pathname} className="animate-page">
+        {children}
+      </div>
 
       <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 px-3 pb-2">
         <div

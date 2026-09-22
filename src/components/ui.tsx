@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ICON_GROUPS, Icon, PALETTE } from "@/lib/icons";
 
 export function Sheet({
@@ -16,6 +16,34 @@ export function Sheet({
   children: ReactNode;
   footer?: ReactNode;
 }) {
+  // Лист должен уезжать вниз, а не исчезать. Для этого он живёт ещё 200 мс
+  // после закрытия — и всё это время показывает застывший снимок прошлого
+  // содержимого: вызывающий код обычно обнуляет заголовок в тот же миг,
+  // и без снимка на прощание мелькал бы пустой лист.
+  const [mounted, setMounted] = useState(open);
+  const [leaving, setLeaving] = useState(false);
+  const snapshot = useRef<{ title: string; children: ReactNode; footer?: ReactNode }>({
+    title,
+    children,
+    footer,
+  });
+  if (open) snapshot.current = { title, children, footer };
+
+  useEffect(() => {
+    if (open) {
+      setMounted(true);
+      setLeaving(false);
+      return;
+    }
+    if (!mounted) return;
+    setLeaving(true);
+    const timer = setTimeout(() => {
+      setMounted(false);
+      setLeaving(false);
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [open, mounted]);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -27,34 +55,44 @@ export function Sheet({
     };
   }, [open, onClose]);
 
-  if (!open) return null;
+  if (!mounted) return null;
+
+  const view = open ? { title, children, footer } : snapshot.current;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
       <button
         aria-label="Закрыть"
         onClick={onClose}
-        className="absolute inset-0 bg-black/55 backdrop-blur-[2px]"
+        className={`absolute inset-0 bg-black/55 backdrop-blur-[2px] ${
+          leaving ? "animate-fade-out" : "animate-fade"
+        }`}
       />
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={title}
-        className="animate-sheet relative flex max-h-[92vh] w-full max-w-md flex-col rounded-t-3xl border-t sm:rounded-3xl sm:border"
+        aria-label={view.title}
+        className={`relative flex max-h-[92vh] w-full max-w-md flex-col rounded-t-3xl border-t sm:rounded-3xl sm:border ${
+          leaving ? "animate-sheet-out" : "animate-sheet"
+        }`}
         style={{ background: "var(--surface)", borderColor: "var(--border)" }}
       >
         <div className="flex items-center justify-between px-5 pb-2 pt-4">
-          <h2 className="text-lg font-semibold">{title}</h2>
+          <h2 className="text-lg font-semibold">{view.title}</h2>
           <button
             onClick={onClose}
-            className="-mr-2 rounded-full p-2 opacity-60 active:opacity-100"
+            className="-mr-2 rounded-full p-2 opacity-60 transition active:scale-90 active:opacity-100"
             aria-label="Закрыть"
           >
             <Icon name="close" size={20} />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto px-5 pb-2">{children}</div>
-        {footer ? <div className="pb-safe px-5 pt-2">{footer}</div> : <div className="pb-safe" />}
+        <div className="flex-1 overflow-y-auto px-5 pb-2">{view.children}</div>
+        {footer || view.footer ? (
+          <div className="pb-safe px-5 pt-2">{view.footer}</div>
+        ) : (
+          <div className="pb-safe" />
+        )}
       </div>
     </div>
   );
@@ -91,7 +129,7 @@ export function Button({
       onClick={onClick}
       disabled={disabled}
       style={{ background: bg[variant] }}
-      className={`w-full rounded-2xl px-4 py-3.5 text-base font-semibold transition active:scale-[0.98] disabled:opacity-40 ${styles[variant]} ${className}`}
+      className={`w-full rounded-2xl px-4 py-3.5 text-base font-semibold transition-transform duration-100 active:scale-[0.97] disabled:opacity-40 ${styles[variant]} ${className}`}
     >
       {children}
     </button>

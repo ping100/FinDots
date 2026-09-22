@@ -192,6 +192,10 @@ export function IncomeExpenseChart({
         {(["income", "expense"] as const).map((key) => (
           <path
             key={key}
+            className="animate-draw"
+            // pathLength нормирует длину к единице — иначе для dashoffset
+            // пришлось бы измерять путь в JS после монтирования
+            pathLength={1}
             d={line((b) => b[key])}
             fill="none"
             stroke={SERIES[key].color}
@@ -199,6 +203,7 @@ export function IncomeExpenseChart({
             strokeLinecap="round"
             strokeLinejoin="round"
             vectorEffect="non-scaling-stroke"
+            style={{ animationDelay: key === "expense" ? "80ms" : "0ms" }}
           />
         ))}
         {active != null && buckets[active]
@@ -270,6 +275,7 @@ export function NetChart({ buckets, currency }: { buckets: Bucket[]; currency: s
           return (
             <rect
               key={buckets[i].key}
+              className="animate-grow-y"
               x={PLOT.x0 + step * (i + 0.5) - width / 2}
               y={positive ? zero - bar : zero}
               width={width}
@@ -277,6 +283,11 @@ export function NetChart({ buckets, currency }: { buckets: Bucket[]; currency: s
               rx={Math.min(4, width / 2)}
               fill={positive ? SERIES.income.color : SERIES.expense.color}
               opacity={active == null || active === i ? 1 : 0.45}
+              style={{
+                transformBox: "fill-box",
+                transformOrigin: positive ? "center bottom" : "center top",
+                animationDelay: `${i * 18}ms`,
+              }}
             />
           );
         })}
@@ -313,7 +324,7 @@ export function ShareBar({
   return (
     <div>
       {/* Разделяют сегменты не обводки, а зазоры цветом поверхности */}
-      <div className="flex h-7 w-full gap-[2px] overflow-hidden rounded-lg">
+      <div className="animate-grow-x flex h-7 w-full gap-[2px] overflow-hidden rounded-lg">
         {parts.map((part) => (
           <button
             key={part.id}

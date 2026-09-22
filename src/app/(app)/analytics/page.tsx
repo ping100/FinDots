@@ -350,7 +350,7 @@ export default function AnalyticsPage() {
 
       {advice ? (
         <div
-          className="mt-3 whitespace-pre-wrap rounded-2xl p-4 text-sm leading-relaxed"
+          className="selectable animate-fade mt-3 whitespace-pre-wrap rounded-2xl p-4 text-sm leading-relaxed"
           style={{ background: "var(--surface)" }}
         >
           {advice}

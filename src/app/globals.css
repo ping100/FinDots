@@ -42,6 +42,21 @@ body {
      вместе с перетаскиваемой иконкой. */
   overscroll-behavior-y: none;
   -webkit-tap-highlight-color: transparent;
+  /* Долгое нажатие у нас — жест перетаскивания. Без этих двух правил
+     система принимает его за выделение: iOS показывает меню «Копировать»,
+     а подписи под кружками обводятся синим прямо во время переноса. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Текст, который осмысленно выделять и копировать. */
+input,
+textarea,
+[contenteditable],
+.selectable {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 /* Безопасные зоны iPhone */
@@ -85,6 +100,11 @@ body {
   animation: rise 0.18s ease-out;
 }
 
+/* ─────────────────────────── движение ───────────────────────────
+   Правило одно: анимация объясняет, откуда взялся элемент, и заканчивается
+   раньше, чем её успеваешь заметить. Ничего декоративного и ничего
+   зацикленного. */
+
 @keyframes sheet-in {
   from {
     transform: translateY(100%);
@@ -93,6 +113,81 @@ body {
     transform: translateY(0);
   }
 }
+@keyframes sheet-out {
+  to {
+    transform: translateY(100%);
+  }
+}
 .animate-sheet {
-  animation: sheet-in 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+  animation: sheet-in 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.animate-sheet-out {
+  animation: sheet-out 0.2s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+.animate-fade {
+  animation: fade-in 0.2s ease-out;
+}
+.animate-fade-out {
+  animation: fade-in 0.18s ease-in reverse forwards;
+}
+
+/* Переход между вкладками: короткий подъём, чтобы смена экрана читалась
+   как движение, а не как мигание. */
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.animate-page {
+  animation: page-in 0.2s ease-out;
+}
+
+/* Линия графика прочерчивается. pathLength="1" избавляет от измерения
+   длины пути в JS. */
+@keyframes draw-line {
+  from {
+    stroke-dashoffset: 1;
+  }
+}
+.animate-draw {
+  stroke-dasharray: 1;
+  animation: draw-line 0.7s ease-out;
+}
+
+/* Столбцы вырастают от нулевой линии, доли — от левого края. */
+@keyframes grow-y {
+  from {
+    transform: scaleY(0);
+  }
+}
+.animate-grow-y {
+  animation: grow-y 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes grow-x {
+  from {
+    transform: scaleX(0);
+  }
+}
+.animate-grow-x {
+  transform-origin: left center;
+  animation: grow-x 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Системная настройка «меньше движения» важнее любой нашей анимации. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

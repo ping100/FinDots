@@ -221,7 +221,7 @@ export function HomeScreen() {
               onTap={() => setDialog({ kind: "income", category })}
             />
           ))}
-          <button onClick={() => setCategoryEditor({ kind: "income", category: null })}>
+          <button onClick={() => setCategoryEditor({ kind: "income", category: null })} className="transition-transform duration-100 active:scale-95">
             <AddBubble />
           </button>
         </Section>
@@ -252,7 +252,7 @@ export function HomeScreen() {
                 onTap={() => setDebtPicker({ group })}
               />
             ))}
-          <button onClick={() => setWalletEditor({ wallet: null, kind: "card" })}>
+          <button onClick={() => setWalletEditor({ wallet: null, kind: "card" })} className="transition-transform duration-100 active:scale-95">
             <AddBubble />
           </button>
         </Section>
@@ -274,7 +274,7 @@ export function HomeScreen() {
               onHold={() => setCategoryEditor({ kind: "expense", category })}
             />
           ))}
-          <button onClick={() => setCategoryEditor({ kind: "expense", category: null })}>
+          <button onClick={() => setCategoryEditor({ kind: "expense", category: null })} className="transition-transform duration-100 active:scale-95">
             <AddBubble />
           </button>
         </Section>
@@ -614,6 +614,7 @@ function IncomeBubble({
     <button
       ref={setNodeRef}
       onClick={onTap}
+      className="transition-transform duration-100 active:scale-95"
       style={{ touchAction: draggable ? "none" : undefined }}
       {...attributes}
       {...listeners}
@@ -660,6 +661,7 @@ function WalletBubble({
         dropRef(node);
       }}
       onClick={onTap}
+      className="transition-transform duration-100 active:scale-95"
       style={{ touchAction: "none" }}
       {...attributes}
       {...listeners}
@@ -696,7 +698,7 @@ function DebtBubble({
   const shown = group === "debt_out" ? -amount : amount;
 
   return (
-    <button ref={setNodeRef} onClick={onTap}>
+    <button ref={setNodeRef} onClick={onTap} className="transition-transform duration-100 active:scale-95">
       <Bubble
         icon={style.icon}
         color={style.color}
@@ -733,7 +735,7 @@ function ExpenseBubble({
   const over = limit != null && spent > limit;
 
   return (
-    <button ref={setNodeRef} onClick={onTap} {...hold}>
+    <button ref={setNodeRef} onClick={onTap} className="transition-transform duration-100 active:scale-95" {...hold}>
       <Bubble
         icon={category.icon}
         color={category.color}

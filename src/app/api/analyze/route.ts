@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
+// Лимит защищает не кошелёк владельца, а самого пользователя: ключ теперь
+// личный, и зациклившийся запрос жёг бы его собственные деньги.
 const DAILY_LIMIT = Number(process.env.AI_DAILY_LIMIT ?? 20);
 const DEFAULT_MODEL = "meta-llama/llama-3.3-70b-instruct:free";
 
@@ -15,19 +17,26 @@ interface Row {
 }
 
 export async function POST() {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: "Ключ OpenRouter не настроен на сервере (OPENROUTER_API_KEY)" },
-      { status: 503 },
-    );
-  }
-
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Нужна авторизация" }, { status: 401 });
+
+  // Ключ у каждого свой. В браузер он не уходит — читаем его только здесь.
+  const { data: keyRow } = await supabase
+    .from("ai_keys")
+    .select("api_key")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  const apiKey = keyRow?.api_key;
+  if (!apiKey) {
+    return NextResponse.json(
+      { error: "Добавьте свой ключ OpenRouter в настройках — разбор идёт от вашего аккаунта" },
+      { status: 400 },
+    );
+  }
 
   // Дневной лимит обращений, чтобы один пользователь не выжег общий ключ.
   const today = new Date().toISOString().slice(0, 10);
@@ -154,9 +163,21 @@ export async function POST() {
   }
 
   if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      return NextResponse.json(
+        { error: "OpenRouter не принял ключ — проверьте его в настройках" },
+        { status: 400 },
+      );
+    }
+    if (response.status === 402) {
+      return NextResponse.json(
+        { error: "На счету OpenRouter не хватает средств для этой модели" },
+        { status: 400 },
+      );
+    }
     const detail = await response.text();
     return NextResponse.json(
-      { error: `OpenRouter ответил ${response.status}`, detail: detail.slice(0, 400) },
+      { error: `OpenRouter ответил ${response.status}`, detail: detail.slice(0, 300) },
       { status: 502 },
     );
   }

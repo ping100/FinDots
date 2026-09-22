@@ -11,9 +11,13 @@ import { Button, Field, Sheet, inputClass, inputStyle } from "@/components/ui";
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { profile, rates, saveProfile, saveRate } = useStore();
-  const [sheet, setSheet] = useState<"currency" | "rates" | "theme" | "model" | null>(null);
+  const { profile, rates, aiKeyHint, saveProfile, saveRate, saveAiKey, deleteAiKey } = useStore();
+  const [sheet, setSheet] =
+    useState<"currency" | "rates" | "theme" | "model" | "key" | null>(null);
   const [model, setModel] = useState(profile?.ai_model ?? AI_MODELS[0].id);
+  const [keyDraft, setKeyDraft] = useState("");
+  const [keyBusy, setKeyBusy] = useState(false);
+  const [keyProblem, setKeyProblem] = useState<string | null>(null);
 
   const base = profile?.base_currency ?? "KZT";
   const modelLabel = AI_MODELS.find((m) => m.id === profile?.ai_model)?.label ?? profile?.ai_model;
@@ -52,6 +56,16 @@ export default function SettingsPage() {
       </Group>
 
       <Group>
+        <Row
+          label="Ключ OpenRouter"
+          value={aiKeyHint ? `···${aiKeyHint}` : "не задан"}
+          hint="Разбор бюджета идёт от вашего аккаунта — ключ у каждого свой"
+          onClick={() => {
+            setKeyDraft("");
+            setKeyProblem(null);
+            setSheet("key");
+          }}
+        />
         <Row
           label="Модель для разбора бюджета"
           value={modelLabel}
@@ -124,6 +138,91 @@ export default function SettingsPage() {
             </button>
           ))}
         </div>
+      </Sheet>
+
+      <Sheet
+        open={sheet === "key"}
+        title="Ключ OpenRouter"
+        onClose={() => setSheet(null)}
+        footer={
+          <div className="space-y-2">
+            <Button
+              disabled={keyBusy || keyDraft.trim().length < 8}
+              onClick={async () => {
+                setKeyBusy(true);
+                setKeyProblem(null);
+                try {
+                  await saveAiKey(keyDraft);
+                  setSheet(null);
+                } catch (e) {
+                  setKeyProblem(e instanceof Error ? e.message : "Не получилось сохранить");
+                } finally {
+                  setKeyBusy(false);
+                }
+              }}
+            >
+              {keyBusy ? "Сохраняю…" : "Сохранить ключ"}
+            </Button>
+            {aiKeyHint ? (
+              <Button
+                variant="ghost"
+                disabled={keyBusy}
+                onClick={async () => {
+                  setKeyBusy(true);
+                  try {
+                    await deleteAiKey();
+                    setSheet(null);
+                  } finally {
+                    setKeyBusy(false);
+                  }
+                }}
+              >
+                Удалить ключ
+              </Button>
+            ) : null}
+          </div>
+        }
+      >
+        <p className="mb-3 text-sm" style={{ color: "var(--muted)" }}>
+          Разбор бюджета выполняется вашим ключом, поэтому и расходы ваши.
+          Бесплатных моделей в списке хватает — на них счёт не растёт.
+        </p>
+        <ol className="mb-4 space-y-1.5 text-sm" style={{ color: "var(--muted)" }}>
+          <li>
+            1. Заведите ключ на{" "}
+            <a
+              href="https://openrouter.ai/keys"
+              target="_blank"
+              rel="noreferrer noopener"
+              className="underline"
+              style={{ color: "var(--accent)" }}
+            >
+              openrouter.ai/keys
+            </a>
+          </li>
+          <li>2. Вставьте его сюда — он начинается с sk-or-</li>
+        </ol>
+
+        <Field
+          label={aiKeyHint ? `Новый ключ (сейчас задан ···${aiKeyHint})` : "Ключ"}
+          hint="Хранится в вашей строке базы, другим пользователям он недоступен. В браузер обратно не отдаётся — показываются только последние 4 символа."
+        >
+          <input
+            type="password"
+            autoComplete="off"
+            className={inputClass}
+            style={inputStyle}
+            value={keyDraft}
+            onChange={(e) => setKeyDraft(e.target.value)}
+            placeholder="sk-or-..."
+          />
+        </Field>
+
+        {keyProblem ? (
+          <p className="pb-2 text-sm" style={{ color: "var(--danger)" }}>
+            {keyProblem}
+          </p>
+        ) : null}
       </Sheet>
 
       <Sheet

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { Icon } from "@/lib/icons";
 import { formatMoney, monthLabel, monthRange } from "@/lib/money";
 import type { CategoryKind } from "@/lib/types";
@@ -8,7 +9,7 @@ import { useStore } from "@/components/DataProvider";
 import { Button } from "@/components/ui";
 
 export default function AnalyticsPage() {
-  const { transactions, categories, profile, toBase } = useStore();
+  const { transactions, categories, profile, aiKeyHint, toBase } = useStore();
   const [offset, setOffset] = useState(0);
   const [side, setSide] = useState<CategoryKind>("expense");
   const base = profile?.base_currency ?? "KZT";
@@ -201,9 +202,16 @@ export default function AnalyticsPage() {
         Модель получает только суммы по категориям, балансы и долги — без
         комментариев к операциям.
       </p>
-      <Button onClick={runAnalysis} disabled={aiBusy}>
-        {aiBusy ? "Думает…" : advice ? "Пересчитать" : "Разобрать мой бюджет"}
-      </Button>
+      {aiKeyHint ? (
+        <Button onClick={runAnalysis} disabled={aiBusy}>
+          {aiBusy ? "Думает…" : advice ? "Пересчитать" : "Разобрать мой бюджет"}
+        </Button>
+      ) : (
+        // Без ключа кнопка только выдала бы ошибку — ведём сразу туда, где его заводят.
+        <Link href="/settings">
+          <Button variant="ghost">Добавить ключ OpenRouter в настройках</Button>
+        </Link>
+      )}
 
       {aiError ? (
         <p className="mt-3 text-sm" style={{ color: "var(--danger)" }}>

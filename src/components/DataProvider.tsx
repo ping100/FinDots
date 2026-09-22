@@ -35,6 +35,8 @@ export interface Store {
   balances: WalletBalance[];
   pools: IncomePool[];
   transactions: Transaction[];
+  /** Последние 4 символа ключа OpenRouter; null — ключ не задан. */
+  aiKeyHint: string | null;
 
   balanceOf: (walletId: string) => number;
   poolOf: (categoryId: string) => { amount: number; currency: CurrencyCode };
@@ -83,6 +85,8 @@ export interface Store {
 
   saveProfile: (patch: Partial<Profile>) => Promise<void>;
   saveRate: (code: CurrencyCode, rate: number) => Promise<void>;
+  saveAiKey: (key: string) => Promise<void>;
+  deleteAiKey: () => Promise<void>;
 }
 
 export const StoreContext = createContext<Store | null>(null);
@@ -112,6 +116,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [balances, setBalances] = useState<WalletBalance[]>([]);
   const [pools, setPools] = useState<IncomePool[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [aiKeyHint, setAiKeyHint] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const {
@@ -136,6 +141,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
         .order("occurred_at", { ascending: false })
         .limit(5000),
     ]);
+
+    // Полный ключ в браузер не тянем — только хвост из представления.
+    const key = await supabase().from("ai_key_status").select("hint").maybeSingle();
+    setAiKeyHint((key.data?.hint as string | undefined) ?? null);
 
     const firstError = [p, r, w, c, b, ip, tx].find((res) => res.error)?.error;
     if (firstError) setError(firstError.message);
@@ -418,6 +427,26 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [supabase, userId],
   );
 
+  const saveAiKey: Store["saveAiKey"] = useCallback(
+    async (key) => {
+      if (!userId) return;
+      const trimmed = key.trim();
+      const res = await supabase()
+        .from("ai_keys")
+        .upsert({ user_id: userId, api_key: trimmed, updated_at: new Date().toISOString() });
+      if (res.error) throw new Error(res.error.message);
+      setAiKeyHint(trimmed.slice(-4));
+    },
+    [supabase, userId],
+  );
+
+  const deleteAiKey: Store["deleteAiKey"] = useCallback(async () => {
+    if (!userId) return;
+    const res = await supabase().from("ai_keys").delete().eq("user_id", userId);
+    if (res.error) throw new Error(res.error.message);
+    setAiKeyHint(null);
+  }, [supabase, userId]);
+
   const saveRate: Store["saveRate"] = useCallback(
     async (code, rate) => {
       if (!userId) return;
@@ -446,6 +475,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       balances,
       pools,
       transactions,
+      aiKeyHint,
       balanceOf,
       poolOf,
       toBase,
@@ -463,12 +493,15 @@ export function DataProvider({ children }: { children: ReactNode }) {
       deleteCategory,
       saveProfile,
       saveRate,
+      saveAiKey,
+      deleteAiKey,
     }),
     [
       ready, error, userId, profile, rates, wallets, categories, balances, pools,
       transactions, balanceOf, poolOf, toBase, refresh, addIncome, allocate,
       addExpense, addTransfer, setWalletBalance, updateTransaction, deleteTransaction,
       saveWallet, deleteWallet, saveCategory, deleteCategory, saveProfile, saveRate,
+      aiKeyHint, saveAiKey, deleteAiKey,
     ],
   );
 

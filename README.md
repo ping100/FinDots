@@ -64,6 +64,19 @@ Supabase (Postgres + Auth, RLS) · Vercel.
 выключается в Authentication → Sign In / Providers → Email → Confirm email.
 Когда понадобятся настоящие письма, там же подключается свой SMTP.
 
+**Капча.** Регистрация в один шаг означает, что эндпоинт Supabase открыт
+любому, у кого есть публичный `anon`-ключ, — а он по своей природе лежит в коде
+страницы. Встроенный лимит Supabase по IP держит одиночный скрипт, но не
+распределённый перебор. Защита включается парой ключей Cloudflare Turnstile:
+
+1. site key → переменная `NEXT_PUBLIC_TURNSTILE_SITE_KEY` на Vercel;
+2. secret key → Supabase → Authentication → Attack Protection → Enable CAPTCHA,
+   провайдер Turnstile.
+
+Пока переменной нет, капчи нет и вход работает как обычно. Ключи нужны оба:
+с одним только site key Supabase отвергнет токен, с одним secret key форма
+его не пришлёт.
+
 ## Запуск
 
 ```bash

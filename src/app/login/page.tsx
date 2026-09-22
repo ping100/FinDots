@@ -3,6 +3,7 @@
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { TURNSTILE_SITE_KEY, Turnstile } from "@/components/Turnstile";
 import { Button, Field, inputClass, inputStyle } from "@/components/ui";
 
 function LoginForm() {
@@ -14,6 +15,11 @@ function LoginForm() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaNonce, setCaptchaNonce] = useState(0);
+
+  // Без ключа капчи её просто нет, и вход ничем не отличается от прежнего.
+  const captchaRequired = !!TURNSTILE_SITE_KEY;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,19 +29,30 @@ function LoginForm() {
     setMessage(null);
     const supabase = createClient();
 
+    const captcha = captchaToken ?? undefined;
     const result =
       mode === "in"
-        ? await supabase.auth.signInWithPassword({ email, password })
+        ? await supabase.auth.signInWithPassword({
+            email,
+            password,
+            options: { captchaToken: captcha },
+          })
         : await supabase.auth.signUp({
             email,
             password,
-            options: { emailRedirectTo: `${location.origin}/auth/callback` },
+            options: {
+              captchaToken: captcha,
+              emailRedirectTo: `${location.origin}/auth/callback`,
+            },
           });
 
     setBusy(false);
 
     if (result.error) {
       setProblem(result.error.message);
+      // Токен Turnstile одноразовый — после ошибки виджет нужно прогнать заново.
+      setCaptchaToken(null);
+      setCaptchaNonce((n) => n + 1);
       return;
     }
     if (!result.data.session) {
@@ -90,7 +107,9 @@ function LoginForm() {
           </p>
         ) : null}
 
-        <Button type="submit" disabled={busy}>
+        <Turnstile onToken={setCaptchaToken} resetKey={captchaNonce} />
+
+        <Button type="submit" disabled={busy || (captchaRequired && !captchaToken)}>
           {busy ? "Минуту…" : mode === "in" ? "Войти" : "Зарегистрироваться"}
         </Button>
       </form>

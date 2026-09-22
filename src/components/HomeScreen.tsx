@@ -168,7 +168,7 @@ export function HomeScreen() {
     <DndContext
       // Фиксированный id: иначе dnd-kit генерирует разные aria-describedby
       // на сервере и на клиенте, и React ругается на несовпадение разметки.
-      id="money-grid"
+      id="findots"
       sensors={sensors}
       collisionDetection={pointerWithin}
       onDragStart={(event: DragStartEvent) => {

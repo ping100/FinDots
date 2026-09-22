@@ -131,7 +131,7 @@ export async function POST() {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
         "HTTP-Referer": process.env.NEXT_PUBLIC_SITE_URL ?? "https://localhost",
-        "X-Title": "Money Grid",
+        "X-Title": "Findots",
       },
       body: JSON.stringify({
         model,

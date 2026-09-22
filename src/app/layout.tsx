@@ -3,10 +3,10 @@ import { RegisterSW } from "@/components/RegisterSW";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Money Grid — трекер расходов",
+  title: "Findots — трекер расходов",
   description: "Учёт личных финансов: доходы, кошельки и расходы перетаскиванием",
   manifest: "/manifest.webmanifest",
-  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Money Grid" },
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Findots" },
 };
 
 export const viewport: Viewport = {

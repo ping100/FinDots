@@ -1,4 +1,4 @@
--- Money Grid — начальная схема.
+-- Findots — начальная схема.
 -- Все таблицы закрыты RLS: строка видна только своему владельцу (auth.uid()).
 
 create extension if not exists "pgcrypto";

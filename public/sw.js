@@ -1,7 +1,7 @@
 // Кэшируем только статику. Страницы и запросы к Supabase всегда идут в сеть:
 // это финансовые данные, и на общем телефоне кэш страницы одного пользователя
 // не должен достаться другому.
-const CACHE = "money-grid-static-v1";
+const CACHE = "findots-static-v1";
 
 self.addEventListener("install", () => self.skipWaiting());
 

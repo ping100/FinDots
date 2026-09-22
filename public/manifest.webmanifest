@@ -1,6 +1,6 @@
 {
-  "name": "Money Grid — трекер расходов",
-  "short_name": "Money Grid",
+  "name": "Findots — трекер расходов",
+  "short_name": "Findots",
   "description": "Доходы, кошельки и расходы: иконки и перетаскивание",
   "start_url": "/",
   "scope": "/",

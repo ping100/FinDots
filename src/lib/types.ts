@@ -1,4 +1,4 @@
-export type WalletKind = "cash" | "card" | "debt_out" | "debt_in";
+export type WalletKind = "cash" | "card" | "savings" | "debt_out" | "debt_in";
 export type CategoryKind = "income" | "expense";
 export type TxType = "income" | "allocation" | "expense" | "transfer" | "adjustment";
 
@@ -34,6 +34,12 @@ export interface Wallet {
   is_recurring: boolean;
   recurring_day: number | null;
   note: string | null;
+  // накопления: ставка годовых, срок, цель и отметка о начисленных процентах
+  rate: number | null;
+  term_end: string | null;
+  goal: number | null;
+  opened_on: string | null;
+  interest_through: string | null;
 }
 
 export interface Category {

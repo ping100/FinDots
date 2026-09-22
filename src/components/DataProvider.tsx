@@ -13,6 +13,7 @@ import {
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { convert } from "@/lib/money";
+import { maturedAccruals, toISODate } from "@/lib/savings";
 import { scaleFactor } from "@/lib/textScale";
 import type {
   Category,
@@ -75,6 +76,8 @@ export interface Store {
     occurredAt?: string;
   }) => Promise<void>;
   setWalletBalance: (walletId: string, target: number) => Promise<void>;
+  /** Записать созревшие проценты по вкладу. Возвращает начисленную сумму. */
+  accrueInterest: (walletId: string) => Promise<number>;
 
   updateTransaction: (id: string, patch: Partial<Transaction>) => Promise<void>;
   deleteTransaction: (id: string) => Promise<void>;
@@ -89,6 +92,9 @@ export interface Store {
   saveAiKey: (key: string) => Promise<void>;
   deleteAiKey: () => Promise<void>;
 }
+
+/** Куда падают проценты по вкладам. Заводится сама при первом начислении. */
+const INTEREST_CATEGORY = "Проценты";
 
 export const StoreContext = createContext<Store | null>(null);
 
@@ -351,6 +357,94 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [balanceOf, guard, supabase, userId, wallets],
   );
 
+  const reloadDictionaries = useCallback(async () => {
+    const [w, c] = await Promise.all([
+      supabase().from("wallets").select("*").eq("archived", false).order("sort_order"),
+      supabase().from("categories").select("*").eq("archived", false).order("sort_order"),
+    ]);
+    setWallets((w.data ?? []) as Wallet[]);
+    setCategories((c.data ?? []) as Category[]);
+  }, [supabase]);
+
+  /**
+   * Проценты по вкладу — это доход, а не появление денег из воздуха, поэтому
+   * пишем их как обычное поступление плюс разнос на сам вклад: тогда они
+   * видны в отчётах и их можно поправить или удалить, как любую операцию.
+   *
+   * Отдельного сервера с расписанием нет, так что начисление делает сам
+   * пользователь одной кнопкой, когда месяц уже прошёл. Дата последнего
+   * начисления живёт в кошельке, поэтому дважды за один период не начислить.
+   */
+  const accrueInterest: Store["accrueInterest"] = useCallback(
+    async (walletId) => {
+      const wallet = wallets.find((w) => w.id === walletId);
+      if (!wallet) throw new Error("Вклад не найден");
+      const toWallet = (amount: number, currency: CurrencyCode) =>
+        convert(amount, currency, wallet.currency, rates);
+      const due = maturedAccruals(wallet, transactions, toWallet);
+      if (!due.length) return 0;
+
+      let category = categories.find((c) => c.kind === "income" && c.name === INTEREST_CATEGORY);
+      if (!category) {
+        const created = await supabase()
+          .from("categories")
+          .insert({
+            user_id: userId,
+            kind: "income",
+            name: INTEREST_CATEGORY,
+            icon: "percent",
+            color: "#0d9488",
+          })
+          .select("*")
+          .single();
+        if (created.error) throw new Error(created.error.message);
+        category = created.data as Category;
+      }
+
+      // Каждый месяц пишем отдельной парой строк, по очереди: так в истории
+      // видно, за какой период сколько пришло, и разнос точно привязан к
+      // своему поступлению — без угадывания порядка вставки.
+      for (const period of due) {
+        const at = period.to.toISOString();
+        const income = await supabase()
+          .from("transactions")
+          .insert({
+            user_id: userId,
+            type: "income",
+            amount: period.amount,
+            currency: wallet.currency,
+            category_id: category.id,
+            note: wallet.name,
+            occurred_at: at,
+          })
+          .select("id")
+          .single();
+        if (income.error) throw new Error(income.error.message);
+
+        const moved = await supabase().from("transactions").insert({
+          user_id: userId,
+          type: "allocation",
+          amount: period.amount,
+          currency: wallet.currency,
+          wallet_id: wallet.id,
+          parent_id: (income.data as { id: string }).id,
+          occurred_at: at,
+        });
+        if (moved.error) throw new Error(moved.error.message);
+      }
+
+      const marked = await supabase()
+        .from("wallets")
+        .update({ interest_through: toISODate(due[due.length - 1].to) })
+        .eq("id", wallet.id);
+      if (marked.error) throw new Error(marked.error.message);
+
+      await Promise.all([reloadDictionaries(), refresh()]);
+      return due.reduce((sum, period) => sum + period.amount, 0);
+    },
+    [categories, rates, refresh, reloadDictionaries, supabase, transactions, userId, wallets],
+  );
+
   const updateTransaction: Store["updateTransaction"] = useCallback(
     async (id, patch) => guard(() => supabase().from("transactions").update(patch).eq("id", id)),
     [guard, supabase],
@@ -362,15 +456,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
   );
 
   // ───────────────────── справочники ─────────────────────
-
-  const reloadDictionaries = useCallback(async () => {
-    const [w, c] = await Promise.all([
-      supabase().from("wallets").select("*").eq("archived", false).order("sort_order"),
-      supabase().from("categories").select("*").eq("archived", false).order("sort_order"),
-    ]);
-    setWallets((w.data ?? []) as Wallet[]);
-    setCategories((c.data ?? []) as Category[]);
-  }, [supabase]);
 
   const saveWallet: Store["saveWallet"] = useCallback(
     async (wallet) => {
@@ -489,6 +574,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       addExpense,
       addTransfer,
       setWalletBalance,
+      accrueInterest,
       updateTransaction,
       deleteTransaction,
       saveWallet,
@@ -503,7 +589,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [
       ready, error, userId, profile, rates, wallets, categories, balances, pools,
       transactions, balanceOf, poolOf, toBase, refresh, addIncome, allocate,
-      addExpense, addTransfer, setWalletBalance, updateTransaction, deleteTransaction,
+      addExpense, addTransfer, setWalletBalance, accrueInterest, updateTransaction, deleteTransaction,
       saveWallet, deleteWallet, saveCategory, deleteCategory, saveProfile, saveRate,
       aiKeyHint, saveAiKey, deleteAiKey,
     ],

@@ -88,11 +88,14 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M14.4 8.2a5.5 5.5 0 1 1-6.2 6.2" />
     </>
   ),
+  // Ножки и ручка сбоку: без них корпус с кругом внутри читается как купюра
   safe: (
     <>
-      <rect x="3" y="4" width="18" height="16" rx="2" />
-      <circle cx="10.5" cy="12" r="3.8" />
-      <path d="M10.5 8.8v1.3M10.5 13.9v1.3M7.3 12h1.3M12.4 12h1.3M17 9.5v5" />
+      <rect x="3" y="3.5" width="18" height="15" rx="2" />
+      <circle cx="10" cy="11" r="3.2" />
+      <path d="M10 11l2.3-2.3" />
+      <path d="M16.5 8v6" />
+      <path d="M6.5 18.5v2M17.5 18.5v2" />
     </>
   ),
   crypto: (

@@ -15,7 +15,8 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { Icon } from "@/lib/icons";
-import { formatMoney, monthLabel, monthRange } from "@/lib/money";
+import { convert, formatMoney, monthLabel, monthRange } from "@/lib/money";
+import { pendingAccrual } from "@/lib/savings";
 import { gridColumns, scaleFactor } from "@/lib/textScale";
 import type { Category, DragPayload, Wallet, WalletKind } from "@/lib/types";
 import { useStore } from "./DataProvider";
@@ -43,7 +44,7 @@ const DEBT_GROUP: Record<DebtGroup, { label: string; icon: string; color: string
 
 export function HomeScreen() {
   const {
-    profile, wallets, categories, transactions,
+    profile, wallets, categories, transactions, rates,
     balanceOf, poolOf, toBase,
     addIncome, allocate, addExpense, addTransfer, saveProfile,
   } = useStore();
@@ -85,6 +86,7 @@ export function HomeScreen() {
   const incomeCats = categories.filter((c) => c.kind === "income");
   const expenseCats = categories.filter((c) => c.kind === "expense");
   const moneyWallets = wallets.filter((w) => w.kind === "cash" || w.kind === "card");
+  const savings = wallets.filter((w) => w.kind === "savings");
   const debts = useMemo(
     () => ({
       debt_out: wallets.filter((w) => w.kind === "debt_out"),
@@ -117,6 +119,21 @@ export function HomeScreen() {
     (sum, w) => sum + toBase(balanceOf(w.id), w.currency),
     0,
   );
+  const savingsTotal = savings.reduce(
+    (sum, w) => sum + toBase(balanceOf(w.id), w.currency),
+    0,
+  );
+  // Сколько вкладов ждут начисления процентов — по этому числу горит
+  // подсказка над блоком, иначе о созревших процентах никто не узнает.
+  const ripe = useMemo(
+    () =>
+      savings.filter((w) =>
+        pendingAccrual(w, transactions, (amount, currency) =>
+          convert(amount, currency, w.currency, rates),
+        ),
+      ).length,
+    [savings, transactions, rates],
+  );
   const debtTotal = (group: DebtGroup) =>
     debts[group].reduce((sum, w) => sum + toBase(balanceOf(w.id), w.currency), 0);
 
@@ -147,6 +164,11 @@ export function HomeScreen() {
     if (!from) return;
 
     if (target.target === "category") {
+      // С вклада не платят в магазине: сначала деньги переводят на карту.
+      if (from.kind === "savings") {
+        setToast("Сначала переведи со вклада на карту или в наличные");
+        return;
+      }
       const category = expenseCats.find((c) => c.id === target.categoryId);
       if (category) setDialog({ kind: "expense", category, wallet: from });
       return;
@@ -268,6 +290,38 @@ export function HomeScreen() {
               />
             ))}
           <button onClick={() => setWalletEditor({ wallet: null, kind: "card" })} className="transition-transform duration-100 active:scale-95">
+            <AddBubble size={bubble} />
+          </button>
+        </Section>
+
+        <Section
+          columns={columns}
+          title="Накопления"
+          total={formatMoney(savingsTotal, base)}
+          note={ripe > 0 ? "Созрели проценты — открой вклад" : undefined}
+          hint={
+            savings.length === 0
+              ? "Вклад или копилка. Эти деньги не считаются свободными и не попадают в «можно тратить сегодня»."
+              : undefined
+          }
+          collapsed={!!collapsed.savings}
+          onToggle={() => setCollapsed((c) => ({ ...c, savings: !c.savings }))}
+        >
+          {savings.map((wallet) => (
+            <SavingsBubble
+              key={wallet.id}
+              wallet={wallet}
+              balance={balanceOf(wallet.id)}
+              size={bubble}
+              ripe={
+                !!pendingAccrual(wallet, transactions, (amount, currency) =>
+                  convert(amount, currency, wallet.currency, rates),
+                )
+              }
+              onTap={() => setWalletSheet(wallet)}
+            />
+          ))}
+          <button onClick={() => setWalletEditor({ wallet: null, kind: "savings" })} className="transition-transform duration-100 active:scale-95">
             <AddBubble size={bubble} />
           </button>
         </Section>
@@ -406,9 +460,15 @@ export function HomeScreen() {
         open={dialog?.kind === "transfer"}
         title={dialog?.kind === "transfer" ? `${dialog.from.name} → ${dialog.to.name}` : ""}
         subtitle={
-          dialog?.kind === "transfer" && dialog.to.kind === "debt_out"
-            ? "Погашение долга"
-            : "Перенос между кошельками"
+          dialog?.kind !== "transfer"
+            ? undefined
+            : dialog.to.kind === "debt_out"
+              ? "Погашение долга"
+              : dialog.to.kind === "savings"
+                ? "Пополнение вклада — деньги перестанут считаться свободными"
+                : dialog.from.kind === "savings"
+                  ? "Снятие со вклада"
+                  : "Перенос между кошельками"
         }
         currency={dialog?.kind === "transfer" ? dialog.from.currency : base}
         max={
@@ -542,6 +602,7 @@ function Section({
   collapsed,
   onToggle,
   hint,
+  note,
   columns,
   children,
 }: {
@@ -551,6 +612,8 @@ function Section({
   onToggle: () => void;
   /** Подсказка рядом с «+», пока в блоке нет ни одного кружка. */
   hint?: string;
+  /** Строчка под заголовком: что-то ждёт действия. */
+  note?: string;
   columns: number;
   children: React.ReactNode;
 }) {
@@ -567,6 +630,11 @@ function Section({
         </button>
         <span className="ml-auto text-[0.9375rem] font-semibold tabular-nums">{total}</span>
       </div>
+      {note && !collapsed ? (
+        <p className="mb-1.5 px-1 text-[0.6875rem]" style={{ color: "var(--accent)" }}>
+          {note}
+        </p>
+      ) : null}
       {collapsed ? null : (
         <div
           className="flex items-center rounded-2xl px-2 py-3"
@@ -704,6 +772,76 @@ function WalletBubble({
         dimmed={isDragging}
         highlighted={isOver}
       />
+    </button>
+  );
+}
+
+/**
+ * Вклад: как кошелёк, но с полоской до цели и точкой, когда созрели проценты.
+ */
+function SavingsBubble({
+  wallet,
+  balance,
+  size,
+  ripe,
+  onTap,
+}: {
+  wallet: Wallet;
+  balance: number;
+  size: number;
+  ripe: boolean;
+  onTap: () => void;
+}) {
+  const { attributes, listeners, setNodeRef: dragRef, isDragging } = useDraggable({
+    id: `wallet:${wallet.id}`,
+    data: {
+      source: "wallet",
+      walletId: wallet.id,
+      currency: wallet.currency,
+      available: balance,
+    },
+  });
+  const { setNodeRef: dropRef, isOver } = useDroppable({
+    id: `drop-wallet:${wallet.id}`,
+    data: { target: "wallet", walletId: wallet.id },
+  });
+
+  const goal = wallet.goal != null ? Number(wallet.goal) : null;
+  const ratio = goal ? Math.min(Math.max(balance, 0) / goal, 1) : 0;
+
+  return (
+    <button
+      ref={(node) => {
+        dragRef(node);
+        dropRef(node);
+      }}
+      onClick={onTap}
+      className="transition-transform duration-100 active:scale-95"
+      style={{ touchAction: "none" }}
+      {...attributes}
+      {...listeners}
+    >
+      <Bubble
+        icon={wallet.icon}
+        color={wallet.color}
+        label={wallet.name}
+        amount={formatMoney(balance, wallet.currency)}
+        size={size}
+        badge={ripe}
+        dimmed={isDragging}
+        highlighted={isOver}
+      />
+      {goal ? (
+        <span
+          className="mx-auto -mt-0.5 block h-1 w-10 overflow-hidden rounded-full"
+          style={{ background: "var(--surface-2)" }}
+        >
+          <span
+            className="block h-full rounded-full"
+            style={{ width: `${ratio * 100}%`, background: wallet.color }}
+          />
+        </span>
+      ) : null}
     </button>
   );
 }

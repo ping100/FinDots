@@ -60,7 +60,10 @@ export async function POST() {
     await Promise.all([
       supabase.from("profiles").select("base_currency, ai_model").eq("id", user.id).single(),
       supabase.from("exchange_rates").select("code, rate_to_base"),
-      supabase.from("wallets").select("id, kind, name, currency, due_date, monthly_payment, is_recurring").eq("archived", false),
+      supabase
+        .from("wallets")
+        .select("id, kind, name, currency, due_date, monthly_payment, is_recurring, rate, goal, term_end")
+        .eq("archived", false),
       supabase.from("categories").select("id, kind, name, monthly_limit").eq("archived", false),
       supabase.from("wallet_balances").select("wallet_id, currency, balance"),
       supabase
@@ -115,6 +118,9 @@ export async function POST() {
     погасить_до: w.due_date,
     платёж_в_месяц: w.monthly_payment,
     ежемесячный: w.is_recurring,
+    ставка_годовых: w.rate,
+    цель: w.goal,
+    конец_срока: w.term_end,
   }));
 
   const summary = {
@@ -152,6 +158,9 @@ export async function POST() {
               "Ты финансовый помощник. Отвечай по-русски, коротко и конкретно, без вступлений. " +
               "Структура ответа: 1) что бросается в глаза; 2) где сократить траты — 2–4 пункта " +
               "с примерными суммами в месяц; 3) в каком порядке гасить долги и почему. " +
+              "Кошельки типа savings — это вклады и копилки: эти деньги не свободны, " +
+              "к тратам их не приплюсовывай; если ставка по вкладу ниже, чем по долгу, " +
+              "скажи об этом. " +
               "Опирайся только на переданные цифры, не выдумывай данные. Без markdown-таблиц.",
           },
           { role: "user", content: JSON.stringify(summary) },

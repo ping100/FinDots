@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { PALETTE } from "@/lib/icons";
 import { CURRENCIES, parseAmount } from "@/lib/money";
+import { toISODate } from "@/lib/savings";
 import type { Wallet, WalletKind } from "@/lib/types";
 import { useStore } from "./DataProvider";
 import { Button, ColorPicker, Field, IconPicker, Sheet, inputClass, inputStyle } from "./ui";
@@ -10,6 +11,7 @@ import { Button, ColorPicker, Field, IconPicker, Sheet, inputClass, inputStyle }
 export const KIND_LABEL: Record<WalletKind, string> = {
   cash: "Наличные",
   card: "Карта",
+  savings: "Вклад или копилка",
   debt_out: "Долг — я должен",
   debt_in: "Долг — мне должны",
 };
@@ -17,6 +19,7 @@ export const KIND_LABEL: Record<WalletKind, string> = {
 const DEFAULT_ICON: Record<WalletKind, string> = {
   cash: "cash",
   card: "card",
+  savings: "savings",
   debt_out: "debt_out",
   debt_in: "debt_in",
 };
@@ -44,6 +47,10 @@ export function WalletEditor({
   const [monthlyPayment, setMonthlyPayment] = useState("");
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurringDay, setRecurringDay] = useState("");
+  const [rate, setRate] = useState("");
+  const [openedOn, setOpenedOn] = useState("");
+  const [termEnd, setTermEnd] = useState("");
+  const [goal, setGoal] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -60,9 +67,14 @@ export function WalletEditor({
     setMonthlyPayment(wallet?.monthly_payment != null ? String(wallet.monthly_payment) : "");
     setIsRecurring(wallet?.is_recurring ?? false);
     setRecurringDay(wallet?.recurring_day != null ? String(wallet.recurring_day) : "");
+    setRate(wallet?.rate != null ? String(wallet.rate) : "");
+    setOpenedOn(wallet?.opened_on ?? toISODate(new Date()));
+    setTermEnd(wallet?.term_end ?? "");
+    setGoal(wallet?.goal != null ? String(wallet.goal) : "");
   }, [open, wallet, defaultKind, profile]);
 
   const isDebt = kind === "debt_out" || kind === "debt_in";
+  const isSavings = kind === "savings";
 
   const submit = async () => {
     if (!name.trim() || busy) return;
@@ -81,6 +93,10 @@ export function WalletEditor({
         monthly_payment: isDebt ? parseAmount(monthlyPayment) : null,
         is_recurring: isDebt ? isRecurring : false,
         recurring_day: isDebt && isRecurring && recurringDay ? Number(recurringDay) : null,
+        rate: isSavings ? parseAmount(rate) : null,
+        opened_on: isSavings ? openedOn || toISODate(new Date()) : null,
+        term_end: isSavings && termEnd ? termEnd : null,
+        goal: isSavings ? parseAmount(goal) : null,
       });
       onClose();
     } finally {
@@ -140,7 +156,15 @@ export function WalletEditor({
           style={inputStyle}
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder={kind === "card" ? "Карта Kaspi" : kind === "debt_out" ? "Ипотека" : "Наличные"}
+          placeholder={
+            kind === "card"
+              ? "Карта Kaspi"
+              : kind === "savings"
+                ? "Вклад на отпуск"
+                : kind === "debt_out"
+                  ? "Ипотека"
+                  : "Наличные"
+          }
         />
       </Field>
 
@@ -164,7 +188,7 @@ export function WalletEditor({
       </Field>
 
       <Field
-        label={isDebt ? "Сумма долга на старте" : "Баланс на старте"}
+        label={isDebt ? "Сумма долга на старте" : isSavings ? "Уже накоплено" : "Баланс на старте"}
         hint="Дальше баланс меняется операциями — здесь только отправная точка"
       >
         <input
@@ -176,6 +200,52 @@ export function WalletEditor({
           placeholder="0"
         />
       </Field>
+
+      {isSavings ? (
+        <>
+          <Field
+            label="Ставка, % годовых"
+            hint="Пусто — обычная копилка, проценты не считаются"
+          >
+            <input
+              className={inputClass}
+              style={inputStyle}
+              inputMode="decimal"
+              value={rate}
+              onChange={(e) => setRate(e.target.value)}
+              placeholder="например, 16,5"
+            />
+          </Field>
+          <Field label="Дата открытия" hint="С этого дня начинают капать проценты">
+            <input
+              type="date"
+              className={inputClass}
+              style={inputStyle}
+              value={openedOn}
+              onChange={(e) => setOpenedOn(e.target.value)}
+            />
+          </Field>
+          <Field label="Конец срока" hint="Необязательно — для бессрочной копилки оставь пустым">
+            <input
+              type="date"
+              className={inputClass}
+              style={inputStyle}
+              value={termEnd}
+              onChange={(e) => setTermEnd(e.target.value)}
+            />
+          </Field>
+          <Field label="Цель" hint="Появится полоска прогресса под кружком">
+            <input
+              className={inputClass}
+              style={inputStyle}
+              inputMode="decimal"
+              value={goal}
+              onChange={(e) => setGoal(e.target.value)}
+              placeholder="например, 1 000 000"
+            />
+          </Field>
+        </>
+      ) : null}
 
       {isDebt ? (
         <>

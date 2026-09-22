@@ -86,16 +86,16 @@ export function DailyAllowance() {
         className="mb-4 w-full rounded-2xl px-4 py-3 text-left transition-transform duration-100 active:scale-[0.99]"
         style={{ background: "var(--surface)" }}
       >
-        <p className="text-[11px]" style={{ color: "var(--muted)" }}>
+        <p className="text-[0.6875rem]" style={{ color: "var(--muted)" }}>
           {data.short ? "Не хватает на обязательные платежи" : "Можно тратить сегодня"}
         </p>
         <p
-          className="text-[26px] font-bold leading-tight tabular-nums"
+          className="text-[1.625rem] font-bold leading-tight tabular-nums"
           style={{ color: data.short ? "var(--danger)" : "var(--text)" }}
         >
           {formatMoney(data.short ? data.obligations - data.money : data.perDay, base)}
         </p>
-        <p className="mt-0.5 text-[11px]" style={{ color: "var(--muted)" }}>
+        <p className="mt-0.5 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
           осталось {data.daysLeft} {plural(data.daysLeft, "день", "дня", "дней")}
           {data.spentToday > 0 ? (
             <>

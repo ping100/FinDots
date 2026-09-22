@@ -57,7 +57,7 @@ function Tooltip({
   const net = bucket.income - bucket.expense;
   return (
     <div
-      className="pointer-events-none absolute left-1/2 top-0 w-max -translate-x-1/2 rounded-xl px-3 py-2 text-[11px] leading-snug shadow-lg"
+      className="pointer-events-none absolute left-1/2 top-0 w-max -translate-x-1/2 rounded-xl px-3 py-2 text-[0.6875rem] leading-snug shadow-lg"
       style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
     >
       <div className="mb-0.5 font-semibold">{bucket.full}</div>
@@ -225,7 +225,7 @@ export function IncomeExpenseChart({
         <Tooltip bucket={buckets[active]} currency={currency} mode="both" />
       ) : null}
 
-      <div className="mt-1 flex justify-center gap-4 text-[11px]" style={{ color: "var(--muted)" }}>
+      <div className="mt-1 flex justify-center gap-4 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
         {(["income", "expense"] as const).map((key) => (
           <span key={key} className="flex items-center gap-1.5">
             <span className="h-2 w-4 rounded-full" style={{ background: SERIES[key].color }} />
@@ -344,7 +344,7 @@ export function ShareBar({
           />
         ))}
       </div>
-      <p className="mt-2 text-center text-[11px]" style={{ color: "var(--muted)" }}>
+      <p className="mt-2 text-center text-[0.6875rem]" style={{ color: "var(--muted)" }}>
         {shown ? (
           <>
             {shown.name} — {formatMoney(shown.value, currency)} ·{" "}

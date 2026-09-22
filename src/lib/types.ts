@@ -9,6 +9,7 @@ export interface Profile {
   display_name: string | null;
   base_currency: CurrencyCode;
   theme: "dark" | "light";
+  text_scale: "small" | "medium" | "large";
   ai_model: string;
 }
 

@@ -131,7 +131,7 @@ export default function AnalyticsPage() {
 
   return (
     <div className="mx-auto w-full max-w-md px-4 pb-32">
-      <h1 className="py-2 text-[26px] font-semibold">Отчет</h1>
+      <h1 className="py-2 text-[1.625rem] font-semibold">Отчет</h1>
 
       {/* Сначала период и итоги — это контекст. Выбор разреза идёт после. */}
       <div className="mb-3 flex items-center justify-between">
@@ -185,7 +185,7 @@ export default function AnalyticsPage() {
       <div className="mb-4 rounded-2xl p-3" style={{ background: "var(--surface)" }}>
         {/* Подпись объясняет, что именно на графике — без неё режимы
             приходится угадывать по названию. */}
-        <p className="mb-2.5 px-1 text-[12px] leading-snug" style={{ color: "var(--muted)" }}>
+        <p className="mb-2.5 px-1 text-[0.75rem] leading-snug" style={{ color: "var(--muted)" }}>
           {active.caption}
         </p>
 
@@ -203,7 +203,7 @@ export default function AnalyticsPage() {
                 <button
                   key={item.id}
                   onClick={() => setGrouping(item.id)}
-                  className="flex-1 rounded-lg py-1.5 text-[13px] font-medium"
+                  className="flex-1 rounded-lg py-1.5 text-[0.8125rem] font-medium"
                   style={{
                     background: grouping === item.id ? "var(--surface)" : "transparent",
                     boxShadow: grouping === item.id ? "0 1px 3px rgba(0,0,0,0.12)" : undefined,
@@ -219,7 +219,7 @@ export default function AnalyticsPage() {
               <NetChart buckets={buckets} currency={base} />
             )}
             {grouping === "month" ? (
-              <p className="mt-1 text-center text-[11px]" style={{ color: "var(--muted)" }}>
+              <p className="mt-1 text-center text-[0.6875rem]" style={{ color: "var(--muted)" }}>
                 12 месяцев по выбранный включительно
               </p>
             ) : null}
@@ -239,7 +239,7 @@ export default function AnalyticsPage() {
           {tableOpen ? (
             <div className="overflow-hidden rounded-2xl" style={{ background: "var(--surface)" }}>
               <div
-                className="flex gap-2 px-4 py-2 text-[11px]"
+                className="flex gap-2 px-4 py-2 text-[0.6875rem]"
                 style={{ color: "var(--muted)", borderBottom: "1px solid var(--border)" }}
               >
                 <span className="flex-1">Период</span>
@@ -273,7 +273,7 @@ export default function AnalyticsPage() {
         </div>
       ) : (
         <>
-          <h2 className="mb-2 text-[15px] font-semibold">
+          <h2 className="mb-2 text-[0.9375rem] font-semibold">
             {mode === "earned" ? "Источники дохода" : "Категории трат"}
           </h2>
           {stats.rows.length === 0 ? (
@@ -304,7 +304,7 @@ export default function AnalyticsPage() {
                         {formatMoney(now, base)}
                         {delta !== 0 ? (
                           <span
-                            className="ml-1 text-[11px]"
+                            className="ml-1 text-[0.6875rem]"
                             style={{ color: delta > 0 ? SERIES.expense.color : SERIES.income.color }}
                           >
                             {delta > 0 ? "↑" : "↓"}
@@ -337,7 +337,7 @@ export default function AnalyticsPage() {
                     </span>
                     {limit != null ? (
                       <span
-                        className="mt-1 block text-[11px]"
+                        className="mt-1 block text-[0.6875rem]"
                         style={{ color: overLimit ? SERIES.expense.color : "var(--muted)" }}
                       >
                         лимит {formatMoney(limit, base)}
@@ -347,7 +347,7 @@ export default function AnalyticsPage() {
                   </div>
                 );
               })}
-              <p className="pt-1 text-[11px]" style={{ color: "var(--muted)" }}>
+              <p className="pt-1 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
                 Бледная полоса под цветной — тот же период прошлого месяца
               </p>
             </div>
@@ -355,7 +355,7 @@ export default function AnalyticsPage() {
         </>
       )}
 
-      <h2 className="mb-1 text-[15px] font-semibold">Разбор бюджета</h2>
+      <h2 className="mb-1 text-[0.9375rem] font-semibold">Разбор бюджета</h2>
       <p className="mb-3 text-xs" style={{ color: "var(--muted)" }}>
         Модель получает только суммы по категориям, балансы и долги — без
         комментариев к операциям.
@@ -402,14 +402,14 @@ function Stat({
 }) {
   return (
     <div className="px-2 text-center">
-      <p className="text-[11px]" style={{ color: "var(--muted)" }}>
+      <p className="text-[0.6875rem]" style={{ color: "var(--muted)" }}>
         {label}
       </p>
-      <p className="text-[15px] font-semibold tabular-nums" style={{ color }}>
+      <p className="text-[0.9375rem] font-semibold tabular-nums" style={{ color }}>
         {value}
       </p>
       {hint ? (
-        <p className="text-[10px]" style={{ color: "var(--muted)" }}>
+        <p className="text-[0.625rem]" style={{ color: "var(--muted)" }}>
           {hint}
         </p>
       ) : null}

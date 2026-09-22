@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AI_MODELS } from "@/lib/aiModels";
+import { TEXT_SCALES } from "@/lib/textScale";
 import { Icon } from "@/lib/icons";
 import { CURRENCIES, parseAmount, symbolOf } from "@/lib/money";
 import { createClient } from "@/lib/supabase/client";
@@ -13,7 +14,7 @@ export default function SettingsPage() {
   const router = useRouter();
   const { profile, rates, aiKeyHint, saveProfile, saveRate, saveAiKey, deleteAiKey } = useStore();
   const [sheet, setSheet] =
-    useState<"currency" | "rates" | "theme" | "model" | "key" | null>(null);
+    useState<"currency" | "rates" | "theme" | "size" | "model" | "key" | null>(null);
   const [model, setModel] = useState(profile?.ai_model ?? AI_MODELS[0].id);
   const [keyDraft, setKeyDraft] = useState("");
   const [keyBusy, setKeyBusy] = useState(false);
@@ -30,7 +31,7 @@ export default function SettingsPage() {
 
   return (
     <div className="mx-auto w-full max-w-md px-4 pb-32">
-      <h1 className="py-2 text-[26px] font-semibold">Настройки</h1>
+      <h1 className="py-2 text-[1.625rem] font-semibold">Настройки</h1>
 
       <Group>
         <Row
@@ -52,6 +53,12 @@ export default function SettingsPage() {
           label="Тема"
           value={profile?.theme === "dark" ? "Тёмная" : "Светлая"}
           onClick={() => setSheet("theme")}
+        />
+        <Row
+          label="Размер шрифта"
+          value={TEXT_SCALES.find((item) => item.id === profile?.text_scale)?.label ?? "Средний"}
+          hint="Если цифры трудно разглядеть"
+          onClick={() => setSheet("size")}
         />
       </Group>
 
@@ -78,7 +85,7 @@ export default function SettingsPage() {
         <Row label="Выйти" danger onClick={signOut} />
       </Group>
 
-      <p className="mt-5 text-center text-[11px]" style={{ color: "var(--muted)" }}>
+      <p className="mt-5 text-center text-[0.6875rem]" style={{ color: "var(--muted)" }}>
         Кошельки и категории правятся на «Панели»: тап по кошельку, долгое
         нажатие на категории расхода, «Настроить категорию» в окне дохода.
       </p>
@@ -138,6 +145,39 @@ export default function SettingsPage() {
             </button>
           ))}
         </div>
+      </Sheet>
+
+      <Sheet open={sheet === "size"} title="Размер шрифта" onClose={() => setSheet(null)}>
+        <div className="space-y-2 pb-2">
+          {TEXT_SCALES.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => {
+                void saveProfile({ text_scale: item.id });
+                setSheet(null);
+              }}
+              className="flex w-full items-baseline gap-2 rounded-2xl px-4 py-3.5 text-left"
+              style={{
+                background:
+                  (profile?.text_scale ?? "medium") === item.id ? "var(--accent)" : "var(--surface-2)",
+                color: (profile?.text_scale ?? "medium") === item.id ? "#fff" : "inherit",
+              }}
+            >
+              {/* Размер названия показывает сам результат выбора */}
+              <span
+                className="font-semibold"
+                style={{ fontSize: `${item.factor}rem` }}
+              >
+                {item.label}
+              </span>
+              <span className="text-[0.6875rem] opacity-70">{item.hint}</span>
+            </button>
+          ))}
+        </div>
+        <p className="pb-2 text-xs" style={{ color: "var(--muted)" }}>
+          Меняется весь текст в приложении, а на крупном размере кружки на
+          «Панели» становятся больше и встают по четыре в ряд вместо пяти.
+        </p>
       </Sheet>
 
       <Sheet
@@ -254,7 +294,7 @@ export default function SettingsPage() {
               <span className="flex-1">{m.label}</span>
               {m.free ? (
                 <span
-                  className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                  className="rounded-full px-2 py-0.5 text-[0.625rem] font-semibold"
                   style={{
                     background: model === m.id ? "rgba(255,255,255,0.25)" : "var(--ok)",
                     color: "#fff",
@@ -306,17 +346,17 @@ function Row({
   const content = (
     <>
       <span className="flex-1">
-        <span className="block text-[15px]" style={{ color: danger ? "var(--danger)" : undefined }}>
+        <span className="block text-[0.9375rem]" style={{ color: danger ? "var(--danger)" : undefined }}>
           {label}
         </span>
         {hint ? (
-          <span className="mt-0.5 block text-[11px] leading-snug" style={{ color: "var(--muted)" }}>
+          <span className="mt-0.5 block text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
             {hint}
           </span>
         ) : null}
       </span>
       {value ? (
-        <span className="text-[15px]" style={{ color: "var(--muted)" }}>
+        <span className="text-[0.9375rem]" style={{ color: "var(--muted)" }}>
           {value}
         </span>
       ) : null}

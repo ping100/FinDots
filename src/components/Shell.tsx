@@ -64,7 +64,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 }}
               >
                 <Icon name={tab.icon} size={21} />
-                <span className="text-[10px]">{tab.label}</span>
+                <span className="text-[0.625rem]">{tab.label}</span>
               </Link>
             );
           })}

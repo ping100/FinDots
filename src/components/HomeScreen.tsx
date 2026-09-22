@@ -16,6 +16,7 @@ import {
 } from "@dnd-kit/core";
 import { Icon } from "@/lib/icons";
 import { formatMoney, monthLabel, monthRange } from "@/lib/money";
+import { gridColumns, scaleFactor } from "@/lib/textScale";
 import type { Category, DragPayload, Wallet, WalletKind } from "@/lib/types";
 import { useStore } from "./DataProvider";
 import { AmountSheet } from "./AmountSheet";
@@ -77,6 +78,10 @@ export function HomeScreen() {
   );
 
   const base = profile?.base_currency ?? "KZT";
+  // Кружок в rem не выразить — размер иконки внутри SVG это число,
+  // поэтому диаметр масштабируем тем же коэффициентом вручную.
+  const bubble = Math.round(58 * scaleFactor(profile?.text_scale));
+  const columns = gridColumns(profile?.text_scale);
   const incomeCats = categories.filter((c) => c.kind === "income");
   const expenseCats = categories.filter((c) => c.kind === "expense");
   const moneyWallets = wallets.filter((w) => w.kind === "cash" || w.kind === "card");
@@ -190,7 +195,7 @@ export function HomeScreen() {
           </Link>
           <button
             onClick={() => setMonthPicker(true)}
-            className="flex items-center gap-1.5 text-[15px] font-semibold uppercase tracking-wide"
+            className="flex items-center gap-1.5 text-[0.9375rem] font-semibold uppercase tracking-wide"
           >
             {monthLabel(offset)}
             <Icon name="chevron-down" size={14} className="opacity-50" />
@@ -210,6 +215,7 @@ export function HomeScreen() {
         {offset === 0 && moneyWallets.length > 0 ? <DailyAllowance /> : null}
 
         <Section
+          columns={columns}
           title="Доходы"
           total={formatMoney(month.incomeTotal, base)}
           hint={incomeCats.length === 0 ? "Нажми «+» и заведи источник дохода: название, цвет, иконка." : undefined}
@@ -223,15 +229,17 @@ export function HomeScreen() {
               amount={month.income.get(category.id) ?? 0}
               pool={poolOf(category.id)}
               base={base}
+              size={bubble}
               onTap={() => setDialog({ kind: "income", category })}
             />
           ))}
           <button onClick={() => setCategoryEditor({ kind: "income", category: null })} className="transition-transform duration-100 active:scale-95">
-            <AddBubble />
+            <AddBubble size={bubble} />
           </button>
         </Section>
 
         <Section
+          columns={columns}
           title="Кошельки"
           total={formatMoney(walletsTotal, base)}
           hint={wallets.length === 0 ? "Нажми «+»: наличные, карта или долг — что заведёшь, то и будет." : undefined}
@@ -243,6 +251,7 @@ export function HomeScreen() {
               key={wallet.id}
               wallet={wallet}
               balance={balanceOf(wallet.id)}
+              size={bubble}
               onTap={() => setWalletSheet(wallet)}
             />
           ))}
@@ -254,15 +263,17 @@ export function HomeScreen() {
                 group={group}
                 amount={debtTotal(group)}
                 base={base}
+                size={bubble}
                 onTap={() => setDebtPicker({ group })}
               />
             ))}
           <button onClick={() => setWalletEditor({ wallet: null, kind: "card" })} className="transition-transform duration-100 active:scale-95">
-            <AddBubble />
+            <AddBubble size={bubble} />
           </button>
         </Section>
 
         <Section
+          columns={columns}
           title="Расходы"
           total={formatMoney(month.expenseTotal, base)}
           hint={expenseCats.length === 0 ? "Нажми «+» и создай категорию трат — можно задать лимит на месяц." : undefined}
@@ -275,12 +286,13 @@ export function HomeScreen() {
               category={category}
               spent={month.expense.get(category.id) ?? 0}
               base={base}
+              size={bubble}
               onTap={() => setDialog({ kind: "expense", category })}
               onHold={() => setCategoryEditor({ kind: "expense", category })}
             />
           ))}
           <button onClick={() => setCategoryEditor({ kind: "expense", category: null })} className="transition-transform duration-100 active:scale-95">
-            <AddBubble />
+            <AddBubble size={bubble} />
           </button>
         </Section>
       </div>
@@ -530,6 +542,7 @@ function Section({
   collapsed,
   onToggle,
   hint,
+  columns,
   children,
 }: {
   title: string;
@@ -538,6 +551,7 @@ function Section({
   onToggle: () => void;
   /** Подсказка рядом с «+», пока в блоке нет ни одного кружка. */
   hint?: string;
+  columns: number;
   children: React.ReactNode;
 }) {
   return (
@@ -549,18 +563,23 @@ function Section({
             size={15}
             style={{ color: "var(--muted)" }}
           />
-          <h2 className="text-[17px] font-semibold">{title}</h2>
+          <h2 className="text-[1.0625rem] font-semibold">{title}</h2>
         </button>
-        <span className="ml-auto text-[15px] font-semibold tabular-nums">{total}</span>
+        <span className="ml-auto text-[0.9375rem] font-semibold tabular-nums">{total}</span>
       </div>
       {collapsed ? null : (
         <div
           className="flex items-center rounded-2xl px-2 py-3"
           style={{ background: "var(--surface)" }}
         >
-          <div className="grid flex-1 grid-cols-5 gap-x-1 gap-y-3">{children}</div>
+          <div
+            className="grid flex-1 gap-x-1 gap-y-3"
+            style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+          >
+            {children}
+          </div>
           {hint ? (
-            <p className="max-w-[58%] shrink-0 pl-1 pr-2 text-[12px] leading-snug" style={{ color: "var(--muted)" }}>
+            <p className="max-w-[58%] shrink-0 pl-1 pr-2 text-[0.75rem] leading-snug" style={{ color: "var(--muted)" }}>
               {hint}
             </p>
           ) : null}
@@ -595,12 +614,14 @@ function IncomeBubble({
   amount,
   pool,
   base,
+  size,
   onTap,
 }: {
   category: Category;
   amount: number;
   pool: { amount: number; currency: string };
   base: string;
+  size: number;
   onTap: () => void;
 }) {
   const draggable = pool.amount > 0;
@@ -629,6 +650,7 @@ function IncomeBubble({
         color={category.color}
         label={category.name}
         amount={formatMoney(amount, base)}
+        size={size}
         badge={draggable}
         dimmed={isDragging}
       />
@@ -639,10 +661,12 @@ function IncomeBubble({
 function WalletBubble({
   wallet,
   balance,
+  size,
   onTap,
 }: {
   wallet: Wallet;
   balance: number;
+  size: number;
   onTap: () => void;
 }) {
   const { attributes, listeners, setNodeRef: dragRef, isDragging } = useDraggable({
@@ -676,6 +700,7 @@ function WalletBubble({
         color={wallet.color}
         label={wallet.name}
         amount={formatMoney(balance, wallet.currency)}
+        size={size}
         dimmed={isDragging}
         highlighted={isOver}
       />
@@ -687,11 +712,13 @@ function DebtBubble({
   group,
   amount,
   base,
+  size,
   onTap,
 }: {
   group: DebtGroup;
   amount: number;
   base: string;
+  size: number;
   onTap: () => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({
@@ -708,6 +735,7 @@ function DebtBubble({
         icon={style.icon}
         color={style.color}
         label={style.label}
+        size={size}
         amount={amount === 0 ? formatMoney(0, base) : formatMoney(shown, base)}
         muted={group === "debt_out"}
         highlighted={isOver}
@@ -720,12 +748,14 @@ function ExpenseBubble({
   category,
   spent,
   base,
+  size,
   onTap,
   onHold,
 }: {
   category: Category;
   spent: number;
   base: string;
+  size: number;
   onTap: () => void;
   onHold: () => void;
 }) {
@@ -746,6 +776,7 @@ function ExpenseBubble({
         color={category.color}
         label={category.name}
         amount={formatMoney(spent, base)}
+        size={size}
         highlighted={isOver}
       />
       {limit ? (
@@ -796,7 +827,7 @@ function DragGhost({ payload }: { payload: DragPayload }) {
           <Icon name={item.icon} size={28} />
         </span>
         <span
-          className="whitespace-nowrap rounded-full px-2.5 py-1 text-[12px] font-semibold tabular-nums shadow-lg"
+          className="whitespace-nowrap rounded-full px-2.5 py-1 text-[0.75rem] font-semibold tabular-nums shadow-lg"
           style={{ background: "var(--surface)", border: `1px solid ${item.color}` }}
         >
           {formatMoney(payload.available, payload.currency)}

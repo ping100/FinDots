@@ -168,7 +168,7 @@ export function AmountSheet({
               >
                 <span className="block font-medium">{option.name}</span>
                 {option.caption ? (
-                  <span className="block text-[11px] opacity-70">{option.caption}</span>
+                  <span className="block text-[0.6875rem] opacity-70">{option.caption}</span>
                 ) : null}
               </button>
             ))}

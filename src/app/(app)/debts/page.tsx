@@ -76,7 +76,7 @@ export default function DebtsPage() {
             </span>
             <span className="flex-1">
               <span className="block text-sm font-medium">{w.name}</span>
-              <span className="block text-[11px]" style={{ color: "var(--muted)" }}>
+              <span className="block text-[0.6875rem]" style={{ color: "var(--muted)" }}>
                 {w.recurring_day ? `${w.recurring_day}-го числа` : "каждый месяц"}
               </span>
             </span>
@@ -218,7 +218,7 @@ function DebtCard({
           <span className="block text-sm font-medium">{wallet.name}</span>
           {wallet.due_date ? (
             <span
-              className="block text-[11px]"
+              className="block text-[0.6875rem]"
               style={{ color: remind ? "var(--danger)" : "var(--muted)" }}
             >
               {left != null && left < 0
@@ -232,7 +232,7 @@ function DebtCard({
             {formatMoney(amount, wallet.currency)}
           </span>
           {wallet.monthly_payment ? (
-            <span className="block text-[11px]" style={{ color: "var(--muted)" }}>
+            <span className="block text-[0.6875rem]" style={{ color: "var(--muted)" }}>
               платёж {formatMoney(wallet.monthly_payment, wallet.currency)}
             </span>
           ) : null}

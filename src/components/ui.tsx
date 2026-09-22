@@ -203,7 +203,7 @@ export function Bubble({
           style={{
             color: "var(--muted)",
             // длинные названия ужимаются, а не обрезаются посреди слова
-            fontSize: label.length > 9 ? 9.5 : 11,
+            fontSize: label.length > 9 ? "0.594rem" : "0.6875rem",
           }}
         >
           {label}
@@ -244,20 +244,23 @@ export function Bubble({
   );
 }
 
-/** Ширина ячейки в сетке 5 колонок — около 68px; под неё и подбираем кегль. */
-function amountFontSize(amount?: string): number {
+/**
+ * Ширина ячейки — около 68px, под неё и подбираем кегль. В rem, чтобы
+ * настройка размера шрифта поднимала и эти подписи тоже.
+ */
+function amountFontSize(amount?: string): string {
   const length = amount?.length ?? 0;
-  if (length > 15) return 7.5;
-  if (length > 12) return 8.5;
-  if (length > 9) return 9.5;
-  return 11;
+  if (length > 15) return "0.469rem";
+  if (length > 12) return "0.531rem";
+  if (length > 9) return "0.594rem";
+  return "0.6875rem";
 }
 
 /** Пустой кружок «добавить» в конце каждой сетки. */
 export function AddBubble({ size = 58 }: { size?: number }) {
   return (
     <div className="flex w-full flex-col items-center gap-1">
-      <span className="h-[26px] text-[11px] leading-[1.15]">&nbsp;</span>
+      <span className="h-[26px] text-[0.6875rem] leading-[1.15]">&nbsp;</span>
       <span
         className="flex items-center justify-center rounded-full border"
         style={{
@@ -271,7 +274,7 @@ export function AddBubble({ size = 58 }: { size?: number }) {
       >
         <Icon name="plus" size={24} />
       </span>
-      <span className="text-[11px]">&nbsp;</span>
+      <span className="text-[0.6875rem]">&nbsp;</span>
     </div>
   );
 }
@@ -391,7 +394,7 @@ export function IconPicker({
       <div className="space-y-3">
         {ICON_GROUPS.map((group) => (
           <div key={group.title}>
-            <p className="mb-1.5 text-[11px]" style={{ color: "var(--muted)" }}>
+            <p className="mb-1.5 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
               {group.title}
             </p>
             <div className="grid grid-cols-6 gap-2">

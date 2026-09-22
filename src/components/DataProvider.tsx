@@ -13,6 +13,7 @@ import {
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { convert } from "@/lib/money";
+import { scaleFactor } from "@/lib/textScale";
 import type {
   Category,
   CurrencyCode,
@@ -163,10 +164,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
     void load();
   }, [load]);
 
-  // Тема живёт в профиле, чтобы переезжала между устройствами.
+  // Тема и размер шрифта живут в профиле, чтобы переезжали между
+  // устройствами. Размер задаётся базовым кеглем на html: весь текст в
+  // приложении описан в rem и подтягивается за ним.
   useEffect(() => {
     if (!profile) return;
     document.documentElement.classList.toggle("dark", profile.theme === "dark");
+    document.documentElement.style.fontSize = `${16 * scaleFactor(profile.text_scale)}px`;
   }, [profile]);
 
   /** Пересчитать производные данные после записи. */

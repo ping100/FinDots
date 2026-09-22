@@ -88,7 +88,7 @@ export default function OperationsPage() {
   return (
     <div className="mx-auto w-full max-w-md px-4 pb-32">
       <header className="relative flex items-center justify-center py-2">
-        <h1 className="text-[17px] font-semibold">История</h1>
+        <h1 className="text-[1.0625rem] font-semibold">История</h1>
         <button
           onClick={() => setFiltersOpen(true)}
           aria-label="Фильтр"
@@ -110,7 +110,6 @@ export default function OperationsPage() {
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Поиск по примечаниям"
           className="w-full bg-transparent outline-none"
-          style={{ fontSize: 15 }}
         />
       </label>
 
@@ -118,7 +117,7 @@ export default function OperationsPage() {
         <button onClick={() => setOffset((o) => o - 1)} aria-label="Раньше" style={{ color: "var(--accent)" }}>
           <Icon name="chevron-left" size={22} />
         </button>
-        <span className="text-[15px] font-semibold first-letter:uppercase">{monthLabel(offset, true)}</span>
+        <span className="text-[0.9375rem] font-semibold first-letter:uppercase">{monthLabel(offset, true)}</span>
         <button
           onClick={() => setOffset((o) => Math.min(0, o + 1))}
           disabled={offset >= 0}
@@ -130,7 +129,7 @@ export default function OperationsPage() {
         </button>
       </div>
 
-      <p className="text-center text-[11px]" style={{ color: "var(--muted)" }}>
+      <p className="text-center text-[0.6875rem]" style={{ color: "var(--muted)" }}>
         сальдо
       </p>
       <p
@@ -142,7 +141,7 @@ export default function OperationsPage() {
 
       {groups.length === 0 ? (
         <div className="py-12 text-center">
-          <p className="text-[15px] font-semibold">За этот период данных нет</p>
+          <p className="text-[0.9375rem] font-semibold">За этот период данных нет</p>
           <p className="mt-1 text-sm" style={{ color: "var(--muted)" }}>
             добавлять операции можно в разделе «Панель»
           </p>
@@ -168,7 +167,7 @@ export default function OperationsPage() {
               >
                 <span className="flex-1">
                   <span className="block text-sm">{describe(t)}</span>
-                  <span className="block text-[11px]" style={{ color: "var(--muted)" }}>
+                  <span className="block text-[0.6875rem]" style={{ color: "var(--muted)" }}>
                     {TYPE_LABEL[t.type]}
                     {t.note ? ` · ${t.note}` : ""}
                   </span>

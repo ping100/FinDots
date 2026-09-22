@@ -46,6 +46,24 @@
 Next.js 16 (App Router, TypeScript) · Tailwind CSS 4 · dnd-kit ·
 Supabase (Postgres + Auth, RLS) · Vercel.
 
+## Развёрнутое окружение
+
+| | |
+|---|---|
+| Приложение | https://findots.vercel.app |
+| Vercel | проект `findots` в команде Mars6 |
+| Supabase | проект `findots`, регион eu-central-1 |
+| Репозиторий | `ping100/findots` |
+
+Ключи лежат в переменных окружения проекта Vercel; `anon`-ключ и Project URL
+берутся в Supabase → Project Settings → API.
+
+**Подтверждение почты.** У Supabase оно включено по умолчанию, а встроенный
+почтовик шлёт единицы писем в час и для боевого использования не предназначен —
+на полевом тесте люди просто не получат письмо. Для теста подтверждение
+выключается в Authentication → Sign In / Providers → Email → Confirm email.
+Когда понадобятся настоящие письма, там же подключается свой SMTP.
+
 ## Запуск
 
 ```bash

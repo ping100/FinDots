@@ -5,17 +5,34 @@ import Link from "next/link";
 import { Icon } from "@/lib/icons";
 import { formatMoney, monthLabel, monthRange } from "@/lib/money";
 import { buildBuckets, type Grouping } from "@/lib/report";
-import type { CategoryKind } from "@/lib/types";
 import { useStore } from "@/components/DataProvider";
 import { IncomeExpenseChart, NetChart, SERIES, ShareBar } from "@/components/charts";
 import { Button } from "@/components/ui";
 
-type Mode = "expenses" | "both" | "net";
+type Mode = "spent" | "earned" | "flow" | "net";
 
-const MODES: { id: Mode; label: string }[] = [
-  { id: "expenses", label: "Расходы" },
-  { id: "both", label: "Доходы и расходы" },
-  { id: "net", label: "Доходы − Расходы" },
+/** Название отвечает на вопрос пользователя, подпись объясняет график. */
+const MODES: { id: Mode; label: string; caption: string }[] = [
+  {
+    id: "spent",
+    label: "На что ушло",
+    caption: "Доля каждой категории в тратах за месяц",
+  },
+  {
+    id: "earned",
+    label: "Откуда пришло",
+    caption: "Доля каждого источника в доходах за месяц",
+  },
+  {
+    id: "flow",
+    label: "Приход и расход",
+    caption: "Сколько приходило и уходило внутри периода",
+  },
+  {
+    id: "net",
+    label: "Плюс или минус",
+    caption: "Выше нуля — отложили, ниже — потратили больше, чем получили",
+  },
 ];
 
 const GROUPINGS: { id: Grouping; label: string }[] = [
@@ -26,10 +43,9 @@ const GROUPINGS: { id: Grouping; label: string }[] = [
 
 export default function AnalyticsPage() {
   const { transactions, categories, profile, aiKeyHint, toBase } = useStore();
-  const [mode, setMode] = useState<Mode>("expenses");
+  const [mode, setMode] = useState<Mode>("spent");
   const [grouping, setGrouping] = useState<Grouping>("day");
   const [offset, setOffset] = useState(0);
-  const [side, setSide] = useState<CategoryKind>("expense");
   const [tableOpen, setTableOpen] = useState(false);
   const base = profile?.base_currency ?? "KZT";
 
@@ -63,7 +79,7 @@ export default function AnalyticsPage() {
 
     const current = collect(offset);
     const previous = collect(offset - 1);
-    const listSide = mode === "expenses" ? "expense" : side;
+    const listSide: "income" | "expense" = mode === "earned" ? "income" : "expense";
     const pick = (data: ReturnType<typeof collect>) =>
       listSide === "income" ? data.income : data.expense;
 
@@ -85,7 +101,7 @@ export default function AnalyticsPage() {
       expenseTotal: total(current.expense),
       prevExpenseTotal: total(previous.expense),
     };
-  }, [transactions, categories, offset, side, mode, toBase]);
+  }, [transactions, categories, offset, mode, toBase]);
 
   const runAnalysis = async () => {
     setAiBusy(true);
@@ -110,27 +126,14 @@ export default function AnalyticsPage() {
     .filter((r) => r.now > 0)
     .map((r) => ({ id: r.category.id, name: r.category.name, color: r.category.color, value: r.now }));
 
+  const active = MODES.find((item) => item.id === mode)!;
+  const isStructure = mode === "spent" || mode === "earned";
+
   return (
     <div className="mx-auto w-full max-w-md px-4 pb-32">
       <h1 className="py-2 text-[26px] font-bold">Отчет</h1>
 
-      <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
-        {MODES.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => setMode(item.id)}
-            className="shrink-0 rounded-full border px-4 py-2 text-sm font-medium"
-            style={{
-              background: mode === item.id ? "var(--surface)" : "transparent",
-              borderColor: mode === item.id ? "var(--accent)" : "var(--border)",
-              color: mode === item.id ? "var(--accent)" : "inherit",
-            }}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
-
+      {/* Сначала период и итоги — это контекст. Выбор разреза идёт после. */}
       <div className="mb-3 flex items-center justify-between">
         <button onClick={() => setOffset((o) => o - 1)} aria-label="Раньше" style={{ color: "var(--accent)" }}>
           <Icon name="chevron-left" size={22} />
@@ -152,11 +155,47 @@ export default function AnalyticsPage() {
         </button>
       </div>
 
+      <div className="mb-4 grid grid-cols-3 rounded-2xl py-3" style={{ background: "var(--surface)" }}>
+        <Stat label="Доходы" value={formatMoney(stats.incomeTotal, base)} color={SERIES.income.color} />
+        <Stat label="Расходы" value={formatMoney(stats.expenseTotal, base)} color={SERIES.expense.color} />
+        <Stat
+          label="Итого"
+          value={formatMoney(stats.incomeTotal - stats.expenseTotal, base)}
+          hint={share != null ? `${diff > 0 ? "+" : ""}${share}% к прошлому` : undefined}
+        />
+      </div>
+
+      <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
+        {MODES.map((item) => (
+          <button
+            key={item.id}
+            onClick={() => setMode(item.id)}
+            className="shrink-0 rounded-full border px-4 py-2 text-sm font-medium transition-transform duration-100 active:scale-95"
+            style={{
+              background: mode === item.id ? "var(--surface)" : "transparent",
+              borderColor: mode === item.id ? "var(--accent)" : "var(--border)",
+              color: mode === item.id ? "var(--accent)" : "inherit",
+            }}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+
       <div className="mb-4 rounded-2xl p-3" style={{ background: "var(--surface)" }}>
-        {mode === "expenses" ? (
-          <>
-            <ShareBar items={shareItems} total={stats.expenseTotal} currency={base} />
-          </>
+        {/* Подпись объясняет, что именно на графике — без неё режимы
+            приходится угадывать по названию. */}
+        <p className="mb-2.5 px-1 text-[12px] leading-snug" style={{ color: "var(--muted)" }}>
+          {active.caption}
+        </p>
+
+        {isStructure ? (
+          <ShareBar
+            items={shareItems}
+            total={mode === "earned" ? stats.incomeTotal : stats.expenseTotal}
+            currency={base}
+            empty={mode === "earned" ? "За этот месяц доходов нет" : "За этот месяц трат нет"}
+          />
         ) : (
           <>
             <div className="mb-2 flex rounded-xl p-1" style={{ background: "var(--surface-2)" }}>
@@ -174,7 +213,7 @@ export default function AnalyticsPage() {
                 </button>
               ))}
             </div>
-            {mode === "both" ? (
+            {mode === "flow" ? (
               <IncomeExpenseChart buckets={buckets} currency={base} />
             ) : (
               <NetChart buckets={buckets} currency={base} />
@@ -188,16 +227,6 @@ export default function AnalyticsPage() {
         )}
       </div>
 
-      <div className="mb-4 grid grid-cols-3 rounded-2xl py-3" style={{ background: "var(--surface)" }}>
-        <Stat label="Доходы" value={formatMoney(stats.incomeTotal, base)} color={SERIES.income.color} />
-        <Stat label="Расходы" value={formatMoney(stats.expenseTotal, base)} color={SERIES.expense.color} />
-        <Stat
-          label="Итого"
-          value={formatMoney(stats.incomeTotal - stats.expenseTotal, base)}
-          hint={share != null ? `${diff > 0 ? "+" : ""}${share}% к прошлому` : undefined}
-        />
-      </div>
-
       {mode === "net" ? (
         <div className="mb-6">
           <button
@@ -209,6 +238,14 @@ export default function AnalyticsPage() {
           </button>
           {tableOpen ? (
             <div className="overflow-hidden rounded-2xl" style={{ background: "var(--surface)" }}>
+              <div
+                className="flex gap-2 px-4 py-2 text-[11px]"
+                style={{ color: "var(--muted)", borderBottom: "1px solid var(--border)" }}
+              >
+                <span className="flex-1">Период</span>
+                <span>приход / расход</span>
+                <span className="w-24 text-right">итог</span>
+              </div>
               {buckets
                 .filter((b) => b.income || b.expense)
                 .map((b, i) => (
@@ -236,24 +273,9 @@ export default function AnalyticsPage() {
         </div>
       ) : (
         <>
-          {mode === "both" ? (
-            <div className="mb-4 flex rounded-2xl p-1" style={{ background: "var(--surface-2)" }}>
-              {(["income", "expense"] as CategoryKind[]).map((value) => (
-                <button
-                  key={value}
-                  onClick={() => setSide(value)}
-                  className="flex-1 rounded-xl py-2 text-sm font-medium"
-                  style={{
-                    background: side === value ? "var(--surface)" : "transparent",
-                    boxShadow: side === value ? "0 1px 3px rgba(0,0,0,0.12)" : undefined,
-                  }}
-                >
-                  {value === "income" ? "Доходы" : "Расходы"}
-                </button>
-              ))}
-            </div>
-          ) : null}
-
+          <h2 className="mb-2 text-[15px] font-semibold">
+            {mode === "earned" ? "Источники дохода" : "Категории трат"}
+          </h2>
           {stats.rows.length === 0 ? (
             <p className="mb-6 py-6 text-center text-sm" style={{ color: "var(--muted)" }}>
               За этот период данных нет
@@ -263,6 +285,9 @@ export default function AnalyticsPage() {
               {stats.rows.map(({ category, now, before }) => {
                 const limit = category.kind === "expense" ? category.monthly_limit : null;
                 const overLimit = limit != null && now > limit;
+                // Нулевая разница с прошлым месяцем — не новость, значок не рисуем.
+                const delta =
+                  before > 0 ? Math.round(((now - before) / before) * 100) : 0;
                 return (
                   <div key={category.id}>
                     <div className="mb-1 flex items-baseline justify-between text-sm">
@@ -277,17 +302,18 @@ export default function AnalyticsPage() {
                       </span>
                       <span className="tabular-nums">
                         {formatMoney(now, base)}
-                        {before > 0 ? (
+                        {delta !== 0 ? (
                           <span
                             className="ml-1 text-[11px]"
-                            style={{ color: now > before ? SERIES.expense.color : SERIES.income.color }}
+                            style={{ color: delta > 0 ? SERIES.expense.color : SERIES.income.color }}
                           >
-                            {now > before ? "↑" : "↓"}
-                            {changeLabel(now, before)}
+                            {delta > 0 ? "↑" : "↓"}
+                            {Math.abs(delta) > 500 ? ">500%" : `${Math.abs(delta)}%`}
                           </span>
                         ) : null}
                       </span>
                     </div>
+                    {/* верхняя полоса — этот месяц, нижняя бледная — прошлый */}
                     <span
                       className="block h-1.5 w-full overflow-hidden rounded-full"
                       style={{ background: "var(--surface-2)" }}
@@ -321,6 +347,9 @@ export default function AnalyticsPage() {
                   </div>
                 );
               })}
+              <p className="pt-1 text-[11px]" style={{ color: "var(--muted)" }}>
+                Бледная полоса под цветной — тот же период прошлого месяца
+              </p>
             </div>
           )}
         </>
@@ -358,15 +387,6 @@ export default function AnalyticsPage() {
       ) : null}
     </div>
   );
-}
-
-/**
- * Рост от крошечной базы даёт числа вроде «↑2088%» — они ничего не сообщают
- * и забивают строку. Выше пяти крат показываем сам факт, а не цифру.
- */
-function changeLabel(now: number, before: number): string {
-  const percent = Math.abs(Math.round(((now - before) / before) * 100));
-  return percent > 500 ? ">500%" : `${percent}%`;
 }
 
 function Stat({

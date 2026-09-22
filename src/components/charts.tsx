@@ -259,10 +259,14 @@ export function NetChart({ buckets, currency }: { buckets: Bucket[]; currency: s
   const step = (PLOT.x1 - PLOT.x0) / buckets.length;
   const width = Math.min(step - 2, 24);
 
+  // Когда одна из сторон крошечная, её подпись слипается с нулём. Подписи
+  // не двигаем и не обрезаем — просто не рисуем ту, которой не хватило
+  // места: точные значения всё равно в подсказке и в таблице.
+  const fits = (a: number, b: number) => Math.abs(a - b) >= 14;
   const ticks = [
-    ...(top > 0 ? [{ y: PLOT.y0, label: tickLabel(top) }] : []),
+    ...(top > 0 && fits(PLOT.y0, zero) ? [{ y: PLOT.y0, label: tickLabel(top) }] : []),
     { y: zero, label: "0" },
-    ...(bottom > 0 ? [{ y: PLOT.y1, label: tickLabel(-bottom) }] : []),
+    ...(bottom > 0 && fits(PLOT.y1, zero) ? [{ y: PLOT.y1, label: tickLabel(-bottom) }] : []),
   ];
 
   return (
@@ -305,13 +309,15 @@ export function ShareBar({
   items,
   total,
   currency,
+  empty = "За этот период данных нет",
 }: {
   items: { id: string; name: string; color: string; value: number }[];
   total: number;
   currency: string;
+  empty?: string;
 }) {
   const [active, setActive] = useState<string | null>(null);
-  if (total <= 0) return <Empty text="За этот период трат нет" />;
+  if (total <= 0) return <Empty text={empty} />;
 
   const top = items.slice(0, 6);
   const rest = items.slice(6).reduce((sum, item) => sum + item.value, 0);

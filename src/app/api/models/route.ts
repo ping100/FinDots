@@ -15,6 +15,9 @@ interface Model {
   name?: string;
   context_length?: number;
   pricing?: { prompt?: string; completion?: string };
+  // Рассуждающие модели сначала пишут черновик и только потом ответ. На
+  // разбор бюджета это добавляет десятки секунд, поэтому признак важен.
+  reasoning?: { mandatory?: boolean; default_enabled?: boolean } | null;
 }
 
 export async function GET() {
@@ -37,6 +40,9 @@ export async function GET() {
       // разбирать цены строками.
       free: m.id.endsWith(":free"),
       context: m.context_length ?? 0,
+      // Думает, если размышления вообще заявлены и не выключены по
+      // умолчанию. Такие модели отвечают заметно дольше.
+      thinks: Boolean(m.reasoning) && m.reasoning?.default_enabled !== false,
     }))
     // Совсем короткий контекст не подходит: сводка бюджета в него не влезет.
     .filter((m) => m.context >= 16000)

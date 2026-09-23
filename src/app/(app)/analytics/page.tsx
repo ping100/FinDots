@@ -55,6 +55,11 @@ export default function AnalyticsPage() {
   const [aiError, setAiError] = useState<string | null>(null);
   // Оговорка про модель: ответ при этом всё равно показываем.
   const [aiNote, setAiNote] = useState<string | null>(null);
+  // Ответила ли модель не по-русски — тогда предлагаем переспросить.
+  const [aiForeign, setAiForeign] = useState(false);
+  // Секунды ожидания первых строк. Пустой экран без счётчика тянется вдвое
+  // дольше, чем такой же с ним.
+  const [aiWait, setAiWait] = useState(0);
 
   const buckets = useMemo(
     () => buildBuckets(transactions, offset, grouping, toBase),
@@ -122,19 +127,53 @@ export default function AnalyticsPage() {
     };
   }, [transactions, categories, offset, mode, toBase]);
 
-  const runAnalysis = async () => {
+  const runAnalysis = async (insist = false) => {
     setAiBusy(true);
     setAiError(null);
     setAiNote(null);
+    setAiForeign(false);
+    setAdvice(null);
+    setAiWait(0);
+    const since = Date.now();
+    const tick = setInterval(() => setAiWait(Math.round((Date.now() - since) / 1000)), 1000);
     try {
-      const res = await fetch("/api/analyze", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Не получилось");
-      setAdvice(data.text as string);
-      setAiNote((data.warning as string | null) ?? null);
+      const res = await fetch(`/api/analyze${insist ? "?insist=1" : ""}`, { method: "POST" });
+      // Отказы приходят обычным JSON: до потока дело не дошло.
+      if (!res.ok || !res.body) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error((data as { error?: string }).error ?? "Не получилось");
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let rest = "";
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        rest += decoder.decode(value, { stream: true });
+        const lines = rest.split("\n");
+        rest = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          const event = JSON.parse(line) as {
+            t: string;
+            v?: string;
+            warning?: string | null;
+            foreign?: boolean;
+            error?: string;
+          };
+          if (event.t === "chunk") setAdvice((was) => (was ?? "") + (event.v ?? ""));
+          if (event.t === "done") {
+            setAiNote(event.warning ?? null);
+            setAiForeign(Boolean(event.foreign));
+          }
+          if (event.t === "error") throw new Error(event.error ?? "Не получилось");
+        }
+      }
     } catch (e) {
       setAiError(e instanceof Error ? e.message : "Не получилось");
     } finally {
+      clearInterval(tick);
       setAiBusy(false);
     }
   };
@@ -430,8 +469,16 @@ export default function AnalyticsPage() {
         комментариев к операциям.
       </p>
       {aiKeyHint ? (
-        <Button onClick={runAnalysis} disabled={aiBusy}>
-          {aiBusy ? "Думает…" : advice ? "Пересчитать" : "Разобрать мой бюджет"}
+        <Button onClick={() => runAnalysis()} disabled={aiBusy}>
+          {aiBusy
+            ? // Пока ответ не пошёл — показываем, сколько уже ждём: молчащая
+              // кнопка тревожит сильнее, чем честный счётчик.
+              advice
+              ? "Пишет…"
+              : `Думает… ${aiWait} с`
+            : advice
+              ? "Пересчитать"
+              : "Разобрать мой бюджет"}
         </Button>
       ) : (
         // Без ключа кнопка только выдала бы ошибку — ведём сразу туда, где его заводят.
@@ -452,12 +499,22 @@ export default function AnalyticsPage() {
         </p>
       ) : null}
 
+      {aiForeign && !aiBusy ? (
+        <button
+          onClick={() => runAnalysis(true)}
+          className="mt-2 rounded-full px-4 py-1.5 text-[0.8125rem] font-medium"
+          style={{ background: "var(--surface)" }}
+        >
+          Переспросить по-русски
+        </button>
+      ) : null}
+
       {advice ? (
         <div
           className="selectable animate-fade mt-3 whitespace-pre-wrap rounded-2xl p-4 text-sm leading-relaxed"
           style={{ background: "var(--surface)" }}
         >
-          {advice}
+          {plain(advice)}
         </div>
       ) : null}
     </div>
@@ -490,4 +547,9 @@ function Stat({
       ) : null}
     </div>
   );
+}
+
+/** Показываем простым текстом, поэтому звёздочки и решётки убираем. */
+function plain(text: string): string {
+  return text.replace(/\*\*(.+?)\*\*/g, "$1").replace(/^#{1,6}\s+/gm, "");
 }

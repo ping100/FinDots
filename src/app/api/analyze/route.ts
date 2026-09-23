@@ -22,6 +22,9 @@ const SYSTEM_PROMPT =
 const ASK =
   "Разбери эти цифры. Ответ — на русском языке, начни сразу с заголовка «Что бросается в глаза».";
 
+/** Первый заголовок заданной структуры: по нему отличаем ответ от черновика. */
+const HEADING = /^\s*(?:\d[).]\s*)?(?:\*\*)?\s*Что бросается в глаза/im;
+
 const INSIST =
   "Ответ был не на русском. Напиши разбор заново полностью на русском языке, " +
   "без единого английского предложения, без описания своих рассуждений. " +
@@ -36,7 +39,11 @@ interface Row {
   occurred_at: string;
 }
 
-export async function POST() {
+export async function POST(request: Request) {
+  // Переспрос по-русски — та же ручка с флагом: человек жмёт кнопку сам,
+  // вместо молчаливой второй попытки, которая удваивала ожидание.
+  const insist = new URL(request.url).searchParams.get("insist") === "1";
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -171,7 +178,7 @@ export async function POST() {
 
   const model = profileRes.data?.ai_model || DEFAULT_MODEL;
 
-  const ask = (insist: boolean) =>
+  const ask = () =>
     fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -182,6 +189,9 @@ export async function POST() {
       },
       body: JSON.stringify({
         model,
+        // Ответ идёт человеку по мере написания. Ждать полминуты, глядя на
+        // «Думает…», куда хуже, чем видеть, как строчки появляются.
+        stream: true,
         // Рассуждающие модели отдельно «думают» перед ответом, и этот
         // черновик на английском вылезал прямо в разбор. Просим OpenRouter
         // не присылать его — модель думает, человек видит только вывод.
@@ -205,7 +215,7 @@ export async function POST() {
 
   let response: Response;
   try {
-    response = await ask(false);
+    response = await ask();
   } catch {
     return NextResponse.json({ error: "OpenRouter недоступен" }, { status: 502 });
   }
@@ -244,54 +254,122 @@ export async function POST() {
     );
   }
 
-  let { text, cut } = await answer(response);
-
-  // Модель могла не послушаться и ответить по-английски — тогда заходим на
-  // второй круг с требованием пожёстче. Один раз: дальше это уже не
-  // упрямство модели, а неподходящая модель.
-  if (text && !russian(text)) {
-    try {
-      const second = await ask(true);
-      if (second.ok) {
-        const retry = await answer(second);
-        if (retry.text) ({ text, cut } = retry);
-      }
-    } catch {
-      // Вторая попытка — необязательная роскошь: молча остаёмся с первой.
-    }
-  }
-
-  if (!text) return NextResponse.json({ error: "Пустой ответ модели" }, { status: 502 });
-
+  // Считаем обращение сразу: ответ уже пошёл, и если человек закроет
+  // страницу на середине, модель всё равно отработала.
   await supabase
     .from("ai_usage")
     .upsert({ user_id: user.id, day: today, calls: used + 1 }, { onConflict: "user_id,day" });
 
-  return NextResponse.json({
-    text,
-    model,
-    callsLeft: DAILY_LIMIT - used - 1,
-    // Ответ всё равно показываем: даже неидеальный он полезнее пустого
-    // экрана. Но говорим, что дело в модели, а не в приложении.
-    warning: !russian(text)
-      ? "Эта модель отвечает не по-русски — попробуйте выбрать другую в настройках"
-      : cut
-        ? "Модель не уложилась в ответ и оборвалась на полуслове — с другой моделью разбор выйдет целее"
-        : null,
+  return new Response(relay(response, model, DAILY_LIMIT - used - 1), {
+    headers: {
+      "Content-Type": "application/x-ndjson; charset=utf-8",
+      // Без этого прокси копит ответ у себя, и вся затея с потоком теряет
+      // смысл: человек снова ждёт молча до самого конца.
+      "Cache-Control": "no-cache, no-transform",
+      "X-Accel-Buffering": "no",
+    },
   });
 }
 
-async function answer(response: Response): Promise<{ text: string; cut: boolean }> {
-  const payload = (await response.json()) as {
-    choices?: { message?: { content?: string }; finish_reason?: string }[];
-  };
-  const choice = payload.choices?.[0];
-  return {
-    text: clean(choice?.message?.content ?? ""),
-    // Размышления модели съедают тот же лимит, что и ответ, так что
-    // оборваться на полуслове она вполне может — и это стоит сказать.
-    cut: choice?.finish_reason === "length",
-  };
+/**
+ * Переливает поток OpenRouter в поток для браузера.
+ *
+ * Наружу идут строки JSON: `chunk` — очередной кусок текста, `done` — итог
+ * с оговорками. Начало придерживаем: пока не ясно, пошёл ответ или модель
+ * ещё выкладывает черновик, показывать нечего.
+ */
+function relay(upstream: Response, model: string, callsLeft: number): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+
+  return new ReadableStream({
+    async start(controller) {
+      const send = (event: object) =>
+        controller.enqueue(encoder.encode(JSON.stringify(event) + "\n"));
+
+      let whole = "";  // весь ответ — по нему в конце судим о языке
+      let head = "";   // придержанное начало, пока ищем заголовок
+      let started = false;
+      let cut = false;
+      let rest = "";   // недочитанный хвост строки из потока
+
+      const take = (piece: string) => {
+        whole += piece;
+        if (started) {
+          send({ t: "chunk", v: piece });
+          return;
+        }
+        head += piece;
+        // Заголовок нашёлся — черновик кончился, начался ответ. Не нашёлся
+        // за девять сотен знаков — значит его и не будет, ждать нечего.
+        if (HEADING.test(head) || head.length > 900) {
+          started = true;
+          const ready = clean(head);
+          if (ready) send({ t: "chunk", v: ready });
+        }
+      };
+
+      try {
+        const reader = upstream.body?.getReader();
+        if (!reader) throw new Error("нет потока");
+
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          rest += decoder.decode(value, { stream: true });
+
+          const lines = rest.split("\n");
+          rest = lines.pop() ?? "";
+          for (const line of lines) {
+            const data = line.trim();
+            if (!data.startsWith("data:")) continue;
+            const body = data.slice(5).trim();
+            if (!body || body === "[DONE]") continue;
+            try {
+              const parsed = JSON.parse(body) as {
+                choices?: { delta?: { content?: string }; finish_reason?: string }[];
+              };
+              const choice = parsed.choices?.[0];
+              if (choice?.finish_reason === "length") cut = true;
+              const piece = choice?.delta?.content;
+              if (piece) take(piece);
+            } catch {
+              // Служебные строки вроде «: OPENROUTER PROCESSING» — не наше дело.
+            }
+          }
+        }
+
+        // Весь ответ уместился в придержанное начало и наружу не выходил.
+        if (!started) {
+          const ready = clean(head);
+          if (ready) send({ t: "chunk", v: ready });
+        }
+
+        const text = clean(whole);
+        if (!text) {
+          send({ t: "error", error: "Модель ничего не ответила" });
+        } else {
+          const foreign = !russian(text);
+          send({
+            t: "done",
+            model,
+            callsLeft,
+            foreign,
+            // Ответ оставляем на экране: даже неидеальный он полезнее
+            // пустого места. Но говорим, что дело в модели.
+            warning: foreign
+              ? "Эта модель отвечает не по-русски"
+              : cut
+                ? "Модель не уложилась и оборвалась на полуслове — с другой моделью разбор выйдет целее"
+                : null,
+          });
+        }
+      } catch {
+        send({ t: "error", error: "Связь с OpenRouter оборвалась на середине" });
+      }
+      controller.close();
+    },
+  });
 }
 
 /**
@@ -302,6 +380,9 @@ async function answer(response: Response): Promise<{ text: string; cut: boolean 
  * «Here's a thinking process». Человеку это читать незачем, поэтому режем
  * по первому русскому заголовку из заданной структуры: до него любые
  * англоязычные черновики, после — собственно разбор.
+ *
+ * Разметку тут не трогаем: в потоке звёздочки приходят по кускам, и пару
+ * к открывающей можно не дождаться. Их снимает страница при показе.
  */
 function clean(raw: string): string {
   let text = raw;
@@ -311,14 +392,13 @@ function clean(raw: string): string {
   if (closed >= 0) text = text.slice(closed + "</think>".length);
   text = text.replace(/<\/?(think|thinking|reasoning)>/gi, "");
 
-  const start = text.search(/^\s*(?:\d[).]\s*)?(?:\*\*)?\s*Что бросается в глаза/im);
+  const start = text.search(HEADING);
   if (start > 0) text = text.slice(start);
 
-  // Разметку модели ставят по привычке, а показываем мы простым текстом —
-  // звёздочки и решётки в нём выглядят мусором.
-  text = text.replace(/\*\*(.+?)\*\*/g, "$1").replace(/^#{1,6}\s+/gm, "");
-
-  return text.trim();
+  // Обрезаем только начало. Хвост трогать нельзя: придержанный кусок
+  // отдаётся в поток первым, и съеденный на его конце перенос строки
+  // склеил бы заголовок следующего раздела с предыдущей строкой.
+  return text.replace(/^\s+/, "");
 }
 
 /** Ответ считаем русским, если кириллицы в нём заметно больше латиницы. */

@@ -10,6 +10,8 @@ export interface AiModel {
   id: string;
   label: string;
   free: boolean;
+  /** Пишет черновик перед ответом — значит разбор придётся ждать дольше. */
+  thinks?: boolean;
 }
 
 export const AI_MODELS: AiModel[] = [

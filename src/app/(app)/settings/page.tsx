@@ -380,6 +380,11 @@ export default function SettingsPage() {
           placeholder="Поиск: gemma, claude, qwen…"
         />
 
+        <p className="mb-2 px-1 text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
+          Модели с меткой «думает» сначала пишут черновик и только потом ответ —
+          разбор у них выходит вдумчивее, но ждать дольше.
+        </p>
+
         <div className="mb-3 max-h-[46vh] space-y-2 overflow-y-auto">
           {shown.map((m) => (
             <button
@@ -392,6 +397,17 @@ export default function SettingsPage() {
               }}
             >
               <span className="flex-1">{m.label}</span>
+              {m.thinks ? (
+                <span
+                  className="rounded-full px-2 py-0.5 text-[0.625rem] font-semibold"
+                  style={{
+                    background: model === m.id ? "rgba(255,255,255,0.25)" : "var(--surface)",
+                    color: model === m.id ? "#fff" : "var(--muted)",
+                  }}
+                >
+                  думает
+                </span>
+              ) : null}
               {m.free ? (
                 <span
                   className="rounded-full px-2 py-0.5 text-[0.625rem] font-semibold"

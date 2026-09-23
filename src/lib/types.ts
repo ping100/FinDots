@@ -11,6 +11,8 @@ export interface Profile {
   theme: "dark" | "light";
   text_scale: "small" | "medium" | "large";
   ai_model: string;
+  /** Приветствие после регистрации уже показывали. */
+  onboarding_seen: boolean;
 }
 
 export interface ExchangeRate {

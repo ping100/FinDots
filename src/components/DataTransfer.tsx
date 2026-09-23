@@ -23,7 +23,7 @@ const TYPE_LABEL: Record<TxType, string> = {
  * Загрузка — мастер: у каждой программы свои заголовки, поэтому колонки
  * сопоставляет человек, а мы лишь угадываем и показываем, что получится.
  */
-export function DataTransfer() {
+export function DataTransfer({ onlyImport = false }: { onlyImport?: boolean } = {}) {
   const { transactions, categories, wallets, profile, importDrafts } = useStore();
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -121,16 +121,19 @@ export function DataTransfer() {
   return (
     <>
       <div className="mb-2 overflow-hidden rounded-2xl" style={{ border: "1px solid var(--border)" }}>
-        <button onClick={exportCsv} className="flex w-full items-center justify-between px-4 py-3.5 text-left">
-          <span className="text-sm">Выгрузить в CSV</span>
-          <span className="text-sm" style={{ color: "var(--muted)" }}>
-            {transactions.length} {plural(transactions.length, "операция", "операции", "операций")}
-          </span>
-        </button>
+        {/* В приветствии выгружать нечего — у нового пользователя пусто. */}
+        {onlyImport ? null : (
+          <button onClick={exportCsv} className="flex w-full items-center justify-between px-4 py-3.5 text-left">
+            <span className="text-sm">Выгрузить в CSV</span>
+            <span className="text-sm" style={{ color: "var(--muted)" }}>
+              {transactions.length} {plural(transactions.length, "операция", "операции", "операций")}
+            </span>
+          </button>
+        )}
         <button
           onClick={() => fileInput.current?.click()}
           className="flex w-full items-center justify-between px-4 py-3.5 text-left"
-          style={{ borderTop: "1px solid var(--border)" }}
+          style={{ borderTop: onlyImport ? undefined : "1px solid var(--border)" }}
         >
           <span className="text-sm">Загрузить из CSV</span>
           <span className="text-sm" style={{ color: "var(--muted)" }}>

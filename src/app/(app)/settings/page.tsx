@@ -9,6 +9,7 @@ import { CURRENCIES, parseAmount, symbolOf } from "@/lib/money";
 import { createClient } from "@/lib/supabase/client";
 import { useStore } from "@/components/DataProvider";
 import { DataTransfer } from "@/components/DataTransfer";
+import { Guide } from "@/components/Guide";
 import { Button, Field, Sheet, inputClass, inputStyle } from "@/components/ui";
 
 export default function SettingsPage() {
@@ -20,6 +21,7 @@ export default function SettingsPage() {
   const [keyDraft, setKeyDraft] = useState("");
   const [keyBusy, setKeyBusy] = useState(false);
   const [keyProblem, setKeyProblem] = useState<string | null>(null);
+  const [guide, setGuide] = useState(false);
 
   const base = profile?.base_currency ?? "KZT";
   const modelLabel = AI_MODELS.find((m) => m.id === profile?.ai_model)?.label ?? profile?.ai_model;
@@ -33,6 +35,14 @@ export default function SettingsPage() {
   return (
     <div className="mx-auto w-full max-w-md px-4 pb-32">
       <h1 className="py-2 text-[1.625rem] font-semibold">Настройки</h1>
+
+      <Group>
+        <Row
+          label="Как пользоваться"
+          hint="Та же инструкция, что после регистрации — можно открыть в любой момент"
+          onClick={() => setGuide(true)}
+        />
+      </Group>
 
       <Group>
         <Row
@@ -93,10 +103,17 @@ export default function SettingsPage() {
         <Row label="Выйти" danger onClick={signOut} />
       </Group>
 
-      <p className="mt-5 text-center text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+      <button
+        onClick={() => setGuide(true)}
+        className="mt-5 w-full text-center text-[0.6875rem] underline"
+        style={{ color: "var(--muted)" }}
+      >
         Кошельки и категории правятся на «Панели»: тап по кошельку, долгое
         нажатие на категории расхода, «Настроить категорию» в окне дохода.
-      </p>
+        Подробнее — в инструкции.
+      </button>
+
+      <Guide open={guide} onClose={() => setGuide(false)} />
 
       <Sheet open={sheet === "currency"} title="Основная валюта" onClose={() => setSheet(null)}>
         <div className="flex gap-2 pb-2">

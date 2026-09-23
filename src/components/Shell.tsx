@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Icon } from "@/lib/icons";
 import { useStore } from "./DataProvider";
+import { Welcome } from "./Welcome";
 
 const TABS = [
   { href: "/", label: "Панель", icon: "grid" },
@@ -27,6 +28,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-dvh pt-safe">
+      {/* Поверх любой вкладки: приветствие должно найти человека, куда бы
+          он ни попал после регистрации. */}
+      <Welcome />
       {error ? (
         <p
           className="mx-4 mt-3 rounded-2xl px-4 py-2 text-xs"

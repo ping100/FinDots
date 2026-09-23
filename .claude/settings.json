@@ -1,6 +1,14 @@
 {
   "permissions": {
     "allow": [
+      "mcp__Supabase__execute_sql",
+      "mcp__Supabase__apply_migration",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git fetch:*)",
+      "Bash(npm run build)",
+      "Bash(npx tsc --noEmit)",
       "mcp__Vercel__get_deployment",
       "mcp__Vercel__get_project",
       "mcp__Vercel__list_projects",

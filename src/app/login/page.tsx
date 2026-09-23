@@ -115,7 +115,7 @@ function LoginForm() {
           className="animate-lift mt-1.5 text-sm leading-snug"
           style={{ color: "var(--muted)", animationDelay: "330ms" }}
         >
-          Доходы, кошельки и траты — кружочками и перетаскиванием
+          Личные финансы: сколько есть, сколько ушло и сколько можно потратить сегодня
         </p>
       </div>
 

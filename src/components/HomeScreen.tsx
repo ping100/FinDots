@@ -660,14 +660,20 @@ function Section({
           className="flex items-center rounded-2xl px-2 py-3"
           style={{ background: "var(--surface)" }}
         >
+          {/* Пока блок пуст, рядом стоит подсказка, и делить остаток на пять
+              колонок не под что: колонка выходит уже самого кружка, и тот
+              вылезает за скруглённый угол карточки. Поэтому с подсказкой
+              сетка занимает ровно свою ширину, а текст забирает остальное. */}
           <div
-            className="grid flex-1 gap-x-1 gap-y-3"
-            style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+            className={`grid gap-x-1 gap-y-3 ${hint ? "shrink-0" : "flex-1"}`}
+            style={{
+              gridTemplateColumns: hint ? "max-content" : `repeat(${columns}, minmax(0, 1fr))`,
+            }}
           >
             {children}
           </div>
           {hint ? (
-            <p className="max-w-[58%] shrink-0 pl-1 pr-2 text-[0.75rem] leading-snug" style={{ color: "var(--muted)" }}>
+            <p className="flex-1 pl-3 pr-1 text-[0.75rem] leading-snug" style={{ color: "var(--muted)" }}>
               {hint}
             </p>
           ) : null}

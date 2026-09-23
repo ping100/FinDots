@@ -1,7 +1,7 @@
 {
   "name": "Findots — трекер расходов",
   "short_name": "Findots",
-  "description": "Доходы, кошельки и расходы: иконки и перетаскивание",
+  "description": "Учёт личных финансов: доходы, кошельки и расходы",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

@@ -20,7 +20,7 @@ const onest = Onest({
 
 export const metadata: Metadata = {
   title: "Findots — трекер расходов",
-  description: "Учёт личных финансов: доходы, кошельки и расходы перетаскиванием",
+  description: "Учёт личных финансов: доходы, кошельки и расходы",
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Findots" },
 };

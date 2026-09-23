@@ -89,9 +89,11 @@ npm run dev
 ### 1. Supabase
 
 1. Создать проект на [supabase.com](https://supabase.com).
-2. Выполнить `supabase/migrations/0001_init.sql` в SQL Editor — он создаёт
+2. Выполнить миграции из `supabase/migrations/` по порядку — первая создаёт
    таблицы, представления, политики RLS и триггер, который при регистрации
-   заводит профиль, курсы валют и стартовый набор категорий.
+   заводит профиль, курсы валют и стартовый набор категорий. Имя файла
+   начинается с версии: по ней Supabase отличает применённые миграции от
+   новых, поэтому переименовывать их нельзя.
 3. Project Settings → API: скопировать `Project URL` и `anon public` ключ в
    `NEXT_PUBLIC_SUPABASE_URL` и `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 4. Authentication → URL Configuration: в `Redirect URLs` добавить

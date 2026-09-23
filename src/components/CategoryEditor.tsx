@@ -11,11 +11,14 @@ export function CategoryEditor({
   open,
   kind,
   category,
+  recurring,
   onClose,
 }: {
   open: boolean;
   kind: CategoryKind;
   category?: Category | null;
+  /** Заводим из блока «Каждый месяц» — сумма платежа обязательна. */
+  recurring?: boolean;
   onClose: () => void;
 }) {
   const { categories, saveCategory, addSubcategory, deleteCategory } = useStore();
@@ -37,7 +40,7 @@ export function CategoryEditor({
     setNewSub("");
     setPlanned(category?.planned_amount != null ? String(category.planned_amount) : "");
     setDueDay(category?.due_day != null ? String(category.due_day) : "");
-  }, [open, category, kind]);
+  }, [open, category, kind, recurring]);
 
   const subs = category ? categories.filter((c) => !c.archived && c.parent_id === category.id) : [];
 
@@ -76,13 +79,15 @@ export function CategoryEditor({
           ? "Категория"
           : kind === "income"
             ? "Новый источник дохода"
-            : "Новая категория расхода"
+            : recurring
+              ? "Новый ежемесячный платёж"
+              : "Новая категория расхода"
       }
       onClose={onClose}
       footer={
         <div className="space-y-2">
-          <Button onClick={submit} disabled={!name.trim() || busy}>
-            Сохранить
+          <Button onClick={submit} disabled={!name.trim() || (recurring && !planned) || busy}>
+            {recurring && !planned ? "Укажите сумму платежа" : "Сохранить"}
           </Button>
           {category ? (
             <Button
@@ -108,25 +113,30 @@ export function CategoryEditor({
         />
       </Field>
 
+      {/* Лимит — это потолок трат, и регулярному платежу он не нужен: у него
+          сумма и так известна заранее. */}
+      {kind === "expense" && !recurring ? (
+        <Field label="Лимит в месяц" hint="Потолок трат. Пусто — без лимита">
+          <input
+            className={inputClass}
+            style={inputStyle}
+            inputMode="decimal"
+            value={limit}
+            onChange={(e) => setLimit(e.target.value)}
+            placeholder="например 60000"
+          />
+        </Field>
+      ) : null}
+
       {kind === "expense" ? (
         <>
-          <Field label="Лимит в месяц" hint="Потолок трат. Пусто — без лимита">
-            <input
-              className={inputClass}
-              style={inputStyle}
-              inputMode="decimal"
-              value={limit}
-              onChange={(e) => setLimit(e.target.value)}
-              placeholder="например 60000"
-            />
-          </Field>
-
-          {/* Обязательный платёж: аренда, подписка, интернет. Отличается от
-              лимита тем, что эти деньги не свободны — их вычитают из
-              «можно тратить сегодня», пока платёж не сделан. */}
           <Field
             label="Платёж каждый месяц"
-            hint="Аренда, подписка, интернет. Эта сумма не попадёт в «можно тратить сегодня», пока не оплачена"
+            hint={
+              recurring
+                ? "Эта сумма не попадёт в «можно тратить сегодня», пока не оплачена"
+                : "Аренда, подписка, интернет. Пусто — платёж не регулярный"
+            }
           >
             <input
               className={inputClass}
@@ -134,7 +144,7 @@ export function CategoryEditor({
               inputMode="decimal"
               value={planned}
               onChange={(e) => setPlanned(e.target.value)}
-              placeholder="пусто — платёж не регулярный"
+              placeholder={recurring ? "например 2000" : "пусто — платёж не регулярный"}
             />
           </Field>
 

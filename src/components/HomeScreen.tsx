@@ -57,7 +57,11 @@ export function HomeScreen() {
   const [walletEditor, setWalletEditor] =
     useState<{ wallet?: Wallet | null; kind?: WalletKind; kinds?: WalletKind[] } | null>(null);
   const [categoryEditor, setCategoryEditor] =
-    useState<{ kind: "income" | "expense"; category?: Category | null } | null>(null);
+    useState<{
+      kind: "income" | "expense";
+      category?: Category | null;
+      recurring?: boolean;
+    } | null>(null);
   const [debtPicker, setDebtPicker] =
     useState<{ group: DebtGroup; payFrom?: Wallet } | null>(null);
   const [monthPicker, setMonthPicker] = useState(false);
@@ -89,7 +93,11 @@ export function HomeScreen() {
   const live = categories.filter((c) => !c.archived);
   const liveWallets = wallets.filter((w) => !w.archived);
   const incomeCats = live.filter((c) => c.kind === "income" && !c.parent_id);
-  const expenseCats = live.filter((c) => c.kind === "expense" && !c.parent_id);
+  const allExpense = live.filter((c) => c.kind === "expense" && !c.parent_id);
+  // Регулярные платежи вынесены в свой блок, иначе один и тот же кружок
+  // стоял бы в двух местах.
+  const bills = allExpense.filter((c) => c.planned_amount);
+  const expenseCats = allExpense.filter((c) => !c.planned_amount);
   const subsOf = (parentId: string) =>
     live.filter((c) => c.parent_id === parentId).map((c) => ({ id: c.id, name: c.name }));
   const moneyWallets = liveWallets.filter((w) => w.kind === "cash" || w.kind === "card");
@@ -121,6 +129,14 @@ export function HomeScreen() {
     const sum = (map: Map<string, number>) => [...map.values()].reduce((a, b) => a + b, 0);
     return { income, expense, incomeTotal: sum(income), expenseTotal: sum(expense) };
   }, [transactions, offset, toBase]);
+
+  const expenseTotal = expenseCats.reduce((sum, c) => sum + (month.expense.get(c.id) ?? 0), 0);
+  // В блоке платежей показываем не сколько их всего, а сколько ещё висит:
+  // это то самое, что отложено от «можно тратить сегодня».
+  const billsLeft = bills.reduce(
+    (sum, c) => sum + Math.max(Number(c.planned_amount) - (month.expense.get(c.id) ?? 0), 0),
+    0,
+  );
 
   const walletsTotal = moneyWallets.reduce(
     (sum, w) => sum + toBase(balanceOf(w.id), w.currency),
@@ -342,7 +358,7 @@ export function HomeScreen() {
         <Section
           columns={columns}
           title="Расходы"
-          total={formatMoney(month.expenseTotal, base)}
+          total={formatMoney(expenseTotal, base)}
           hint={expenseCats.length === 0 ? "Нажми «+» и создай категорию трат — можно задать лимит на месяц." : undefined}
           collapsed={!!collapsed.expenses}
           onToggle={() => setCollapsed((c) => ({ ...c, expenses: !c.expenses }))}
@@ -359,6 +375,38 @@ export function HomeScreen() {
             />
           ))}
           <button onClick={() => setCategoryEditor({ kind: "expense", category: null })} className="transition-transform duration-100 active:scale-95">
+            <AddBubble size={bubble} />
+          </button>
+        </Section>
+
+        <Section
+          columns={columns}
+          title="Каждый месяц"
+          total={formatMoney(billsLeft, base)}
+          note={billsLeft > 0 ? "столько ещё не оплачено" : undefined}
+          hint={
+            bills.length === 0
+              ? "Аренда, подписки, интернет. Такие платежи откладываются из «можно тратить сегодня», пока не оплачены."
+              : undefined
+          }
+          collapsed={!!collapsed.bills}
+          onToggle={() => setCollapsed((c) => ({ ...c, bills: !c.bills }))}
+        >
+          {bills.map((category) => (
+            <BillBubble
+              key={category.id}
+              category={category}
+              spent={month.expense.get(category.id) ?? 0}
+              base={base}
+              size={bubble}
+              onTap={() => setDialog({ kind: "expense", category })}
+              onHold={() => setCategoryEditor({ kind: "expense", category })}
+            />
+          ))}
+          <button
+            onClick={() => setCategoryEditor({ kind: "expense", category: null, recurring: true })}
+            className="transition-transform duration-100 active:scale-95"
+          >
             <AddBubble size={bubble} />
           </button>
         </Section>
@@ -444,6 +492,15 @@ export function HomeScreen() {
         open={dialog?.kind === "expense"}
         title={dialog?.kind === "expense" ? `Трата: ${dialog.category.name}` : ""}
         currency={dialog?.kind === "expense" ? (dialog.wallet?.currency ?? base) : base}
+        initial={
+          dialog?.kind === "expense" && dialog.category.planned_amount
+            ? Math.max(
+                Number(dialog.category.planned_amount) -
+                  (month.expense.get(dialog.category.id) ?? 0),
+                0,
+              )
+            : undefined
+        }
         max={
           dialog?.kind === "expense" && dialog.wallet
             ? Math.max(balanceOf(dialog.wallet.id), 0)
@@ -616,6 +673,7 @@ export function HomeScreen() {
         open={!!categoryEditor}
         kind={categoryEditor?.kind ?? "expense"}
         category={categoryEditor?.category}
+        recurring={categoryEditor?.recurring}
         onClose={() => setCategoryEditor(null)}
       />
     </DndContext>
@@ -965,6 +1023,65 @@ function ExpenseBubble({
           />
         </span>
       ) : null}
+    </button>
+  );
+}
+
+/**
+ * Регулярный платёж: под кружком не потраченное за месяц, а сколько ещё
+ * осталось внести. Полоска показывает, насколько он закрыт.
+ */
+function BillBubble({
+  category,
+  spent,
+  base,
+  size,
+  onTap,
+  onHold,
+}: {
+  category: Category;
+  spent: number;
+  base: string;
+  size: number;
+  onTap: () => void;
+  onHold: () => void;
+}) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `drop-category:${category.id}`,
+    data: { target: "category", categoryId: category.id },
+  });
+  const hold = useLongPress(onHold);
+
+  const planned = Number(category.planned_amount);
+  const left = Math.max(planned - spent, 0);
+  const done = left <= 0.5;
+  const today = new Date().getDate();
+  const late = !done && category.due_day != null && category.due_day < today;
+
+  return (
+    <button ref={setNodeRef} onClick={onTap} className="transition-transform duration-100 active:scale-95" {...hold}>
+      <Bubble
+        icon={done ? "check" : category.icon}
+        color={category.color}
+        label={category.name}
+        amount={formatMoney(done ? 0 : left, base)}
+        size={size}
+        muted={done}
+        dimmed={done}
+        highlighted={isOver}
+      />
+      <span
+        className="mx-auto -mt-0.5 block h-1 w-10 overflow-hidden rounded-full"
+        style={{ background: "var(--surface-2)" }}
+      >
+        <span
+          className="block h-full rounded-full"
+          style={{
+            width: `${Math.min(spent / planned, 1) * 100}%`,
+            background: late ? "var(--danger)" : category.color,
+          }}
+        />
+      </span>
     </button>
   );
 }

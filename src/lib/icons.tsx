@@ -12,6 +12,7 @@ const PATHS: Record<string, ReactNode> = {
   circle: <circle cx="12" cy="12" r="7" />,
   plus: <path d="M12 6v12M6 12h12" />,
   close: <path d="M6 6l12 12M18 6L6 18" />,
+  check: <path d="M5 12.5l4.5 4.5L19 7.5" />,
   "chevron-down": <path d="M6 9.5l6 6 6-6" />,
   "chevron-right": <path d="M9.5 6l6 6-6 6" />,
   "chevron-left": <path d="M14.5 6l-6 6 6 6" />,

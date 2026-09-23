@@ -646,8 +646,8 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="mb-4">
-      <div className="mb-1.5 flex items-center gap-2 px-1">
+    <section className="mb-3">
+      <div className="mb-1 flex items-center gap-2 px-1">
         <button onClick={onToggle} className="flex items-center gap-2" aria-expanded={!collapsed}>
           <Icon
             name={collapsed ? "chevron-right" : "chevron-down"}
@@ -665,7 +665,7 @@ function Section({
       ) : null}
       {collapsed ? null : (
         <div
-          className="flex items-center rounded-2xl px-2 py-3"
+          className="flex items-center rounded-2xl px-2 py-1.5"
           style={{ background: "var(--surface)" }}
         >
           {/* Пока блок пуст, рядом стоит подсказка, и делить остаток на пять
@@ -673,7 +673,7 @@ function Section({
               вылезает за скруглённый угол карточки. Поэтому с подсказкой
               сетка занимает ровно свою ширину, а текст забирает остальное. */}
           <div
-            className={`grid gap-x-1 gap-y-3 ${hint ? "shrink-0" : "flex-1"}`}
+            className={`grid gap-x-1 gap-y-2 ${hint ? "shrink-0" : "flex-1"}`}
             style={{
               gridTemplateColumns: hint ? "max-content" : `repeat(${columns}, minmax(0, 1fr))`,
             }}

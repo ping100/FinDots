@@ -222,13 +222,15 @@ export function Bubble({
 }) {
   return (
     <div
-      className={`flex w-full flex-col items-center gap-1 transition ${
+      className={`flex w-full flex-col items-center gap-0.5 transition ${
         dimmed ? "opacity-30" : ""
       }`}
     >
-      <span className="flex h-[26px] w-full items-end justify-center overflow-hidden">
+      {/* Полоса под названием фиксирована, чтобы кружки в ряду стояли на одной
+          линии. Две строки в неё помещаются за счёт плотного интерлиньяжа. */}
+      <span className="flex h-[22px] w-full items-end justify-center overflow-hidden">
         <span
-          className="line-clamp-2 w-full break-words text-center leading-[1.15]"
+          className="line-clamp-2 w-full break-words text-center leading-[1.05]"
           style={{
             color: "var(--muted)",
             // длинные названия ужимаются, а не обрезаются посреди слова
@@ -288,8 +290,8 @@ function amountFontSize(amount?: string): string {
 /** Пустой кружок «добавить» в конце каждой сетки. */
 export function AddBubble({ size = 58 }: { size?: number }) {
   return (
-    <div className="flex w-full flex-col items-center gap-1">
-      <span className="h-[26px] text-[0.6875rem] leading-[1.15]">&nbsp;</span>
+    <div className="flex w-full flex-col items-center gap-0.5">
+      <span className="h-[22px] text-[0.6875rem] leading-[1.05]">&nbsp;</span>
       <span
         className="flex items-center justify-center rounded-full border"
         style={{

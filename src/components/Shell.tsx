@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Icon } from "@/lib/icons";
 import { useStore } from "./DataProvider";
+import { Loader } from "./Loader";
 import { Welcome } from "./Welcome";
 
 const TABS = [
@@ -18,13 +19,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { ready, error } = useStore();
 
-  if (!ready) {
-    return (
-      <div className="flex min-h-dvh items-center justify-center" style={{ color: "var(--muted)" }}>
-        Загружаю…
-      </div>
-    );
-  }
+  if (!ready) return <Loader />;
 
   return (
     <div className="min-h-dvh pt-safe">

@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Icon } from "@/lib/icons";
 import { Logo } from "@/components/Logo";
+import { GoogleButton } from "@/components/GoogleButton";
+import { useProvider } from "@/lib/providers";
 import { TURNSTILE_SITE_KEY, Turnstile } from "@/components/Turnstile";
 import { Button, Field, inputClass, inputStyle } from "@/components/ui";
 
@@ -32,7 +34,9 @@ function ruError(message: string): string {
 
 function LoginForm() {
   const router = useRouter();
-  const next = useSearchParams().get("next") ?? "/";
+  const params = useSearchParams();
+  const next = params.get("next") ?? "/";
+  const googleReady = useProvider("google");
   const [mode, setMode] = useState<"in" | "up">("in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -42,6 +46,12 @@ function LoginForm() {
   const [problem, setProblem] = useState<string | null>(null);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [captchaNonce, setCaptchaNonce] = useState(0);
+
+  // Возврат из Google мог сорваться — тогда мы попадаем сюда с пометкой, и
+  // молчать об этом нельзя: человек нажал кнопку и вернулся ни с чем.
+  useEffect(() => {
+    if (params.get("error")) setProblem("Вход через Google не завершился — попробуйте ещё раз");
+  }, [params]);
 
   // Без ключа капчи её просто нет, и вход ничем не отличается от прежнего.
   const captchaRequired = !!TURNSTILE_SITE_KEY;
@@ -99,6 +109,22 @@ function LoginForm() {
     router.refresh();
   };
 
+  const withGoogle = async () => {
+    setBusy(true);
+    setProblem(null);
+    const { error } = await createClient().auth.signInWithOAuth({
+      provider: "google",
+      // next тащим через ссылку возврата: после Google человек должен
+      // попасть туда же, куда шёл до того, как его развернуло на вход.
+      options: { redirectTo: `${location.origin}/auth/callback?next=${encodeURIComponent(next)}` },
+    });
+    if (error) {
+      setBusy(false);
+      setProblem(ruError(error.message));
+    }
+    // Успех уводит на google.com — снимать busy незачем, страница уходит.
+  };
+
   const switchTo = (value: "in" | "up") => {
     setMode(value);
     setProblem(null);
@@ -146,6 +172,23 @@ function LoginForm() {
           </button>
         ))}
       </div>
+
+      {googleReady ? (
+        <div className="animate-lift mb-4" style={{ animationDelay: "440ms" }}>
+          <GoogleButton
+            label={mode === "in" ? "Войти через Google" : "Продолжить с Google"}
+            onClick={() => void withGoogle()}
+            disabled={busy}
+          />
+          {/* Разделитель, а не просто отступ: иначе кнопка читается как
+              часть формы ниже, и человек ищет, куда же вписать почту. */}
+          <div className="mt-4 flex items-center gap-3" style={{ color: "var(--muted)" }}>
+            <span className="h-px flex-1" style={{ background: "var(--border)" }} />
+            <span className="text-[0.6875rem]">или по почте</span>
+            <span className="h-px flex-1" style={{ background: "var(--border)" }} />
+          </div>
+        </div>
+      ) : null}
 
       <form
         onSubmit={submit}

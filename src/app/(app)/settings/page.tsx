@@ -12,6 +12,7 @@ import { useStore } from "@/components/DataProvider";
 import { DataTransfer } from "@/components/DataTransfer";
 import { StatementImport } from "@/components/StatementImport";
 import { Guide } from "@/components/Guide";
+import { SignInMethods } from "@/components/SignInMethods";
 import { Button, Field, Sheet, inputClass, inputStyle } from "@/components/ui";
 
 export default function SettingsPage() {
@@ -98,6 +99,7 @@ export default function SettingsPage() {
           value={profile?.display_name ?? undefined}
           hint="Данные привязаны к этой учётной записи и видны только вам"
         />
+        <SignInMethods />
         <Row
           label="Основная валюта"
           value={`${symbolOf(base)} ${base}`}

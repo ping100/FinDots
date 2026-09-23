@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AI_MODELS } from "@/lib/aiModels";
+import { AI_MODELS, type AiModel } from "@/lib/aiModels";
 import { TEXT_SCALES } from "@/lib/textScale";
 import { CURRENT_BUILD, applyUpdate, serverBuild } from "@/lib/update";
 import { Icon } from "@/lib/icons";
@@ -24,6 +24,30 @@ export default function SettingsPage() {
   const [keyBusy, setKeyBusy] = useState(false);
   const [keyProblem, setKeyProblem] = useState<string | null>(null);
   const [guide, setGuide] = useState(false);
+  // Список моделей берём у OpenRouter живьём: зашитый в код протухает, и
+  // выбранная когда-то модель однажды просто исчезает.
+  const [models, setModels] = useState<AiModel[]>(AI_MODELS);
+  const [modelsNote, setModelsNote] = useState<string | null>(null);
+  const [modelQuery, setModelQuery] = useState("");
+
+  useEffect(() => {
+    if (sheet !== "model" || models !== AI_MODELS) return;
+    let alive = true;
+    void (async () => {
+      try {
+        const res = await fetch("/api/models");
+        const data = (await res.json()) as { models?: AiModel[] };
+        if (!alive) return;
+        if (data.models?.length) setModels(data.models);
+        else setModelsNote("Список не загрузился — показан запасной");
+      } catch {
+        if (alive) setModelsNote("Список не загрузился — показан запасной");
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [sheet, models]);
   const [checking, setChecking] = useState(false);
   const [updateNote, setUpdateNote] = useState<string | null>(null);
 
@@ -43,7 +67,12 @@ export default function SettingsPage() {
   };
 
   const base = profile?.base_currency ?? "KZT";
-  const modelLabel = AI_MODELS.find((m) => m.id === profile?.ai_model)?.label ?? profile?.ai_model;
+  // Бесплатные вперёд: ради них человек и заводит свой ключ.
+  const needle = modelQuery.trim().toLowerCase();
+  const shown = models
+    .filter((m) => !needle || m.id.toLowerCase().includes(needle) || m.label.toLowerCase().includes(needle))
+    .slice(0, 60);
+  const modelLabel = models.find((m) => m.id === profile?.ai_model)?.label ?? profile?.ai_model;
 
   const signOut = async () => {
     await createClient().auth.signOut();
@@ -337,8 +366,22 @@ export default function SettingsPage() {
           </Button>
         }
       >
-        <div className="mb-3 space-y-2">
-          {AI_MODELS.map((m) => (
+        {modelsNote ? (
+          <p className="mb-2 text-xs" style={{ color: "var(--muted)" }}>
+            {modelsNote}
+          </p>
+        ) : null}
+
+        <input
+          className={`${inputClass} mb-2`}
+          style={inputStyle}
+          value={modelQuery}
+          onChange={(e) => setModelQuery(e.target.value)}
+          placeholder="Поиск: gemma, claude, qwen…"
+        />
+
+        <div className="mb-3 max-h-[46vh] space-y-2 overflow-y-auto">
+          {shown.map((m) => (
             <button
               key={m.id}
               onClick={() => setModel(m.id)}
@@ -365,7 +408,7 @@ export default function SettingsPage() {
         </div>
         <Field
           label="Или вписать идентификатор вручную"
-          hint="Пригодится, когда OpenRouter переименует модель"
+          hint="Список берётся у OpenRouter — если нужной модели в нём нет, впишите её сюда"
         >
           <input
             className={inputClass}

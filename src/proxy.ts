@@ -3,7 +3,9 @@ import { createServerClient } from "@supabase/ssr";
 
 // /api/version отдаёт только отпечаток сборки и нужен до входа тоже: иначе
 // проверка обновления на экране логина молча упиралась бы в редирект.
-const PUBLIC_PATHS = ["/login", "/auth", "/api/version", "/preview-tmp"];
+// /api/models — открытый каталог моделей OpenRouter, личного в нём ничего
+// нет, а ответ кэшируется на час, так что скрывать его не за чем.
+const PUBLIC_PATHS = ["/login", "/auth", "/api/version", "/api/models"];
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });

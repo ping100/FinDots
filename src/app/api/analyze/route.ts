@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 // Лимит защищает не кошелёк владельца, а самого пользователя: ключ теперь
 // личный, и зациклившийся запрос жёг бы его собственные деньги.
 const DAILY_LIMIT = Number(process.env.AI_DAILY_LIMIT ?? 20);
-const DEFAULT_MODEL = "meta-llama/llama-3.3-70b-instruct:free";
+const DEFAULT_MODEL = "google/gemma-4-31b-it:free";
 
 interface Row {
   type: string;
@@ -195,6 +195,20 @@ export async function POST() {
     if (response.status === 402) {
       return NextResponse.json(
         { error: "На счету OpenRouter не хватает средств для этой модели" },
+        { status: 400 },
+      );
+    }
+    // 404 у OpenRouter означает не «сервис пропал», а «нет такой модели»:
+    // идентификаторы меняются, и выбранная когда-то модель может исчезнуть.
+    if (response.status === 404) {
+      return NextResponse.json(
+        { error: `Модели «${model}» больше нет у OpenRouter — выберите другую в настройках` },
+        { status: 400 },
+      );
+    }
+    if (response.status === 429) {
+      return NextResponse.json(
+        { error: "Слишком часто — бесплатные модели ограничены. Попробуйте через минуту" },
         { status: 400 },
       );
     }

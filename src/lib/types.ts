@@ -55,6 +55,9 @@ export interface Category {
   archived: boolean;
   /** Не null — это подкатегория: она живёт внутри своей категории, а не на главной. */
   parent_id: string | null;
+  /** Регулярный платёж: сколько ждём каждый месяц и какого числа. */
+  planned_amount: number | null;
+  due_day: number | null;
 }
 
 export interface Transaction {

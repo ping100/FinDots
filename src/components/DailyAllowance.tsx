@@ -15,7 +15,7 @@ import { Sheet } from "./ui";
  * сегодня — завтрашняя цифра станет меньше, и наоборот.
  */
 export function DailyAllowance() {
-  const { wallets, transactions, profile, balanceOf, toBase } = useStore();
+  const { wallets, categories, transactions, profile, balanceOf, toBase } = useStore();
   const [explain, setExplain] = useState(false);
   const base = profile?.base_currency ?? "KZT";
 
@@ -55,6 +55,25 @@ export function DailyAllowance() {
       }
     }
 
+    // Регулярные траты: аренда, подписки. Из свободных денег держим в
+    // стороне только неоплаченный остаток — заплатил половину, половина и
+    // вернётся в доступные.
+    const spentByCategory = new Map<string, number>();
+    for (const t of transactions) {
+      if (t.type !== "expense" || !t.category_id) continue;
+      const at = new Date(t.occurred_at);
+      if (at < new Date(now.getFullYear(), now.getMonth(), 1) || at >= monthEnd) continue;
+      spentByCategory.set(
+        t.category_id,
+        (spentByCategory.get(t.category_id) ?? 0) + toBase(Number(t.amount), t.currency),
+      );
+    }
+    for (const category of categories) {
+      if (category.kind !== "expense" || !category.planned_amount) continue;
+      const left = Number(category.planned_amount) - (spentByCategory.get(category.id) ?? 0);
+      if (left > 0.5) upcoming.push({ name: category.name, amount: left });
+    }
+
     const obligations = upcoming.reduce((sum, item) => sum + item.amount, 0);
     const free = money - obligations;
 
@@ -75,7 +94,7 @@ export function DailyAllowance() {
       perDay: free / Math.max(daysLeft, 1),
       short: free < 0,
     };
-  }, [wallets, transactions, balanceOf, toBase]);
+  }, [wallets, categories, transactions, balanceOf, toBase]);
 
   const overspent = data.spentToday > data.perDay && data.perDay > 0;
 
@@ -139,8 +158,9 @@ export function DailyAllowance() {
           </div>
         </div>
         <p className="pb-2 text-xs" style={{ color: "var(--muted)" }}>
-          Обязательные — это долги и кредиты с ежемесячным платежом, чьё число
-          ещё не прошло, и долги со сроком погашения внутри остатка месяца.
+          Обязательные — это регулярные платежи по категориям (в той части,
+          что ещё не оплачена), кредиты с ежемесячным платежом, чьё число ещё
+          не прошло, и долги со сроком погашения внутри остатка месяца.
           Цифра считается от текущих балансов, поэтому сама себя выправляет:
           перебрали сегодня — завтра она станет меньше.
         </p>

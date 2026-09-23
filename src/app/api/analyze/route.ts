@@ -67,7 +67,7 @@ export async function POST() {
         .eq("archived", false),
       supabase
         .from("categories")
-        .select("id, kind, name, monthly_limit, parent_id")
+        .select("id, kind, name, monthly_limit, parent_id, planned_amount, due_day")
         .eq("archived", false),
       supabase.from("wallet_balances").select("wallet_id, currency, balance"),
       supabase
@@ -139,6 +139,7 @@ export async function POST() {
       категория: nameOf(id),
       сумма: round(value),
       лимит: categories.find((c) => c.id === id)?.monthly_limit ?? null,
+      обязательный_платёж_в_месяц: categories.find((c) => c.id === id)?.planned_amount ?? null,
       было_в_прошлом_месяце: round(prev.perCategory.get(id) ?? 0),
       // Разрез внутри категории: на что именно ушло — виден только если
       // человек отмечал уточнения.

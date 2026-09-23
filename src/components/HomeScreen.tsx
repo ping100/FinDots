@@ -55,7 +55,7 @@ export function HomeScreen() {
   const [dialog, setDialog] = useState<Dialog>(null);
   const [walletSheet, setWalletSheet] = useState<Wallet | null>(null);
   const [walletEditor, setWalletEditor] =
-    useState<{ wallet?: Wallet | null; kind?: WalletKind } | null>(null);
+    useState<{ wallet?: Wallet | null; kind?: WalletKind; kinds?: WalletKind[] } | null>(null);
   const [categoryEditor, setCategoryEditor] =
     useState<{ kind: "income" | "expense"; category?: Category | null } | null>(null);
   const [debtPicker, setDebtPicker] =
@@ -183,7 +183,7 @@ export function HomeScreen() {
     if (target.target === "debts") {
       const list = debts[target.group];
       if (list.length === 0) {
-        setWalletEditor({ wallet: null, kind: target.group });
+        setWalletEditor({ wallet: null, kind: target.group, kinds: [target.group] });
         return;
       }
       if (list.length === 1) {
@@ -269,7 +269,10 @@ export function HomeScreen() {
               onTap={() => setWalletSheet(wallet)}
             />
           ))}
-          <button onClick={() => setWalletEditor({ wallet: null, kind: "savings" })} className="transition-transform duration-100 active:scale-95">
+          <button
+            onClick={() => setWalletEditor({ wallet: null, kind: "savings", kinds: ["savings"] })}
+            className="transition-transform duration-100 active:scale-95"
+          >
             <AddBubble size={bubble} />
           </button>
         </Section>
@@ -327,7 +330,10 @@ export function HomeScreen() {
                 onTap={() => setDebtPicker({ group })}
               />
             ))}
-          <button onClick={() => setWalletEditor({ wallet: null, kind: "card" })} className="transition-transform duration-100 active:scale-95">
+          <button
+            onClick={() => setWalletEditor({ wallet: null, kind: "card", kinds: ["cash", "card"] })}
+            className="transition-transform duration-100 active:scale-95"
+          >
             <AddBubble size={bubble} />
           </button>
         </Section>
@@ -532,7 +538,7 @@ export function HomeScreen() {
         onAdd={() => {
           const kind = debtPicker?.group;
           setDebtPicker(null);
-          setWalletEditor({ wallet: null, kind });
+          setWalletEditor({ wallet: null, kind, kinds: kind ? [kind] : undefined });
         }}
         onPick={(id) => {
           const target = wallets.find((w) => w.id === id);
@@ -601,6 +607,7 @@ export function HomeScreen() {
         open={!!walletEditor}
         wallet={walletEditor?.wallet}
         defaultKind={walletEditor?.kind ?? "card"}
+        kinds={walletEditor?.kinds}
         onClose={() => setWalletEditor(null)}
       />
 

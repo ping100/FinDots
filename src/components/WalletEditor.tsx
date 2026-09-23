@@ -16,6 +16,15 @@ export const KIND_LABEL: Record<WalletKind, string> = {
   debt_in: "Долг — мне должны",
 };
 
+/** Заголовок под то, что человек и правда заводит: не «кошелёк» для долга. */
+const NEW_TITLE: Record<WalletKind, string> = {
+  cash: "Новый кошелёк",
+  card: "Новый кошелёк",
+  savings: "Новый вклад или копилка",
+  debt_out: "Новый долг или кредит",
+  debt_in: "Мне должны",
+};
+
 const DEFAULT_ICON: Record<WalletKind, string> = {
   cash: "cash",
   card: "card",
@@ -28,11 +37,17 @@ export function WalletEditor({
   open,
   wallet,
   defaultKind = "card",
+  kinds,
   onClose,
 }: {
   open: boolean;
   wallet?: Wallet | null;
   defaultKind?: WalletKind;
+  /**
+   * Что вообще можно завести в этом месте. На странице долгов незачем
+   * предлагать завести наличные, а в блоке накоплений — долг.
+   */
+  kinds?: WalletKind[];
   onClose: () => void;
 }) {
   const { saveWallet, deleteWallet, profile } = useStore();
@@ -75,6 +90,9 @@ export function WalletEditor({
 
   const isDebt = kind === "debt_out" || kind === "debt_in";
   const isSavings = kind === "savings";
+  // Тип существующего кошелька не меняем: у долга поток инвертирован, и
+  // превращение карты в долг перевернуло бы всю его историю.
+  const choices = wallet ? [] : (kinds ?? (Object.keys(KIND_LABEL) as WalletKind[]));
 
   const submit = async () => {
     if (!name.trim() || busy) return;
@@ -107,7 +125,7 @@ export function WalletEditor({
   return (
     <Sheet
       open={open}
-      title={wallet ? "Кошелёк" : "Новый кошелёк"}
+      title={wallet ? "Кошелёк" : NEW_TITLE[kind]}
       onClose={onClose}
       footer={
         <div className="space-y-2">
@@ -128,9 +146,10 @@ export function WalletEditor({
         </div>
       }
     >
+      {choices.length > 1 ? (
       <FieldGroup label="Тип">
         <div className="grid grid-cols-2 gap-2">
-          {(Object.keys(KIND_LABEL) as WalletKind[]).map((k) => (
+          {choices.map((k) => (
             <button
               key={k}
               onClick={() => {
@@ -149,6 +168,7 @@ export function WalletEditor({
           ))}
         </div>
       </FieldGroup>
+      ) : null}
 
       <Field label="Название">
         <input

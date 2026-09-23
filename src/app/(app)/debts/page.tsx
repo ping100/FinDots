@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Icon } from "@/lib/icons";
-import { formatMoney } from "@/lib/money";
-import type { Wallet } from "@/lib/types";
+import { formatMoney, monthRange } from "@/lib/money";
+import type { Category, Wallet, WalletKind } from "@/lib/types";
 import { useStore } from "@/components/DataProvider";
 import { AmountSheet } from "@/components/AmountSheet";
+import { CategoryEditor } from "@/components/CategoryEditor";
 import { WalletEditor } from "@/components/WalletEditor";
 import { Button } from "@/components/ui";
 
@@ -17,23 +18,47 @@ function daysLeft(date: string): number {
 }
 
 export default function DebtsPage() {
-  const { wallets, balanceOf, addTransfer } = useStore();
+  const { wallets, categories, transactions, profile, balanceOf, toBase, addTransfer, addExpense } =
+    useStore();
   const [paying, setPaying] = useState<Wallet | null>(null);
   // Возврат долга мне: деньги идут из долга в выбранный кошелёк.
   const [returning, setReturning] = useState<Wallet | null>(null);
-  const [editor, setEditor] = useState<{ wallet?: Wallet | null } | null>(null);
+  const [editor, setEditor] =
+    useState<{ wallet?: Wallet | null; kind: WalletKind } | null>(null);
+  const [categoryEditor, setCategoryEditor] = useState<Category | null | undefined>(undefined);
+  const [payingBill, setPayingBill] = useState<Category | null>(null);
 
+  const base = profile?.base_currency ?? "KZT";
   const owed = wallets.filter((w) => w.kind === "debt_out");
   const due = wallets.filter((w) => w.kind === "debt_in");
-  const recurring = wallets.filter((w) => w.is_recurring);
+  const credits = wallets.filter((w) => w.is_recurring);
   const moneyWallets = wallets.filter((w) => w.kind === "cash" || w.kind === "card");
+
+  // Сколько уже потрачено в этом месяце по каждой категории — из этого
+  // видно, какой регулярный платёж ещё висит.
+  const spent = useMemo(() => {
+    const { from, to } = monthRange(0);
+    const map = new Map<string, number>();
+    for (const t of transactions) {
+      if (t.type !== "expense" || !t.category_id) continue;
+      const at = new Date(t.occurred_at);
+      if (at < from || at >= to) continue;
+      map.set(t.category_id, (map.get(t.category_id) ?? 0) + toBase(Number(t.amount), t.currency));
+    }
+    return map;
+  }, [transactions, toBase]);
+
+  const bills = categories.filter((c) => c.kind === "expense" && c.planned_amount);
 
   return (
     <div className="mx-auto w-full max-w-md px-4 pb-28 pt-3">
       <h1 className="mb-1 text-xl font-semibold">Долги и обязательные платежи</h1>
-      <p className="mb-4 text-xs" style={{ color: "var(--muted)" }}>
-        Долг гасится переносом денег из кошелька — здесь или перетаскиванием на
-        главном экране.
+      <p className="mb-4 text-xs leading-snug" style={{ color: "var(--muted)" }}>
+        Долг — это то, что нужно отдать целиком: он гасится переносом денег из
+        кошелька. Ежемесячный платёж — аренда, подписка, интернет: у него нет
+        остатка задолженности, он просто повторяется и записывается обычной
+        тратой. И то и другое откладывается из «можно тратить сегодня», пока не
+        оплачено.
       </p>
 
       <Group title="Я должен" empty="Долгов нет">
@@ -43,7 +68,7 @@ export default function DebtsPage() {
             wallet={w}
             amount={balanceOf(w.id)}
             onPay={() => setPaying(w)}
-            onEdit={() => setEditor({ wallet: w })}
+            onEdit={() => setEditor({ wallet: w, kind: "debt_out" })}
           />
         ))}
       </Group>
@@ -56,13 +81,33 @@ export default function DebtsPage() {
             amount={balanceOf(w.id)}
             actionLabel="Мне вернули"
             onPay={() => setReturning(w)}
-            onEdit={() => setEditor({ wallet: w })}
+            onEdit={() => setEditor({ wallet: w, kind: "debt_in" })}
           />
         ))}
       </Group>
 
-      <Group title="Ежемесячные" empty="Регулярных платежей нет">
-        {recurring.map((w) => (
+      <Group
+        title="Каждый месяц"
+        empty="Регулярных платежей нет. Аренда, подписки, интернет — заводятся кнопкой ниже."
+      >
+        {bills.map((c) => {
+          const planned = Number(c.planned_amount);
+          const paid = spent.get(c.id) ?? 0;
+          const left = Math.max(planned - paid, 0);
+          return (
+            <BillCard
+              key={c.id}
+              category={c}
+              planned={planned}
+              paid={paid}
+              left={left}
+              base={base}
+              onPay={() => setPayingBill(c)}
+              onEdit={() => setCategoryEditor(c)}
+            />
+          );
+        })}
+        {credits.map((w) => (
           <div
             key={w.id}
             className="mb-2 flex items-center gap-3 rounded-2xl px-4 py-3"
@@ -87,9 +132,17 @@ export default function DebtsPage() {
         ))}
       </Group>
 
-      <Button variant="ghost" onClick={() => setEditor({ wallet: null })}>
-        Добавить долг или кредит
-      </Button>
+      <div className="space-y-2">
+        <Button variant="ghost" onClick={() => setCategoryEditor(null)}>
+          Добавить ежемесячный платёж
+        </Button>
+        <Button variant="ghost" onClick={() => setEditor({ wallet: null, kind: "debt_out" })}>
+          Добавить долг или кредит
+        </Button>
+        <Button variant="ghost" onClick={() => setEditor({ wallet: null, kind: "debt_in" })}>
+          Записать, что мне должны
+        </Button>
+      </div>
 
       <AmountSheet
         open={!!paying}
@@ -148,11 +201,54 @@ export default function DebtsPage() {
         }}
       />
 
+      {/* Тип задан кнопкой, которой сюда пришли: выбирать «наличные» на
+          странице долгов незачем. */}
       <WalletEditor
         open={!!editor}
         wallet={editor?.wallet}
-        defaultKind="debt_out"
+        defaultKind={editor?.kind ?? "debt_out"}
+        kinds={editor ? [editor.kind] : undefined}
         onClose={() => setEditor(null)}
+      />
+
+      <CategoryEditor
+        open={categoryEditor !== undefined}
+        kind="expense"
+        category={categoryEditor}
+        onClose={() => setCategoryEditor(undefined)}
+      />
+
+      <AmountSheet
+        open={!!payingBill}
+        title={payingBill ? `Оплатить: ${payingBill.name}` : ""}
+        subtitle="Запишется обычной тратой в эту категорию"
+        currency={base}
+        initial={
+          payingBill
+            ? Math.max(Number(payingBill.planned_amount) - (spent.get(payingBill.id) ?? 0), 0)
+            : undefined
+        }
+        options={moneyWallets.map((w) => ({
+          id: w.id,
+          name: w.name,
+          caption: formatMoney(balanceOf(w.id), w.currency),
+        }))}
+        optionLabel="Откуда списать"
+        submitLabel="Оплатить"
+        onClose={() => setPayingBill(null)}
+        onSubmit={async ({ amount, note, occurredAt, optionId }) => {
+          if (!payingBill || !optionId) throw new Error("Выбери кошелёк");
+          const from = wallets.find((w) => w.id === optionId);
+          if (!from) throw new Error("Кошелёк не найден");
+          await addExpense({
+            categoryId: payingBill.id,
+            walletId: from.id,
+            amount,
+            currency: from.currency,
+            note,
+            occurredAt,
+          });
+        }}
       />
     </div>
   );
@@ -179,6 +275,82 @@ function Group({
         children
       )}
     </section>
+  );
+}
+
+/** Регулярный платёж: сколько уже внесено в этом месяце и сколько осталось. */
+function BillCard({
+  category,
+  planned,
+  paid,
+  left,
+  base,
+  onPay,
+  onEdit,
+}: {
+  category: Category;
+  planned: number;
+  paid: number;
+  left: number;
+  base: string;
+  onPay: () => void;
+  onEdit: () => void;
+}) {
+  const done = left <= 0.5;
+  const today = new Date().getDate();
+  const overdue = !done && category.due_day != null && category.due_day < today;
+
+  return (
+    <div
+      className="mb-2 rounded-2xl p-4"
+      style={{
+        background: "var(--surface)",
+        border: `1px solid ${overdue ? "var(--danger)" : "var(--border)"}`,
+      }}
+    >
+      <div className="flex items-center gap-3">
+        <span
+          className="flex h-10 w-10 items-center justify-center rounded-full"
+          style={{ background: category.color + "26", color: category.color }}
+        >
+          <Icon name={category.icon} size={18} />
+        </span>
+        <button className="flex-1 text-left" onClick={onEdit}>
+          <span className="block text-sm font-medium">{category.name}</span>
+          <span
+            className="block text-[0.6875rem]"
+            style={{ color: overdue ? "var(--danger)" : "var(--muted)" }}
+          >
+            {done
+              ? "оплачено в этом месяце"
+              : category.due_day
+                ? overdue
+                  ? `было ${category.due_day}-го — ещё не оплачено`
+                  : `${category.due_day}-го числа`
+                : "в этом месяце"}
+          </span>
+        </button>
+        <span className="text-right">
+          <span className="block text-base font-semibold tabular-nums">
+            {formatMoney(done ? planned : left, base)}
+          </span>
+          {paid > 0.5 && !done ? (
+            <span className="block text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+              внесено {formatMoney(paid, base)}
+            </span>
+          ) : null}
+        </span>
+      </div>
+      {done ? null : (
+        <button
+          onClick={onPay}
+          className="mt-3 w-full rounded-xl py-2 text-sm font-semibold"
+          style={{ background: "var(--surface-2)" }}
+        >
+          Оплатить
+        </button>
+      )}
+    </div>
   );
 }
 

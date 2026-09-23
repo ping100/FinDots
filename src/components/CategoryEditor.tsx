@@ -24,6 +24,8 @@ export function CategoryEditor({
   const [color, setColor] = useState(PALETTE[0]);
   const [limit, setLimit] = useState("");
   const [newSub, setNewSub] = useState("");
+  const [planned, setPlanned] = useState("");
+  const [dueDay, setDueDay] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -33,6 +35,8 @@ export function CategoryEditor({
     setColor(category?.color ?? PALETTE[Math.floor(Math.random() * PALETTE.length)]);
     setLimit(category?.monthly_limit != null ? String(category.monthly_limit) : "");
     setNewSub("");
+    setPlanned(category?.planned_amount != null ? String(category.planned_amount) : "");
+    setDueDay(category?.due_day != null ? String(category.due_day) : "");
   }, [open, category, kind]);
 
   const subs = category ? categories.filter((c) => c.parent_id === category.id) : [];
@@ -55,6 +59,8 @@ export function CategoryEditor({
         icon,
         color,
         monthly_limit: kind === "expense" ? parseAmount(limit) : null,
+        planned_amount: kind === "expense" ? parseAmount(planned) : null,
+        due_day: kind === "expense" && planned && dueDay ? Number(dueDay) : null,
       });
       onClose();
     } finally {
@@ -103,16 +109,48 @@ export function CategoryEditor({
       </Field>
 
       {kind === "expense" ? (
-        <Field label="Лимит в месяц" hint="Пусто — без лимита">
-          <input
-            className={inputClass}
-            style={inputStyle}
-            inputMode="decimal"
-            value={limit}
-            onChange={(e) => setLimit(e.target.value)}
-            placeholder="например 60000"
-          />
-        </Field>
+        <>
+          <Field label="Лимит в месяц" hint="Потолок трат. Пусто — без лимита">
+            <input
+              className={inputClass}
+              style={inputStyle}
+              inputMode="decimal"
+              value={limit}
+              onChange={(e) => setLimit(e.target.value)}
+              placeholder="например 60000"
+            />
+          </Field>
+
+          {/* Обязательный платёж: аренда, подписка, интернет. Отличается от
+              лимита тем, что эти деньги не свободны — их вычитают из
+              «можно тратить сегодня», пока платёж не сделан. */}
+          <Field
+            label="Платёж каждый месяц"
+            hint="Аренда, подписка, интернет. Эта сумма не попадёт в «можно тратить сегодня», пока не оплачена"
+          >
+            <input
+              className={inputClass}
+              style={inputStyle}
+              inputMode="decimal"
+              value={planned}
+              onChange={(e) => setPlanned(e.target.value)}
+              placeholder="пусто — платёж не регулярный"
+            />
+          </Field>
+
+          {planned ? (
+            <Field label="Число месяца" hint="Когда обычно платите — для напоминания">
+              <input
+                className={inputClass}
+                style={inputStyle}
+                inputMode="numeric"
+                value={dueDay}
+                onChange={(e) => setDueDay(e.target.value)}
+                placeholder="10"
+              />
+            </Field>
+          ) : null}
+        </>
       ) : null}
 
       {/* Подкатегории заводятся и у существующей категории, и прямо в окне

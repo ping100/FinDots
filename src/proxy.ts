@@ -1,7 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-const PUBLIC_PATHS = ["/login", "/auth"];
+// /api/version отдаёт только отпечаток сборки и нужен до входа тоже: иначе
+// проверка обновления на экране логина молча упиралась бы в редирект.
+const PUBLIC_PATHS = ["/login", "/auth", "/api/version"];
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });

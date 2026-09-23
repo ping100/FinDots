@@ -1,13 +1,83 @@
 "use client";
 
-import { useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { applyUpdate, updateAvailable } from "@/lib/update";
 
+/**
+ * Регистрация service worker и присмотр за обновлениями.
+ *
+ * Добавленное на экран приложение может неделями не перезагружать вкладку,
+ * и человек будет смотреть на старую версию. Поэтому сверяемся с сервером
+ * при запуске, при каждом возвращении к приложению и раз в полчаса — и
+ * предлагаем обновиться полосой внизу, не перезагружая экран у человека
+ * под руками.
+ */
 export function RegisterSW() {
-  useEffect(() => {
-    if (!("serviceWorker" in navigator) || process.env.NODE_ENV !== "production") return;
-    navigator.serviceWorker.register("/sw.js").catch(() => {
-      // Без service worker приложение работает как обычный сайт — молча продолжаем.
-    });
+  const [ready, setReady] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const check = useCallback(async () => {
+    if (await updateAvailable()) setReady(true);
   }, []);
-  return null;
+
+  useEffect(() => {
+    if (process.env.NODE_ENV !== "production") return;
+
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {
+        // Без service worker приложение работает как обычный сайт.
+      });
+    }
+
+    void check();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void check();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    const timer = setInterval(check, 30 * 60 * 1000);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      clearInterval(timer);
+    };
+  }, [check]);
+
+  if (!ready) return null;
+
+  return (
+    <div className="pb-safe animate-rise fixed inset-x-3 bottom-3 z-[70] mx-auto max-w-md">
+      <div
+        className="flex items-center gap-3 rounded-2xl px-4 py-3"
+        style={{
+          background: "var(--surface)",
+          border: "1px solid var(--accent)",
+          boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
+        }}
+      >
+        <span className="flex-1 text-sm leading-snug">
+          Вышла новая версия
+          <span className="block text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+            Записи не потеряются — они хранятся на сервере
+          </span>
+        </span>
+        <button
+          onClick={() => {
+            setBusy(true);
+            void applyUpdate();
+          }}
+          disabled={busy}
+          className="shrink-0 rounded-full px-4 py-2 text-sm font-semibold text-white transition-transform duration-100 active:scale-95 disabled:opacity-50"
+          style={{ background: "var(--accent)" }}
+        >
+          {busy ? "Обновляю…" : "Обновить"}
+        </button>
+        <button
+          onClick={() => setReady(false)}
+          aria-label="Позже"
+          className="shrink-0 rounded-full p-1 opacity-50"
+        >
+          <span className="text-lg leading-none">×</span>
+        </button>
+      </div>
+    </div>
+  );
 }

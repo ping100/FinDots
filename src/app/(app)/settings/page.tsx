@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AI_MODELS } from "@/lib/aiModels";
 import { TEXT_SCALES } from "@/lib/textScale";
+import { CURRENT_BUILD, applyUpdate, serverBuild } from "@/lib/update";
 import { Icon } from "@/lib/icons";
 import { CURRENCIES, parseAmount, symbolOf } from "@/lib/money";
 import { createClient } from "@/lib/supabase/client";
@@ -22,6 +23,23 @@ export default function SettingsPage() {
   const [keyBusy, setKeyBusy] = useState(false);
   const [keyProblem, setKeyProblem] = useState<string | null>(null);
   const [guide, setGuide] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [updateNote, setUpdateNote] = useState<string | null>(null);
+
+  const checkUpdate = async () => {
+    if (checking) return;
+    setChecking(true);
+    setUpdateNote(null);
+    const build = await serverBuild();
+    if (!build) setUpdateNote("Не дозвонились до сервера — проверьте интернет");
+    else if (build === CURRENT_BUILD) setUpdateNote("У вас последняя версия");
+    else {
+      setUpdateNote("Есть новая версия, обновляю…");
+      await applyUpdate();
+      return;
+    }
+    setChecking(false);
+  };
 
   const base = profile?.base_currency ?? "KZT";
   const modelLabel = AI_MODELS.find((m) => m.id === profile?.ai_model)?.label ?? profile?.ai_model;
@@ -98,6 +116,18 @@ export default function SettingsPage() {
         Excel и Google Таблицах.
       </p>
       <DataTransfer />
+
+      <Group>
+        <Row
+          label={checking ? "Проверяю…" : "Обновить приложение"}
+          value={CURRENT_BUILD}
+          hint={
+            updateNote ??
+            "Приложение проверяет обновления само, но если обещанного не видно — нажмите здесь"
+          }
+          onClick={() => void checkUpdate()}
+        />
+      </Group>
 
       <Group>
         <Row label="Выйти" danger onClick={signOut} />

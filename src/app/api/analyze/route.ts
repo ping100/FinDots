@@ -13,6 +13,7 @@ interface Row {
   amount: number;
   currency: string;
   category_id: string | null;
+  subcategory_id: string | null;
   occurred_at: string;
 }
 
@@ -64,11 +65,14 @@ export async function POST() {
         .from("wallets")
         .select("id, kind, name, currency, due_date, monthly_payment, is_recurring, rate, goal, term_end")
         .eq("archived", false),
-      supabase.from("categories").select("id, kind, name, monthly_limit").eq("archived", false),
+      supabase
+        .from("categories")
+        .select("id, kind, name, monthly_limit, parent_id")
+        .eq("archived", false),
       supabase.from("wallet_balances").select("wallet_id, currency, balance"),
       supabase
         .from("transactions")
-        .select("type, amount, currency, category_id, occurred_at")
+        .select("type, amount, currency, category_id, subcategory_id, occurred_at")
         .gte("occurred_at", startOfMonth(-2).toISOString()),
     ]);
 
@@ -88,6 +92,7 @@ export async function POST() {
     const from = startOfMonth(offset);
     const to = startOfMonth(offset + 1);
     const perCategory = new Map<string, number>();
+    const perSub = new Map<string, number>();
     let income = 0;
     for (const row of rows) {
       const at = new Date(row.occurred_at);
@@ -95,10 +100,13 @@ export async function POST() {
       const value = toBase(Number(row.amount), row.currency);
       if (row.type === "expense" && row.category_id) {
         perCategory.set(row.category_id, (perCategory.get(row.category_id) ?? 0) + value);
+        if (row.subcategory_id) {
+          perSub.set(row.subcategory_id, (perSub.get(row.subcategory_id) ?? 0) + value);
+        }
       }
       if (row.type === "income") income += value;
     }
-    return { perCategory, income };
+    return { perCategory, perSub, income };
   };
 
   const now = bucket(0);
@@ -132,6 +140,11 @@ export async function POST() {
       сумма: round(value),
       лимит: categories.find((c) => c.id === id)?.monthly_limit ?? null,
       было_в_прошлом_месяце: round(prev.perCategory.get(id) ?? 0),
+      // Разрез внутри категории: на что именно ушло — виден только если
+      // человек отмечал уточнения.
+      уточнения: categories
+        .filter((c) => c.parent_id === id && (now.perSub.get(c.id) ?? 0) > 0)
+        .map((c) => ({ название: c.name, сумма: round(now.perSub.get(c.id) ?? 0) })),
     })),
     кошельки_и_долги: wallets,
   };

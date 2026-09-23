@@ -35,18 +35,23 @@ export default function OperationsPage() {
 
   const base = profile?.base_currency ?? "KZT";
   const nameOfCategory = (id: string | null) => categories.find((c) => c.id === id)?.name ?? "—";
+  /** «Продукты → магазин»: уточнение дописываем к названию категории. */
+  const withSub = (t: Transaction) => {
+    const sub = categories.find((c) => c.id === t.subcategory_id)?.name;
+    return sub ? `${nameOfCategory(t.category_id)} → ${sub}` : nameOfCategory(t.category_id);
+  };
   const nameOfWallet = (id: string | null) => wallets.find((w) => w.id === id)?.name ?? "—";
 
   const describe = (t: Transaction) => {
     switch (t.type) {
       case "income":
-        return nameOfCategory(t.category_id);
+        return withSub(t);
       case "allocation":
         return `${nameOfCategory(
           transactions.find((p) => p.id === t.parent_id)?.category_id ?? null,
         )} → ${nameOfWallet(t.wallet_id)}`;
       case "expense":
-        return `${nameOfCategory(t.category_id)} · ${nameOfWallet(t.wallet_id)}`;
+        return `${withSub(t)} · ${nameOfWallet(t.wallet_id)}`;
       case "transfer":
         return `${nameOfWallet(t.from_wallet_id)} → ${nameOfWallet(t.to_wallet_id)}`;
       case "adjustment":

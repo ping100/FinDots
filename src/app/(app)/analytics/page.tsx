@@ -47,6 +47,7 @@ export default function AnalyticsPage() {
   const [grouping, setGrouping] = useState<Grouping>("day");
   const [offset, setOffset] = useState(0);
   const [tableOpen, setTableOpen] = useState(false);
+  const [openRow, setOpenRow] = useState<string | null>(null);
   const base = profile?.base_currency ?? "KZT";
 
   const [advice, setAdvice] = useState<string | null>(null);
@@ -63,6 +64,9 @@ export default function AnalyticsPage() {
       const { from, to } = monthRange(shift);
       const income = new Map<string, number>();
       const expense = new Map<string, number>();
+      // Уточнения внутри категории: id подкатегории → сумма. Считаем сразу
+      // здесь, чтобы разбивка бралась из того же прохода по операциям.
+      const subs = new Map<string, number>();
       for (const t of transactions) {
         const at = new Date(t.occurred_at);
         if (at < from || at >= to) continue;
@@ -73,8 +77,11 @@ export default function AnalyticsPage() {
         if (t.type === "expense" && t.category_id) {
           expense.set(t.category_id, (expense.get(t.category_id) ?? 0) + value);
         }
+        if ((t.type === "income" || t.type === "expense") && t.subcategory_id) {
+          subs.set(t.subcategory_id, (subs.get(t.subcategory_id) ?? 0) + value);
+        }
       }
-      return { income, expense };
+      return { income, expense, subs };
     };
 
     const current = collect(offset);
@@ -84,12 +91,22 @@ export default function AnalyticsPage() {
       listSide === "income" ? data.income : data.expense;
 
     const rows = categories
-      .filter((c) => c.kind === listSide)
-      .map((c) => ({
-        category: c,
-        now: pick(current).get(c.id) ?? 0,
-        before: pick(previous).get(c.id) ?? 0,
-      }))
+      // Подкатегории не отдельные строки: они раскрываются внутри своей.
+      .filter((c) => c.kind === listSide && !c.parent_id)
+      .map((c) => {
+        const now = pick(current).get(c.id) ?? 0;
+        const subs = categories
+          .filter((sub) => sub.parent_id === c.id)
+          .map((sub) => ({ id: sub.id, name: sub.name, value: current.subs.get(sub.id) ?? 0 }))
+          .filter((sub) => sub.value > 0)
+          .sort((a, b) => b.value - a.value);
+        const named = subs.reduce((sum, sub) => sum + sub.value, 0);
+        // Остаток — операции этой категории, записанные без уточнения.
+        if (subs.length && now - named > 0.5) {
+          subs.push({ id: `${c.id}:rest`, name: "без уточнения", value: now - named });
+        }
+        return { category: c, now, before: pick(previous).get(c.id) ?? 0, subs };
+      })
       .filter((r) => r.now > 0 || r.before > 0)
       .sort((a, b) => b.now - a.now);
 
@@ -282,12 +299,13 @@ export default function AnalyticsPage() {
             </p>
           ) : (
             <div className="mb-6 space-y-3.5">
-              {stats.rows.map(({ category, now, before }) => {
+              {stats.rows.map(({ category, now, before, subs }) => {
                 const limit = category.kind === "expense" ? category.monthly_limit : null;
                 const overLimit = limit != null && now > limit;
                 // Нулевая разница с прошлым месяцем — не новость, значок не рисуем.
                 const delta =
                   before > 0 ? Math.round(((now - before) / before) * 100) : 0;
+                const expanded = openRow === category.id;
                 return (
                   <div key={category.id}>
                     <div className="mb-1 flex items-baseline justify-between text-sm">
@@ -343,6 +361,53 @@ export default function AnalyticsPage() {
                         лимит {formatMoney(limit, base)}
                         {overLimit ? ` · перерасход ${formatMoney(now - limit, base)}` : ""}
                       </span>
+                    ) : null}
+
+                    {/* Разбивка по уточнениям — под спойлером: у большинства
+                        категорий её нет, и раскрытый список забил бы экран. */}
+                    {subs.length ? (
+                      <>
+                        <button
+                          onClick={() => setOpenRow(expanded ? null : category.id)}
+                          className="mt-1 flex items-center gap-1 text-[0.6875rem]"
+                          style={{ color: "var(--muted)" }}
+                          aria-expanded={expanded}
+                        >
+                          <Icon name={expanded ? "chevron-down" : "chevron-right"} size={11} />
+                          {expanded ? "свернуть" : `подробнее: ${subs.length}`}
+                        </button>
+                        {expanded ? (
+                          <div className="animate-rise mt-1.5 space-y-1.5 pl-4">
+                            {subs.map((sub) => (
+                              <div key={sub.id}>
+                                <div
+                                  className="flex items-baseline justify-between text-[0.75rem]"
+                                  style={{ color: "var(--muted)" }}
+                                >
+                                  <span>{sub.name}</span>
+                                  <span className="tabular-nums">
+                                    {formatMoney(sub.value, base)} ·{" "}
+                                    {Math.round((sub.value / now) * 100)}%
+                                  </span>
+                                </div>
+                                <span
+                                  className="mt-0.5 block h-1 w-full overflow-hidden rounded-full"
+                                  style={{ background: "var(--surface-2)" }}
+                                >
+                                  <span
+                                    className="block h-full rounded-full"
+                                    style={{
+                                      width: `${(sub.value / now) * 100}%`,
+                                      background: category.color,
+                                      opacity: sub.id.endsWith(":rest") ? 0.35 : 0.75,
+                                    }}
+                                  />
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                      </>
                     ) : null}
                   </div>
                 );

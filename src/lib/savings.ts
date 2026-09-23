@@ -157,6 +157,7 @@ export function maturedAccruals(
         amount: due.amount,
         currency: wallet.currency,
         category_id: null,
+        subcategory_id: null,
         wallet_id: wallet.id,
         from_wallet_id: null,
         to_wallet_id: null,

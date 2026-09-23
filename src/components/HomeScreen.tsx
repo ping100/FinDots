@@ -46,7 +46,7 @@ export function HomeScreen() {
   const {
     profile, wallets, categories, transactions, rates,
     balanceOf, poolOf, toBase,
-    addIncome, allocate, addExpense, addTransfer, saveProfile,
+    addIncome, allocate, addExpense, addTransfer, saveProfile, addSubcategory,
   } = useStore();
 
   const [offset, setOffset] = useState(0);
@@ -83,8 +83,14 @@ export function HomeScreen() {
   // поэтому диаметр масштабируем тем же коэффициентом вручную.
   const bubble = Math.round(58 * scaleFactor(profile?.text_scale));
   const columns = gridColumns(profile?.text_scale);
-  const incomeCats = categories.filter((c) => c.kind === "income");
-  const expenseCats = categories.filter((c) => c.kind === "expense");
+  // Кружками показываем только верхний уровень: подкатегории живут внутри
+  // окна операции, иначе сетка расползётся.
+  const incomeCats = categories.filter((c) => c.kind === "income" && !c.parent_id);
+  const expenseCats = categories.filter((c) => c.kind === "expense" && !c.parent_id);
+  const subsOf = (parentId: string) =>
+    categories
+      .filter((c) => c.parent_id === parentId)
+      .map((c) => ({ id: c.id, name: c.name }));
   const moneyWallets = wallets.filter((w) => w.kind === "cash" || w.kind === "card");
   const savings = wallets.filter((w) => w.kind === "savings");
   const debts = useMemo(
@@ -387,11 +393,18 @@ export function HomeScreen() {
             </button>
           ) : null
         }
+        subcategories={dialog?.kind === "income" ? subsOf(dialog.category.id) : undefined}
+        onAddSubcategory={
+          dialog?.kind === "income"
+            ? (name) => addSubcategory(dialog.category.id, name)
+            : undefined
+        }
         onClose={() => setDialog(null)}
-        onSubmit={async ({ amount, note, occurredAt }) => {
+        onSubmit={async ({ amount, note, occurredAt, subcategoryId }) => {
           if (dialog?.kind !== "income") return;
           await addIncome({
             categoryId: dialog.category.id,
+            subcategoryId,
             amount,
             currency: base,
             note,
@@ -439,14 +452,21 @@ export function HomeScreen() {
             : undefined
         }
         optionLabel="Откуда списать"
+        subcategories={dialog?.kind === "expense" ? subsOf(dialog.category.id) : undefined}
+        onAddSubcategory={
+          dialog?.kind === "expense"
+            ? (name) => addSubcategory(dialog.category.id, name)
+            : undefined
+        }
         submitLabel="Записать трату"
         onClose={() => setDialog(null)}
-        onSubmit={async ({ amount, note, occurredAt, optionId }) => {
+        onSubmit={async ({ amount, note, occurredAt, optionId, subcategoryId }) => {
           if (dialog?.kind !== "expense") return;
           const wallet = dialog.wallet ?? wallets.find((w) => w.id === optionId);
           if (!wallet) throw new Error("Выбери кошелёк");
           await addExpense({
             categoryId: dialog.category.id,
+            subcategoryId,
             walletId: wallet.id,
             amount,
             currency: wallet.currency,

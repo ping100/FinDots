@@ -6,7 +6,7 @@ import { CURRENCIES, parseAmount } from "@/lib/money";
 import { toISODate } from "@/lib/savings";
 import type { Wallet, WalletKind } from "@/lib/types";
 import { useStore } from "./DataProvider";
-import { Button, ColorPicker, Field, IconPicker, Sheet, inputClass, inputStyle } from "./ui";
+import { Button, ColorPicker, Field, FieldGroup, IconPicker, Sheet, inputClass, inputStyle } from "./ui";
 
 export const KIND_LABEL: Record<WalletKind, string> = {
   cash: "Наличные",
@@ -128,7 +128,7 @@ export function WalletEditor({
         </div>
       }
     >
-      <Field label="Тип">
+      <FieldGroup label="Тип">
         <div className="grid grid-cols-2 gap-2">
           {(Object.keys(KIND_LABEL) as WalletKind[]).map((k) => (
             <button
@@ -148,7 +148,7 @@ export function WalletEditor({
             </button>
           ))}
         </div>
-      </Field>
+      </FieldGroup>
 
       <Field label="Название">
         <input
@@ -168,7 +168,7 @@ export function WalletEditor({
         />
       </Field>
 
-      <Field label="Валюта">
+      <FieldGroup label="Валюта">
         <div className="flex gap-2">
           {CURRENCIES.map((c) => (
             <button
@@ -185,7 +185,7 @@ export function WalletEditor({
             </button>
           ))}
         </div>
-      </Field>
+      </FieldGroup>
 
       <Field
         label={isDebt ? "Сумма долга на старте" : isSavings ? "Уже накоплено" : "Баланс на старте"}

@@ -1,16 +1,17 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Icon } from "@/lib/icons";
 import { formatMoney, parseAmount, symbolOf } from "@/lib/money";
 import type { CurrencyCode } from "@/lib/types";
-import { Button, Field, Sheet, inputClass, inputStyle } from "./ui";
+import { Button, Field, FieldGroup, Sheet, inputClass, inputStyle } from "./ui";
 
 export interface AmountResult {
   amount: number;
   note: string;
   occurredAt: string;
   optionId?: string;
+  subcategoryId?: string | null;
 }
 
 /**
@@ -27,6 +28,8 @@ export function AmountSheet({
   max,
   options,
   optionLabel,
+  subcategories,
+  onAddSubcategory,
   submitLabel = "Готово",
   extra,
   onSubmit,
@@ -42,6 +45,10 @@ export function AmountSheet({
   /** Необязательный выбор второго участника операции — например, откуда списать. */
   options?: { id: string; name: string; caption?: string }[];
   optionLabel?: string;
+  /** Уточнения внутри категории: «Продукты → Магазин, Базар». */
+  subcategories?: { id: string; name: string }[];
+  /** Завести новое уточнение, не выходя из окна; возвращает его id. */
+  onAddSubcategory?: (name: string) => Promise<string>;
   submitLabel?: string;
   /** Дополнительная кнопка под подзаголовком — например, «настроить категорию». */
   extra?: ReactNode;
@@ -52,17 +59,31 @@ export function AmountSheet({
   const [note, setNote] = useState("");
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [optionId, setOptionId] = useState<string | undefined>(undefined);
+  const [subcategoryId, setSubcategoryId] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [newSub, setNewSub] = useState("");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
 
+  // Начальные значения читаем через ref: вызывающий код пересоздаёт options
+  // на каждом рендере, и если подписаться на них, форма будет обнуляться от
+  // любого обновления данных — например, стоит завести уточнение, как уже
+  // набранная сумма слетает.
+  const start = useRef({ initial, firstOption: options?.[0]?.id });
+  start.current = { initial, firstOption: options?.[0]?.id };
+
   useEffect(() => {
     if (!open) return;
-    setRaw(initial != null && initial > 0 ? trimZeros(initial) : "");
+    const { initial: from, firstOption } = start.current;
+    setRaw(from != null && from > 0 ? trimZeros(from) : "");
     setNote("");
     setDate(new Date().toISOString().slice(0, 10));
-    setOptionId(options?.[0]?.id);
+    setOptionId(firstOption);
+    setSubcategoryId(null);
+    setAdding(false);
+    setNewSub("");
     setProblem(null);
-  }, [open, initial, options]);
+  }, [open]);
 
   const amount = parseAmount(raw) ?? 0;
   const overMax = max != null && amount > max + 0.004;
@@ -79,6 +100,19 @@ export function AmountSheet({
     });
   };
 
+  const createSub = async () => {
+    const name = newSub.trim();
+    if (!name || !onAddSubcategory) return;
+    setProblem(null);
+    try {
+      setSubcategoryId(await onAddSubcategory(name));
+      setNewSub("");
+      setAdding(false);
+    } catch (e) {
+      setProblem(e instanceof Error ? e.message : "Не получилось добавить уточнение");
+    }
+  };
+
   const submit = async () => {
     if (!valid || busy) return;
     setBusy(true);
@@ -88,6 +122,7 @@ export function AmountSheet({
         note,
         occurredAt: new Date(date + "T" + new Date().toTimeString().slice(0, 8)).toISOString(),
         optionId,
+        subcategoryId,
       });
       onClose();
     } catch (e) {
@@ -152,8 +187,63 @@ export function AmountSheet({
         ))}
       </div>
 
+      {subcategories || onAddSubcategory ? (
+        <FieldGroup label="Уточнение">
+          <div className="flex flex-wrap gap-2">
+            <Chip active={subcategoryId === null} onClick={() => setSubcategoryId(null)}>
+              без уточнения
+            </Chip>
+            {subcategories?.map((sub) => (
+              <Chip
+                key={sub.id}
+                active={subcategoryId === sub.id}
+                onClick={() => setSubcategoryId(sub.id)}
+              >
+                {sub.name}
+              </Chip>
+            ))}
+            {onAddSubcategory && !adding ? (
+              <Chip onClick={() => setAdding(true)}>
+                <span className="flex items-center gap-1">
+                  <Icon name="plus" size={13} />
+                  Добавить
+                </span>
+              </Chip>
+            ) : null}
+          </div>
+
+          {adding ? (
+            <div className="mt-2 flex gap-2">
+              <input
+                autoFocus
+                className={inputClass}
+                style={inputStyle}
+                value={newSub}
+                onChange={(e) => setNewSub(e.target.value)}
+                placeholder="Магазин, базар, доставка…"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void createSub();
+                  }
+                  if (e.key === "Escape") setAdding(false);
+                }}
+              />
+              <button
+                onClick={() => void createSub()}
+                disabled={!newSub.trim()}
+                className="shrink-0 rounded-2xl px-4 text-sm font-semibold text-white disabled:opacity-40"
+                style={{ background: "var(--accent)" }}
+              >
+                ОК
+              </button>
+            </div>
+          ) : null}
+        </FieldGroup>
+      ) : null}
+
       {options?.length ? (
-        <Field label={optionLabel ?? "Откуда"}>
+        <FieldGroup label={optionLabel ?? "Откуда"}>
           <div className="flex flex-wrap gap-2">
             {options.map((option) => (
               <button
@@ -173,7 +263,7 @@ export function AmountSheet({
               </button>
             ))}
           </div>
-        </Field>
+        </FieldGroup>
       ) : null}
 
       <Field label="Комментарий">
@@ -202,6 +292,31 @@ export function AmountSheet({
         </p>
       ) : null}
     </Sheet>
+  );
+}
+
+/** Чип уточнения: выбранный залит акцентом, остальные — как поле ввода. */
+function Chip({
+  children,
+  active,
+  onClick,
+}: {
+  children: ReactNode;
+  active?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="rounded-full border px-3.5 py-2 text-sm transition active:scale-95"
+      style={{
+        background: active ? "var(--accent)" : "var(--surface-2)",
+        borderColor: active ? "var(--accent)" : "var(--border)",
+        color: active ? "#fff" : "inherit",
+      }}
+    >
+      {children}
+    </button>
   );
 }
 

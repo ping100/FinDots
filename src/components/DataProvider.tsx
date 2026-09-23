@@ -48,6 +48,7 @@ export interface Store {
 
   addIncome: (args: {
     categoryId: string;
+    subcategoryId?: string | null;
     amount: number;
     currency: CurrencyCode;
     note?: string;
@@ -61,6 +62,7 @@ export interface Store {
   }) => Promise<void>;
   addExpense: (args: {
     categoryId: string;
+    subcategoryId?: string | null;
     walletId: string;
     amount: number;
     currency: CurrencyCode;
@@ -85,6 +87,8 @@ export interface Store {
   saveWallet: (wallet: Partial<Wallet> & { id?: string }) => Promise<void>;
   deleteWallet: (id: string) => Promise<void>;
   saveCategory: (category: Partial<Category> & { id?: string }) => Promise<void>;
+  /** Завести подкатегорию внутри категории; возвращает её id. */
+  addSubcategory: (parentId: string, name: string) => Promise<string>;
   deleteCategory: (id: string) => Promise<void>;
 
   saveProfile: (patch: Partial<Profile>) => Promise<void>;
@@ -236,7 +240,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   // ─────────────────────────── операции ───────────────────────────
 
   const addIncome: Store["addIncome"] = useCallback(
-    async ({ categoryId, amount, currency, note, occurredAt }) =>
+    async ({ categoryId, subcategoryId, amount, currency, note, occurredAt }) =>
       guard(() =>
         supabase().from("transactions").insert({
           user_id: userId,
@@ -244,6 +248,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
           amount,
           currency,
           category_id: categoryId,
+          subcategory_id: subcategoryId || null,
           note: note || null,
           occurred_at: occurredAt ?? new Date().toISOString(),
         }),
@@ -302,7 +307,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   );
 
   const addExpense: Store["addExpense"] = useCallback(
-    async ({ categoryId, walletId, amount, currency, note, occurredAt }) =>
+    async ({ categoryId, subcategoryId, walletId, amount, currency, note, occurredAt }) =>
       guard(() =>
         supabase().from("transactions").insert({
           user_id: userId,
@@ -310,6 +315,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
           amount,
           currency,
           category_id: categoryId,
+          subcategory_id: subcategoryId || null,
           wallet_id: walletId,
           note: note || null,
           occurred_at: occurredAt ?? new Date().toISOString(),
@@ -482,6 +488,38 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [refresh, reloadDictionaries, supabase],
   );
 
+  /**
+   * Подкатегория, заведённая прямо в окне траты. Возвращает её id, чтобы
+   * чип сразу стал выбранным: человек нажал «+», вписал название и продолжил
+   * вводить сумму, не выходя из окна.
+   */
+  const addSubcategory: Store["addSubcategory"] = useCallback(
+    async (parentId, name) => {
+      const parent = categories.find((c) => c.id === parentId);
+      if (!parent) throw new Error("Категория не найдена");
+      const res = await supabase()
+        .from("categories")
+        .insert({
+          user_id: userId,
+          kind: parent.kind,
+          name: name.trim(),
+          icon: parent.icon,
+          color: parent.color,
+          parent_id: parentId,
+        })
+        .select("*")
+        .single();
+      if (res.error) {
+        setError(res.error.message);
+        throw new Error(res.error.message);
+      }
+      const created = res.data as Category;
+      setCategories((prev) => [...prev, created]);
+      return created.id;
+    },
+    [categories, supabase, userId],
+  );
+
   const saveCategory: Store["saveCategory"] = useCallback(
     async (category) => {
       const { id, ...fields } = category;
@@ -499,7 +537,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const deleteCategory: Store["deleteCategory"] = useCallback(
     async (id) => {
-      const res = await supabase().from("categories").update({ archived: true }).eq("id", id);
+      // Вместе с категорией убираем её подкатегории: иначе они остались бы
+      // висеть в базе и всплыли бы, если категорию когда-нибудь вернуть.
+      const res = await supabase()
+        .from("categories")
+        .update({ archived: true })
+        .or(`id.eq.${id},parent_id.eq.${id}`);
       if (res.error) throw new Error(res.error.message);
       await Promise.all([reloadDictionaries(), refresh()]);
     },
@@ -580,6 +623,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       saveWallet,
       deleteWallet,
       saveCategory,
+      addSubcategory,
       deleteCategory,
       saveProfile,
       saveRate,
@@ -590,7 +634,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       ready, error, userId, profile, rates, wallets, categories, balances, pools,
       transactions, balanceOf, poolOf, toBase, refresh, addIncome, allocate,
       addExpense, addTransfer, setWalletBalance, accrueInterest, updateTransaction, deleteTransaction,
-      saveWallet, deleteWallet, saveCategory, deleteCategory, saveProfile, saveRate,
+      saveWallet, deleteWallet, saveCategory, addSubcategory, deleteCategory, saveProfile, saveRate,
       aiKeyHint, saveAiKey, deleteAiKey,
     ],
   );

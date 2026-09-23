@@ -160,6 +160,35 @@ export function Field({
   );
 }
 
+/**
+ * То же, что Field, но для группы кнопок: чипов, плиток выбора, палитры.
+ * <label> оборачивать вокруг них нельзя — он приклеивается к первой кнопке,
+ * и скринридер читает её имя как весь заголовок со всеми соседями.
+ */
+export function FieldGroup({
+  label,
+  children,
+  hint,
+}: {
+  label: string;
+  children: ReactNode;
+  hint?: string;
+}) {
+  return (
+    <div className="mb-3" role="group" aria-label={label}>
+      <span className="mb-1.5 block text-sm" style={{ color: "var(--muted)" }}>
+        {label}
+      </span>
+      {children}
+      {hint ? (
+        <span className="mt-1 block text-xs" style={{ color: "var(--muted)" }}>
+          {hint}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 export const inputClass =
   "w-full rounded-2xl border px-4 py-3 outline-none focus:border-[var(--accent)]";
 
@@ -359,7 +388,7 @@ export function ColorPicker({
   onChange: (color: string) => void;
 }) {
   return (
-    <Field label="Цвет">
+    <FieldGroup label="Цвет">
       <div className="flex flex-wrap gap-2">
         {PALETTE.map((color) => (
           <button
@@ -375,7 +404,7 @@ export function ColorPicker({
           />
         ))}
       </div>
-    </Field>
+    </FieldGroup>
   );
 }
 
@@ -390,7 +419,7 @@ export function IconPicker({
   onChange: (icon: string) => void;
 }) {
   return (
-    <Field label="Иконка">
+    <FieldGroup label="Иконка">
       <div className="space-y-3">
         {ICON_GROUPS.map((group) => (
           <div key={group.title}>
@@ -416,6 +445,6 @@ export function IconPicker({
           </div>
         ))}
       </div>
-    </Field>
+    </FieldGroup>
   );
 }

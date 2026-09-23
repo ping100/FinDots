@@ -51,6 +51,8 @@ export interface Category {
   monthly_limit: number | null;
   sort_order: number;
   archived: boolean;
+  /** Не null — это подкатегория: она живёт внутри своей категории, а не на главной. */
+  parent_id: string | null;
 }
 
 export interface Transaction {
@@ -59,6 +61,8 @@ export interface Transaction {
   amount: number;
   currency: CurrencyCode;
   category_id: string | null;
+  /** Уточнение внутри категории; главная категория остаётся в category_id. */
+  subcategory_id: string | null;
   wallet_id: string | null;
   from_wallet_id: string | null;
   to_wallet_id: string | null;

@@ -6,12 +6,14 @@ import { useStore } from "./DataProvider";
 import { Sheet } from "./ui";
 
 /**
- * «Сколько можно потратить сегодня» — то число, ради которого трекер вообще
- * открывают.
+ * Шапка главного экрана: сколько всего денег и сколько из них можно потратить
+ * сегодня.
+ *
+ * Баланс идёт первым, потому что это факт, а дневная цифра — производная:
  *
  *   (деньги в кошельках − обязательные платежи до конца месяца) ÷ дней осталось
  *
- * Считается от текущих балансов, поэтому само себя выправляет: перебрал
+ * Считается от текущих балансов, поэтому сама себя выправляет: перебрал
  * сегодня — завтрашняя цифра станет меньше, и наоборот.
  */
 export function DailyAllowance() {
@@ -26,9 +28,17 @@ export function DailyAllowance() {
     const daysInMonth = new Date(monthEnd.getTime() - 1).getDate();
     const daysLeft = daysInMonth - now.getDate() + 1;
 
-    const money = wallets
-      .filter((w) => !w.archived && (w.kind === "cash" || w.kind === "card"))
-      .reduce((sum, w) => sum + toBase(balanceOf(w.id), w.currency), 0);
+    const live = wallets.filter((w) => !w.archived);
+    const of = (kind: string) =>
+      live
+        .filter((w) => w.kind === kind)
+        .reduce((sum, w) => sum + toBase(balanceOf(w.id), w.currency), 0);
+
+    const money = of("cash") + of("card");
+    const saved = of("savings");
+    // Остаток по долгам и кредитам — показываем рядом, но из баланса не
+    // вычитаем: «сколько у меня денег» и «сколько я должен» — разные вопросы.
+    const owed = of("debt_out");
 
     // Обязательства этого месяца, которые ещё впереди: либо регулярный
     // платёж, чьё число не прошло, либо долг со сроком внутри остатка месяца.
@@ -87,6 +97,9 @@ export function DailyAllowance() {
 
     return {
       money,
+      saved,
+      owed,
+      total: money + saved,
       obligations,
       upcoming,
       daysLeft,
@@ -102,14 +115,34 @@ export function DailyAllowance() {
     <>
       <button
         onClick={() => setExplain(true)}
-        className="mb-4 w-full rounded-2xl px-4 py-3 text-left transition-transform duration-100 active:scale-[0.99]"
+        className="mb-3 w-full rounded-2xl px-4 py-3 text-left transition-transform duration-100 active:scale-[0.99]"
         style={{ background: "var(--surface)" }}
       >
+        <p className="text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+          Всего денег
+        </p>
+        <p className="text-[1.625rem] font-bold leading-tight tabular-nums">
+          {formatMoney(data.total, base)}
+        </p>
+        <p className="mt-0.5 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+          свободно {formatMoney(data.money, base)}
+          {data.saved > 0 ? ` · отложено ${formatMoney(data.saved, base)}` : ""}
+        </p>
+        {/* Долги отдельной строкой: вместе с остальным они не помещаются, а
+            перенос посреди суммы читается плохо. */}
+        {data.owed > 0 ? (
+          <p className="text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+            долгов и кредитов на {formatMoney(data.owed, base)}
+          </p>
+        ) : null}
+
+        <div className="my-2.5 border-t" style={{ borderColor: "var(--border)" }} />
+
         <p className="text-[0.6875rem]" style={{ color: "var(--muted)" }}>
           {data.short ? "Не хватает на обязательные платежи" : "Можно тратить сегодня"}
         </p>
         <p
-          className="text-[1.625rem] font-bold leading-tight tabular-nums"
+          className="text-[1.25rem] font-bold leading-tight tabular-nums"
           style={{ color: data.short ? "var(--danger)" : "var(--text)" }}
         >
           {formatMoney(data.short ? data.obligations - data.money : data.perDay, base)}
@@ -127,9 +160,21 @@ export function DailyAllowance() {
         </p>
       </button>
 
-      <Sheet open={explain} title="Откуда это число" onClose={() => setExplain(false)}>
+      <Sheet open={explain} title="Откуда эти числа" onClose={() => setExplain(false)}>
         <div className="space-y-2 pb-3 text-sm">
           <Row label="В кошельках и на картах" value={formatMoney(data.money, base)} />
+          {data.saved > 0 ? (
+            <Row label="Отложено в накоплениях" value={formatMoney(data.saved, base)} muted />
+          ) : null}
+          {data.saved > 0 ? (
+            <div className="!mt-2.5 border-t pt-2.5" style={{ borderColor: "var(--border)" }}>
+              <Row label="Всего денег" value={formatMoney(data.total, base)} strong />
+            </div>
+          ) : null}
+          <p className="!mt-3 text-xs" style={{ color: "var(--muted)" }}>
+            На день считаем только от свободных денег — накопления для того и
+            отложены, чтобы их не тратить.
+          </p>
           {data.upcoming.map((item) => (
             <Row
               key={item.name}

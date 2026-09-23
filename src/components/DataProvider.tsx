@@ -107,6 +107,26 @@ export interface Store {
 /** Куда падают проценты по вкладам. Заводится сама при первом начислении. */
 const INTEREST_CATEGORY = "Проценты";
 
+/**
+ * Ошибки, которые проходят сами со второй попытки.
+ *
+ * «JWT issued at future» — рассинхрон внутри Supabase: токен выдаёт один
+ * сервис, а проверяет база, и на секунду их часы расходятся. Часы телефона
+ * тут ни при чём, чинить нечего — надо просто повторить запрос.
+ */
+function transient(message: string): boolean {
+  return /jwt|token is expired|failed to fetch|network|fetch failed/i.test(message);
+}
+
+/** Техническую строку от сервера человеку показывать незачем. */
+function human(message: string): string {
+  if (transient(message)) return "Связь с сервером сорвалась — пробую ещё раз";
+  if (/row-level security|permission denied/i.test(message)) {
+    return "Нет доступа к этим данным — попробуйте войти заново";
+  }
+  return message;
+}
+
 export const StoreContext = createContext<Store | null>(null);
 
 export function useStore(): Store {
@@ -136,7 +156,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [aiKeyHint, setAiKeyHint] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (retry = true) => {
     const {
       data: { user },
     } = await supabase().auth.getUser();
@@ -167,7 +187,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
     setAiKeyHint((key.data?.hint as string | undefined) ?? null);
 
     const firstError = [p, r, w, c, b, ip, tx].find((res) => res.error)?.error;
-    if (firstError) setError(firstError.message);
+    if (firstError && transient(firstError.message) && retry) {
+      // Сорвавшийся токен обновляем и заходим на второй круг: показывать
+      // человеку «JWT issued at future» и оставлять пустой экран — худшее,
+      // что можно сделать с ошибкой, которая проходит сама.
+      await supabase().auth.refreshSession();
+      await new Promise((done) => setTimeout(done, 600));
+      return load(false);
+    }
+    if (firstError) setError(human(firstError.message));
+    else setError(null);
 
     if (p.data) setProfile(p.data as Profile);
     setRates((r.data ?? []) as ExchangeRate[]);
@@ -211,14 +240,21 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const guard = useCallback(
     async (run: () => PromiseLike<{ error: { message: string } | null }>) => {
       setError(null);
-      const { error: err } = await run();
+      let { error: err } = await run();
+      // Та же история, что и при загрузке: срыв токена лечится повтором, и
+      // терять из-за него уже введённую операцию человеку не за что.
+      if (err && transient(err.message)) {
+        await supabase().auth.refreshSession();
+        await new Promise((done) => setTimeout(done, 600));
+        ({ error: err } = await run());
+      }
       if (err) {
-        setError(err.message);
-        throw new Error(err.message);
+        setError(human(err.message));
+        throw new Error(human(err.message));
       }
       await refresh();
     },
-    [refresh],
+    [refresh, supabase],
   );
 
   const balanceOf = useCallback(

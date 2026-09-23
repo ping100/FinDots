@@ -8,6 +8,25 @@ export const runtime = "nodejs";
 const DAILY_LIMIT = Number(process.env.AI_DAILY_LIMIT ?? 20);
 const DEFAULT_MODEL = "google/gemma-4-31b-it:free";
 
+const SYSTEM_PROMPT =
+  "Ты финансовый помощник. Пиши только на русском языке, коротко и конкретно, без вступлений. " +
+  "Не показывай ход рассуждений и не пересказывай это задание — сразу давай готовый разбор. " +
+  "Структура ответа — ровно три части, каждая со своим заголовком с новой строки: " +
+  "«Что бросается в глаза», «Где сократить» (2–4 пункта с примерными суммами в месяц), " +
+  "«Долги» (в каком порядке гасить и почему). " +
+  "Кошельки типа savings — это вклады и копилки: эти деньги не свободны, " +
+  "к тратам их не приплюсовывай; если ставка по вкладу ниже, чем по долгу, " +
+  "скажи об этом. " +
+  "Опирайся только на переданные цифры, не выдумывай данные. Без markdown-таблиц.";
+
+const ASK =
+  "Разбери эти цифры. Ответ — на русском языке, начни сразу с заголовка «Что бросается в глаза».";
+
+const INSIST =
+  "Ответ был не на русском. Напиши разбор заново полностью на русском языке, " +
+  "без единого английского предложения, без описания своих рассуждений. " +
+  "Начни с заголовка «Что бросается в глаза».";
+
 interface Row {
   type: string;
   amount: number;
@@ -152,9 +171,8 @@ export async function POST() {
 
   const model = profileRes.data?.ai_model || DEFAULT_MODEL;
 
-  let response: Response;
-  try {
-    response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  const ask = (insist: boolean) =>
+    fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -164,23 +182,30 @@ export async function POST() {
       },
       body: JSON.stringify({
         model,
-        max_tokens: 900,
+        // Рассуждающие модели отдельно «думают» перед ответом, и этот
+        // черновик на английском вылезал прямо в разбор. Просим OpenRouter
+        // не присылать его — модель думает, человек видит только вывод.
+        // Размышления при этом всё равно съедают лимит токенов, поэтому и
+        // просим думать покороче: задача несложная.
+        reasoning: { effort: "low", exclude: true },
+        // Свободы фантазии тут не нужно: разговор про конкретные суммы.
+        temperature: 0.2,
+        // Запаса хватает и на размышления, и на сам ответ: при 900 разбор
+        // обрывался на середине.
+        max_tokens: 2000,
         messages: [
-          {
-            role: "system",
-            content:
-              "Ты финансовый помощник. Отвечай по-русски, коротко и конкретно, без вступлений. " +
-              "Структура ответа: 1) что бросается в глаза; 2) где сократить траты — 2–4 пункта " +
-              "с примерными суммами в месяц; 3) в каком порядке гасить долги и почему. " +
-              "Кошельки типа savings — это вклады и копилки: эти деньги не свободны, " +
-              "к тратам их не приплюсовывай; если ставка по вкладу ниже, чем по долгу, " +
-              "скажи об этом. " +
-              "Опирайся только на переданные цифры, не выдумывай данные. Без markdown-таблиц.",
-          },
+          { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: JSON.stringify(summary) },
+          // Требование языка идёт последним: небольшие модели тянутся к
+          // языку последнего сообщения, а не системного.
+          { role: "user", content: insist ? INSIST : ASK },
         ],
       }),
     });
+
+  let response: Response;
+  try {
+    response = await ask(false);
   } catch {
     return NextResponse.json({ error: "OpenRouter недоступен" }, { status: 502 });
   }
@@ -219,17 +244,88 @@ export async function POST() {
     );
   }
 
-  const payload = (await response.json()) as {
-    choices?: { message?: { content?: string } }[];
-  };
-  const text = payload.choices?.[0]?.message?.content?.trim();
+  let { text, cut } = await answer(response);
+
+  // Модель могла не послушаться и ответить по-английски — тогда заходим на
+  // второй круг с требованием пожёстче. Один раз: дальше это уже не
+  // упрямство модели, а неподходящая модель.
+  if (text && !russian(text)) {
+    try {
+      const second = await ask(true);
+      if (second.ok) {
+        const retry = await answer(second);
+        if (retry.text) ({ text, cut } = retry);
+      }
+    } catch {
+      // Вторая попытка — необязательная роскошь: молча остаёмся с первой.
+    }
+  }
+
   if (!text) return NextResponse.json({ error: "Пустой ответ модели" }, { status: 502 });
 
   await supabase
     .from("ai_usage")
     .upsert({ user_id: user.id, day: today, calls: used + 1 }, { onConflict: "user_id,day" });
 
-  return NextResponse.json({ text, model, callsLeft: DAILY_LIMIT - used - 1 });
+  return NextResponse.json({
+    text,
+    model,
+    callsLeft: DAILY_LIMIT - used - 1,
+    // Ответ всё равно показываем: даже неидеальный он полезнее пустого
+    // экрана. Но говорим, что дело в модели, а не в приложении.
+    warning: !russian(text)
+      ? "Эта модель отвечает не по-русски — попробуйте выбрать другую в настройках"
+      : cut
+        ? "Модель не уложилась в ответ и оборвалась на полуслове — с другой моделью разбор выйдет целее"
+        : null,
+  });
+}
+
+async function answer(response: Response): Promise<{ text: string; cut: boolean }> {
+  const payload = (await response.json()) as {
+    choices?: { message?: { content?: string }; finish_reason?: string }[];
+  };
+  const choice = payload.choices?.[0];
+  return {
+    text: clean(choice?.message?.content ?? ""),
+    // Размышления модели съедают тот же лимит, что и ответ, так что
+    // оборваться на полуслове она вполне может — и это стоит сказать.
+    cut: choice?.finish_reason === "length",
+  };
+}
+
+/**
+ * Убирает из ответа черновик модели.
+ *
+ * `reasoning: { exclude: true }` выручает не всех: часть моделей всё равно
+ * выкладывает размышления в сам текст — то тегом <think>, то фразой
+ * «Here's a thinking process». Человеку это читать незачем, поэтому режем
+ * по первому русскому заголовку из заданной структуры: до него любые
+ * англоязычные черновики, после — собственно разбор.
+ */
+function clean(raw: string): string {
+  let text = raw;
+
+  // Закрытый тег: ответ — всё, что после последнего закрытия.
+  const closed = text.lastIndexOf("</think>");
+  if (closed >= 0) text = text.slice(closed + "</think>".length);
+  text = text.replace(/<\/?(think|thinking|reasoning)>/gi, "");
+
+  const start = text.search(/^\s*(?:\d[).]\s*)?(?:\*\*)?\s*Что бросается в глаза/im);
+  if (start > 0) text = text.slice(start);
+
+  // Разметку модели ставят по привычке, а показываем мы простым текстом —
+  // звёздочки и решётки в нём выглядят мусором.
+  text = text.replace(/\*\*(.+?)\*\*/g, "$1").replace(/^#{1,6}\s+/gm, "");
+
+  return text.trim();
+}
+
+/** Ответ считаем русским, если кириллицы в нём заметно больше латиницы. */
+function russian(text: string): boolean {
+  const cyrillic = (text.match(/[а-яё]/gi) ?? []).length;
+  const latin = (text.match(/[a-z]/gi) ?? []).length;
+  return cyrillic > latin;
 }
 
 function startOfMonth(offset: number): Date {

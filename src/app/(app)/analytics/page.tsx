@@ -53,6 +53,8 @@ export default function AnalyticsPage() {
   const [advice, setAdvice] = useState<string | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  // Оговорка про модель: ответ при этом всё равно показываем.
+  const [aiNote, setAiNote] = useState<string | null>(null);
 
   const buckets = useMemo(
     () => buildBuckets(transactions, offset, grouping, toBase),
@@ -123,11 +125,13 @@ export default function AnalyticsPage() {
   const runAnalysis = async () => {
     setAiBusy(true);
     setAiError(null);
+    setAiNote(null);
     try {
       const res = await fetch("/api/analyze", { method: "POST" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Не получилось");
       setAdvice(data.text as string);
+      setAiNote((data.warning as string | null) ?? null);
     } catch (e) {
       setAiError(e instanceof Error ? e.message : "Не получилось");
     } finally {
@@ -439,6 +443,12 @@ export default function AnalyticsPage() {
       {aiError ? (
         <p className="mt-3 text-sm" style={{ color: "var(--danger)" }}>
           {aiError}
+        </p>
+      ) : null}
+
+      {aiNote ? (
+        <p className="mt-3 text-xs leading-snug" style={{ color: "var(--muted)" }}>
+          {aiNote}
         </p>
       ) : null}
 

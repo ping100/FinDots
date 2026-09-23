@@ -18,7 +18,11 @@ function ruError(message: string): string {
   if (text.includes("invalid login credentials")) return "Неверная почта или пароль";
   if (text.includes("already registered")) return "Эта почта уже зарегистрирована — войдите";
   if (text.includes("email not confirmed")) return "Почта не подтверждена — проверьте письмо";
-  if (text.includes("password should be")) return "Пароль короче 6 символов";
+  // Длину задаёт сервер, а не мы: подставляем то число, которое он назвал,
+  // иначе после смены настройки подсказка начнёт врать.
+  const short = message.match(/at least (\d+) characters/i);
+  if (short) return `Пароль короче ${short[1]} символов`;
+  if (text.includes("password should be")) return "Пароль слишком простой";
   if (text.includes("unable to validate email")) return "Проверьте адрес почты";
   if (text.includes("failed to fetch")) return "Нет связи с сервером — проверьте интернет";
   const wait = message.match(/after (\d+) seconds?/i);

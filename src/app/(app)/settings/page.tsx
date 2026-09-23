@@ -8,6 +8,7 @@ import { Icon } from "@/lib/icons";
 import { CURRENCIES, parseAmount, symbolOf } from "@/lib/money";
 import { createClient } from "@/lib/supabase/client";
 import { useStore } from "@/components/DataProvider";
+import { DataTransfer } from "@/components/DataTransfer";
 import { Button, Field, Sheet, inputClass, inputStyle } from "@/components/ui";
 
 export default function SettingsPage() {
@@ -80,6 +81,13 @@ export default function SettingsPage() {
           onClick={() => setSheet("model")}
         />
       </Group>
+
+      <h2 className="mb-1.5 mt-5 px-1 text-[0.9375rem] font-semibold">Данные</h2>
+      <p className="mb-2 px-1 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+        Перенос из другой программы и резервная копия. Файл открывается в
+        Excel и Google Таблицах.
+      </p>
+      <DataTransfer />
 
       <Group>
         <Row label="Выйти" danger onClick={signOut} />

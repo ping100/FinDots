@@ -18,11 +18,34 @@ const onest = Onest({
   variable: "--font-onest",
 });
 
+const TITLE = "Findots — трекер расходов";
+const DESCRIPTION = "Учёт личных финансов: доходы, кошельки и расходы";
+
 export const metadata: Metadata = {
-  title: "Findots — трекер расходов",
-  description: "Учёт личных финансов: доходы, кошельки и расходы",
+  // Без metadataBase относительные пути в og остаются относительными, а
+  // мессенджеру нужен абсолютный адрес картинки.
+  metadataBase: new URL("https://findots.vercel.app"),
+  title: TITLE,
+  description: DESCRIPTION,
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Findots" },
+  // Без своей картинки Telegram и прочие цепляют иконку вкладки — она в SVG,
+  // рисовать его они не умеют, и в превью получается белый прямоугольник.
+  openGraph: {
+    type: "website",
+    siteName: "Findots",
+    locale: "ru_RU",
+    title: TITLE,
+    description: DESCRIPTION,
+    url: "/",
+    images: [{ url: "/og.png", width: 1200, height: 630, alt: "Findots" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: TITLE,
+    description: DESCRIPTION,
+    images: ["/og.png"],
+  },
 };
 
 export const viewport: Viewport = {

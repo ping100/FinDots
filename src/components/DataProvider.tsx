@@ -12,7 +12,9 @@ import {
 } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
+import { PALETTE } from "@/lib/icons";
 import { convert } from "@/lib/money";
+import type { Draft } from "@/lib/importCsv";
 import { maturedAccruals, toISODate } from "@/lib/savings";
 import { scaleFactor } from "@/lib/textScale";
 import type {
@@ -89,6 +91,11 @@ export interface Store {
   saveCategory: (category: Partial<Category> & { id?: string }) => Promise<void>;
   /** Завести подкатегорию внутри категории; возвращает её id. */
   addSubcategory: (parentId: string, name: string) => Promise<string>;
+  /** Загрузить операции из чужой выгрузки; сообщает о ходе работы. */
+  importDrafts: (
+    drafts: Draft[],
+    onProgress?: (done: number, total: number) => void,
+  ) => Promise<{ added: number; categories: number; wallets: number }>;
   deleteCategory: (id: string) => Promise<void>;
 
   saveProfile: (patch: Partial<Profile>) => Promise<void>;
@@ -535,6 +542,167 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [refresh, reloadDictionaries, supabase, userId],
   );
 
+  /**
+   * Импорт из чужой программы.
+   *
+   * Недостающие кошельки и категории заводим сами — заставлять человека
+   * вручную повторять список из другого приложения бессмысленно. Сверяем по
+   * имени без учёта регистра, поэтому повторный импорт не плодит двойники.
+   *
+   * Расходы пишем пачками: их тысячи. Доход в нашей модели — это две строки
+   * (поступление и разнос по кошельку), вторая ссылается на первую, поэтому
+   * доходы идут по одному. Их на порядок меньше, так что на времени это
+   * почти не сказывается.
+   */
+  const importDrafts: Store["importDrafts"] = useCallback(
+    async (drafts, onProgress) => {
+      if (!userId) throw new Error("Нет учётной записи");
+      const key = (name: string) => name.trim().toLowerCase();
+
+      const walletId = new Map(wallets.map((w) => [key(w.name), w.id]));
+      const categoryId = new Map(
+        categories.filter((c) => !c.parent_id).map((c) => [`${c.kind}:${key(c.name)}`, c.id]),
+      );
+      const subId = new Map(
+        categories.filter((c) => c.parent_id).map((c) => [`${c.parent_id}:${key(c.name)}`, c.id]),
+      );
+
+      let createdWallets = 0;
+      let createdCategories = 0;
+
+      const ensureWallet = async (name: string, currency: string) => {
+        const found = walletId.get(key(name));
+        if (found) return found;
+        const res = await supabase()
+          .from("wallets")
+          .insert({
+            user_id: userId,
+            kind: "card",
+            name: name.trim(),
+            icon: "card",
+            color: PALETTE[walletId.size % PALETTE.length],
+            currency,
+          })
+          .select("id")
+          .single();
+        if (res.error) throw new Error(res.error.message);
+        const id = (res.data as { id: string }).id;
+        walletId.set(key(name), id);
+        createdWallets += 1;
+        return id;
+      };
+
+      const ensureCategory = async (name: string, kind: "income" | "expense") => {
+        const mapKey = `${kind}:${key(name)}`;
+        const found = categoryId.get(mapKey);
+        if (found) return found;
+        const res = await supabase()
+          .from("categories")
+          .insert({
+            user_id: userId,
+            kind,
+            name: name.trim(),
+            icon: kind === "income" ? "briefcase" : "cart",
+            color: PALETTE[categoryId.size % PALETTE.length],
+          })
+          .select("id")
+          .single();
+        if (res.error) throw new Error(res.error.message);
+        const id = (res.data as { id: string }).id;
+        categoryId.set(mapKey, id);
+        createdCategories += 1;
+        return id;
+      };
+
+      const ensureSub = async (parentId: string, name: string) => {
+        if (!name.trim()) return null;
+        const mapKey = `${parentId}:${key(name)}`;
+        const found = subId.get(mapKey);
+        if (found) return found;
+        const parent = categories.find((c) => c.id === parentId);
+        const res = await supabase()
+          .from("categories")
+          .insert({
+            user_id: userId,
+            kind: parent?.kind ?? "expense",
+            name: name.trim(),
+            icon: parent?.icon ?? "cart",
+            color: parent?.color ?? PALETTE[0],
+            parent_id: parentId,
+          })
+          .select("id")
+          .single();
+        if (res.error) throw new Error(res.error.message);
+        const id = (res.data as { id: string }).id;
+        subId.set(mapKey, id);
+        return id;
+      };
+
+      const expenses: Record<string, unknown>[] = [];
+      let done = 0;
+
+      for (const draft of drafts) {
+        const wallet = await ensureWallet(draft.wallet, draft.currency);
+        const category = await ensureCategory(draft.category, draft.kind);
+        const sub = await ensureSub(category, draft.subcategory);
+
+        if (draft.kind === "expense") {
+          expenses.push({
+            user_id: userId,
+            type: "expense",
+            amount: draft.amount,
+            currency: draft.currency,
+            category_id: category,
+            subcategory_id: sub,
+            wallet_id: wallet,
+            note: draft.note || null,
+            occurred_at: draft.at.toISOString(),
+          });
+        } else {
+          const income = await supabase()
+            .from("transactions")
+            .insert({
+              user_id: userId,
+              type: "income",
+              amount: draft.amount,
+              currency: draft.currency,
+              category_id: category,
+              subcategory_id: sub,
+              note: draft.note || null,
+              occurred_at: draft.at.toISOString(),
+            })
+            .select("id")
+            .single();
+          if (income.error) throw new Error(income.error.message);
+          const moved = await supabase().from("transactions").insert({
+            user_id: userId,
+            type: "allocation",
+            amount: draft.amount,
+            currency: draft.currency,
+            wallet_id: wallet,
+            parent_id: (income.data as { id: string }).id,
+            occurred_at: draft.at.toISOString(),
+          });
+          if (moved.error) throw new Error(moved.error.message);
+        }
+
+        done += 1;
+        if (done % 25 === 0) onProgress?.(done, drafts.length);
+      }
+
+      // Пачками по 200: одним запросом на тысячи строк упирается в лимит тела.
+      for (let i = 0; i < expenses.length; i += 200) {
+        const res = await supabase().from("transactions").insert(expenses.slice(i, i + 200));
+        if (res.error) throw new Error(res.error.message);
+      }
+
+      onProgress?.(drafts.length, drafts.length);
+      await Promise.all([reloadDictionaries(), refresh()]);
+      return { added: drafts.length, categories: createdCategories, wallets: createdWallets };
+    },
+    [categories, refresh, reloadDictionaries, supabase, userId, wallets],
+  );
+
   const deleteCategory: Store["deleteCategory"] = useCallback(
     async (id) => {
       // Вместе с категорией убираем её подкатегории: иначе они остались бы
@@ -624,6 +792,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       deleteWallet,
       saveCategory,
       addSubcategory,
+      importDrafts,
       deleteCategory,
       saveProfile,
       saveRate,
@@ -634,7 +803,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       ready, error, userId, profile, rates, wallets, categories, balances, pools,
       transactions, balanceOf, poolOf, toBase, refresh, addIncome, allocate,
       addExpense, addTransfer, setWalletBalance, accrueInterest, updateTransaction, deleteTransaction,
-      saveWallet, deleteWallet, saveCategory, addSubcategory, deleteCategory, saveProfile, saveRate,
+      saveWallet, deleteWallet, saveCategory, addSubcategory, importDrafts, deleteCategory, saveProfile, saveRate,
       aiKeyHint, saveAiKey, deleteAiKey,
     ],
   );

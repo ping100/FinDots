@@ -39,7 +39,7 @@ export function CategoryEditor({
     setDueDay(category?.due_day != null ? String(category.due_day) : "");
   }, [open, category, kind]);
 
-  const subs = category ? categories.filter((c) => c.parent_id === category.id) : [];
+  const subs = category ? categories.filter((c) => !c.archived && c.parent_id === category.id) : [];
 
   const addSub = async () => {
     const name = newSub.trim();

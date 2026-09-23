@@ -149,8 +149,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const [p, r, w, c, b, ip, tx] = await Promise.all([
       supabase().from("profiles").select("*").eq("id", user.id).single(),
       supabase().from("exchange_rates").select("code, rate_to_base"),
-      supabase().from("wallets").select("*").eq("archived", false).order("sort_order"),
-      supabase().from("categories").select("*").eq("archived", false).order("sort_order"),
+      // Архивные тоже: операция по убранной категории иначе теряет название
+      // и показывается в истории прочерком. Экраны сами прячут archived.
+      supabase().from("wallets").select("*").order("sort_order"),
+      supabase().from("categories").select("*").order("sort_order"),
       supabase().from("wallet_balances").select("wallet_id, currency, balance"),
       supabase().from("income_pools").select("category_id, currency, unallocated"),
       supabase()
@@ -372,8 +374,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const reloadDictionaries = useCallback(async () => {
     const [w, c] = await Promise.all([
-      supabase().from("wallets").select("*").eq("archived", false).order("sort_order"),
-      supabase().from("categories").select("*").eq("archived", false).order("sort_order"),
+      supabase().from("wallets").select("*").order("sort_order"),
+      supabase().from("categories").select("*").order("sort_order"),
     ]);
     setWallets((w.data ?? []) as Wallet[]);
     setCategories((c.data ?? []) as Category[]);
@@ -559,12 +561,15 @@ export function DataProvider({ children }: { children: ReactNode }) {
       if (!userId) throw new Error("Нет учётной записи");
       const key = (name: string) => name.trim().toLowerCase();
 
-      const walletId = new Map(wallets.map((w) => [key(w.name), w.id]));
+      // Архивные в сверку не берём: убранная категория не должна ожить
+      // оттого, что в чужом файле встретилось её имя.
+      const live = categories.filter((c) => !c.archived);
+      const walletId = new Map(wallets.filter((w) => !w.archived).map((w) => [key(w.name), w.id]));
       const categoryId = new Map(
-        categories.filter((c) => !c.parent_id).map((c) => [`${c.kind}:${key(c.name)}`, c.id]),
+        live.filter((c) => !c.parent_id).map((c) => [`${c.kind}:${key(c.name)}`, c.id]),
       );
       const subId = new Map(
-        categories.filter((c) => c.parent_id).map((c) => [`${c.parent_id}:${key(c.name)}`, c.id]),
+        live.filter((c) => c.parent_id).map((c) => [`${c.parent_id}:${key(c.name)}`, c.id]),
       );
 
       let createdWallets = 0;

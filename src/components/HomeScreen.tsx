@@ -85,18 +85,19 @@ export function HomeScreen() {
   const columns = gridColumns(profile?.text_scale);
   // Кружками показываем только верхний уровень: подкатегории живут внутри
   // окна операции, иначе сетка расползётся.
-  const incomeCats = categories.filter((c) => c.kind === "income" && !c.parent_id);
-  const expenseCats = categories.filter((c) => c.kind === "expense" && !c.parent_id);
+  // Убранные с экрана лежат в сторе ради имён в истории — здесь их прячем.
+  const live = categories.filter((c) => !c.archived);
+  const liveWallets = wallets.filter((w) => !w.archived);
+  const incomeCats = live.filter((c) => c.kind === "income" && !c.parent_id);
+  const expenseCats = live.filter((c) => c.kind === "expense" && !c.parent_id);
   const subsOf = (parentId: string) =>
-    categories
-      .filter((c) => c.parent_id === parentId)
-      .map((c) => ({ id: c.id, name: c.name }));
-  const moneyWallets = wallets.filter((w) => w.kind === "cash" || w.kind === "card");
-  const savings = wallets.filter((w) => w.kind === "savings");
+    live.filter((c) => c.parent_id === parentId).map((c) => ({ id: c.id, name: c.name }));
+  const moneyWallets = liveWallets.filter((w) => w.kind === "cash" || w.kind === "card");
+  const savings = liveWallets.filter((w) => w.kind === "savings");
   const debts = useMemo(
     () => ({
-      debt_out: wallets.filter((w) => w.kind === "debt_out"),
-      debt_in: wallets.filter((w) => w.kind === "debt_in"),
+      debt_out: wallets.filter((w) => !w.archived && w.kind === "debt_out"),
+      debt_in: wallets.filter((w) => !w.archived && w.kind === "debt_in"),
     }),
     [wallets],
   );

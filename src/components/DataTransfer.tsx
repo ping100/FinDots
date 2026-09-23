@@ -92,7 +92,13 @@ export function DataTransfer({ onlyImport = false }: { onlyImport?: boolean } = 
 
   const headers = rows?.[0] ?? [];
   const built = rows ? buildDrafts(rows, mapping, base, hasHeader) : null;
-  const preview = built && rows ? summarize(built.drafts, categories, wallets) : null;
+  const preview = built && rows
+    ? summarize(
+        built.drafts,
+        categories.filter((c) => !c.archived),
+        wallets.filter((w) => !w.archived),
+      )
+    : null;
   // Сравниваем с null, а не проверяем на истинность: дата почти всегда первая
   // колонка, её индекс 0 — и на «!!» импорт молча оставался бы заблокирован.
   const ready = mapping.date != null && mapping.amount != null && !!built?.drafts.length;

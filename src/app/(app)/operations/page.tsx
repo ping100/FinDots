@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Icon } from "@/lib/icons";
 import { formatMoney, monthLabel, monthRange, parseAmount } from "@/lib/money";
-import type { Transaction, TxType } from "@/lib/types";
+import type { Category, Transaction, TxType, Wallet } from "@/lib/types";
 import { useStore } from "@/components/DataProvider";
 import { Button, Field, Sheet, inputClass, inputStyle } from "@/components/ui";
 
@@ -230,6 +230,8 @@ export default function OperationsPage() {
 
       <EditSheet
         transaction={editing}
+        categories={categories}
+        wallets={wallets}
         onClose={() => setEditing(null)}
         onSave={updateTransaction}
         onDelete={deleteTransaction}
@@ -240,11 +242,15 @@ export default function OperationsPage() {
 
 function EditSheet({
   transaction,
+  categories,
+  wallets,
   onClose,
   onSave,
   onDelete,
 }: {
   transaction: Transaction | null;
+  categories: Category[];
+  wallets: Wallet[];
   onClose: () => void;
   onSave: (id: string, patch: Partial<Transaction>) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
@@ -252,6 +258,9 @@ function EditSheet({
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [date, setDate] = useState("");
+  const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [subcategoryId, setSubcategoryId] = useState<string | null>(null);
+  const [walletId, setWalletId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [loadedId, setLoadedId] = useState<string | null>(null);
 
@@ -260,9 +269,22 @@ function EditSheet({
     setAmount(String(transaction.amount));
     setNote(transaction.note ?? "");
     setDate(transaction.occurred_at.slice(0, 10));
+    setCategoryId(transaction.category_id);
+    setSubcategoryId(transaction.subcategory_id);
+    setWalletId(transaction.wallet_id);
   }
 
   if (!transaction) return null;
+
+  // Убранные с экрана не предлагаем, но ту, что уже стоит в операции,
+  // показываем — иначе при сохранении она молча заменится на другую.
+  const usable = (c: Category) => !c.archived || c.id === transaction.category_id;
+  const moveable = transaction.type === "income" || transaction.type === "expense";
+  const tops = categories.filter((c) => c.kind === transaction.type && !c.parent_id && usable(c));
+  const subs = categories.filter((c) => !c.archived && c.parent_id === categoryId);
+  const money = wallets.filter(
+    (w) => !w.archived && (w.kind === "cash" || w.kind === "card" || w.id === transaction.wallet_id),
+  );
 
   const save = async () => {
     const value = parseAmount(amount);
@@ -273,6 +295,13 @@ function EditSheet({
         amount: value,
         note: note || null,
         occurred_at: new Date(date + "T12:00:00").toISOString(),
+        ...(moveable
+          ? {
+              category_id: categoryId,
+              subcategory_id: subcategoryId,
+              ...(transaction.type === "expense" ? { wallet_id: walletId } : {}),
+            }
+          : {}),
       });
       onClose();
     } finally {
@@ -316,6 +345,66 @@ function EditSheet({
           onChange={(e) => setAmount(e.target.value)}
         />
       </Field>
+      {moveable ? (
+        <>
+          <Field label={transaction.type === "income" ? "Источник" : "Категория"}>
+            <select
+              className={inputClass}
+              style={inputStyle}
+              value={categoryId ?? ""}
+              onChange={(e) => {
+                setCategoryId(e.target.value || null);
+                // Уточнение принадлежит прежней категории — при переносе
+                // оно теряет смысл, поэтому сбрасываем.
+                setSubcategoryId(null);
+              }}
+            >
+              {tops.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                  {c.archived ? " (убрана с экрана)" : ""}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          {subs.length ? (
+            <Field label="Уточнение">
+              <select
+                className={inputClass}
+                style={inputStyle}
+                value={subcategoryId ?? ""}
+                onChange={(e) => setSubcategoryId(e.target.value || null)}
+              >
+                <option value="">без уточнения</option>
+                {subs.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          ) : null}
+
+          {transaction.type === "expense" ? (
+            <Field label="Откуда списано">
+              <select
+                className={inputClass}
+                style={inputStyle}
+                value={walletId ?? ""}
+                onChange={(e) => setWalletId(e.target.value || null)}
+              >
+                {money.map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          ) : null}
+        </>
+      ) : null}
+
       <Field label="Комментарий">
         <input
           className={inputClass}

@@ -92,11 +92,11 @@ export default function AnalyticsPage() {
 
     const rows = categories
       // Подкатегории не отдельные строки: они раскрываются внутри своей.
-      .filter((c) => c.kind === listSide && !c.parent_id)
+      .filter((c) => !c.archived && c.kind === listSide && !c.parent_id)
       .map((c) => {
         const now = pick(current).get(c.id) ?? 0;
         const subs = categories
-          .filter((sub) => sub.parent_id === c.id)
+          .filter((sub) => !sub.archived && sub.parent_id === c.id)
           .map((sub) => ({ id: sub.id, name: sub.name, value: current.subs.get(sub.id) ?? 0 }))
           .filter((sub) => sub.value > 0)
           .sort((a, b) => b.value - a.value);

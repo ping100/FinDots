@@ -29,10 +29,11 @@ export default function DebtsPage() {
   const [payingBill, setPayingBill] = useState<Category | null>(null);
 
   const base = profile?.base_currency ?? "KZT";
-  const owed = wallets.filter((w) => w.kind === "debt_out");
-  const due = wallets.filter((w) => w.kind === "debt_in");
-  const credits = wallets.filter((w) => w.is_recurring);
-  const moneyWallets = wallets.filter((w) => w.kind === "cash" || w.kind === "card");
+  const live = wallets.filter((w) => !w.archived);
+  const owed = live.filter((w) => w.kind === "debt_out");
+  const due = live.filter((w) => w.kind === "debt_in");
+  const credits = live.filter((w) => w.is_recurring);
+  const moneyWallets = live.filter((w) => w.kind === "cash" || w.kind === "card");
 
   // Сколько уже потрачено в этом месяце по каждой категории — из этого
   // видно, какой регулярный платёж ещё висит.
@@ -48,7 +49,7 @@ export default function DebtsPage() {
     return map;
   }, [transactions, toBase]);
 
-  const bills = categories.filter((c) => c.kind === "expense" && c.planned_amount);
+  const bills = categories.filter((c) => !c.archived && c.kind === "expense" && c.planned_amount);
 
   return (
     <div className="mx-auto w-full max-w-md px-4 pb-28 pt-3">

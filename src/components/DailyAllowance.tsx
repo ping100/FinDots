@@ -27,14 +27,14 @@ export function DailyAllowance() {
     const daysLeft = daysInMonth - now.getDate() + 1;
 
     const money = wallets
-      .filter((w) => w.kind === "cash" || w.kind === "card")
+      .filter((w) => !w.archived && (w.kind === "cash" || w.kind === "card"))
       .reduce((sum, w) => sum + toBase(balanceOf(w.id), w.currency), 0);
 
     // Обязательства этого месяца, которые ещё впереди: либо регулярный
     // платёж, чьё число не прошло, либо долг со сроком внутри остатка месяца.
     const upcoming: { name: string; amount: number }[] = [];
     for (const wallet of wallets) {
-      if (wallet.kind !== "debt_out") continue;
+      if (wallet.archived || wallet.kind !== "debt_out") continue;
 
       if (wallet.is_recurring && wallet.recurring_day != null && wallet.monthly_payment) {
         if (wallet.recurring_day >= now.getDate()) {
@@ -69,7 +69,7 @@ export function DailyAllowance() {
       );
     }
     for (const category of categories) {
-      if (category.kind !== "expense" || !category.planned_amount) continue;
+      if (category.archived || category.kind !== "expense" || !category.planned_amount) continue;
       const left = Number(category.planned_amount) - (spentByCategory.get(category.id) ?? 0);
       if (left > 0.5) upcoming.push({ name: category.name, amount: left });
     }

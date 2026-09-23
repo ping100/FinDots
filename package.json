@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "npm run icons && next dev",
     "icons": "node scripts/make-icons.mjs",
-    "prebuild": "npm run icons",
+    "prebuild": "npm run icons && node scripts/copy-pdf-worker.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -16,6 +16,7 @@
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.95.0",
     "next": "^16.3.5",
+    "pdfjs-dist": "^5.7.284",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },

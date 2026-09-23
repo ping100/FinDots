@@ -10,6 +10,7 @@ import { CURRENCIES, parseAmount, symbolOf } from "@/lib/money";
 import { createClient } from "@/lib/supabase/client";
 import { useStore } from "@/components/DataProvider";
 import { DataTransfer } from "@/components/DataTransfer";
+import { StatementImport } from "@/components/StatementImport";
 import { Guide } from "@/components/Guide";
 import { Button, Field, Sheet, inputClass, inputStyle } from "@/components/ui";
 
@@ -112,9 +113,10 @@ export default function SettingsPage() {
 
       <h2 className="mb-1.5 mt-5 px-1 text-[0.9375rem] font-semibold">Данные</h2>
       <p className="mb-2 px-1 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-        Перенос из другой программы и резервная копия. Файл открывается в
-        Excel и Google Таблицах.
+        Выписка из банка, перенос из другой программы и резервная копия.
+        Выписка читается на устройстве и никуда не отправляется.
       </p>
+      <StatementImport />
       <DataTransfer />
 
       <Group>

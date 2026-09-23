@@ -12,3 +12,6 @@ next-env.d.ts
 # собираются из scripts/make-icons.mjs
 public/icons
 *.tsbuildinfo
+
+# Копируется скриптом prebuild из node_modules
+/public/pdf.worker.min.mjs

@@ -38,6 +38,7 @@ export function WalletEditor({
   wallet,
   defaultKind = "card",
   kinds,
+  credit,
   onClose,
 }: {
   open: boolean;
@@ -48,6 +49,8 @@ export function WalletEditor({
    * предлагать завести наличные, а в блоке накоплений — долг.
    */
   kinds?: WalletKind[];
+  /** Заводим кредит: ежемесячный платёж у него есть по определению. */
+  credit?: boolean;
   onClose: () => void;
 }) {
   const { saveWallet, deleteWallet, profile } = useStore();
@@ -80,13 +83,13 @@ export function WalletEditor({
     setDueDate(wallet?.due_date ?? "");
     setReminderDays(wallet?.reminder_days != null ? String(wallet.reminder_days) : "3");
     setMonthlyPayment(wallet?.monthly_payment != null ? String(wallet.monthly_payment) : "");
-    setIsRecurring(wallet?.is_recurring ?? false);
+    setIsRecurring(wallet?.is_recurring ?? !!credit);
     setRecurringDay(wallet?.recurring_day != null ? String(wallet.recurring_day) : "");
     setRate(wallet?.rate != null ? String(wallet.rate) : "");
     setOpenedOn(wallet?.opened_on ?? toISODate(new Date()));
     setTermEnd(wallet?.term_end ?? "");
     setGoal(wallet?.goal != null ? String(wallet.goal) : "");
-  }, [open, wallet, defaultKind, profile]);
+  }, [open, wallet, defaultKind, profile, credit]);
 
   const isDebt = kind === "debt_out" || kind === "debt_in";
   const isSavings = kind === "savings";
@@ -125,7 +128,7 @@ export function WalletEditor({
   return (
     <Sheet
       open={open}
-      title={wallet ? "Кошелёк" : NEW_TITLE[kind]}
+      title={wallet ? "Кошелёк" : credit ? "Новый кредит" : NEW_TITLE[kind]}
       onClose={onClose}
       footer={
         <div className="space-y-2">
@@ -208,7 +211,15 @@ export function WalletEditor({
       </FieldGroup>
 
       <Field
-        label={isDebt ? "Сумма долга на старте" : isSavings ? "Уже накоплено" : "Баланс на старте"}
+        label={
+          credit
+            ? "Остаток по кредиту"
+            : isDebt
+              ? "Сумма долга на старте"
+              : isSavings
+                ? "Уже накоплено"
+                : "Баланс на старте"
+        }
         hint="Дальше баланс меняется операциями — здесь только отправная точка"
       >
         <input
@@ -287,7 +298,7 @@ export function WalletEditor({
               onChange={(e) => setReminderDays(e.target.value)}
             />
           </Field>
-          <Field label="Платёж в месяц" hint="Для кредитов и подписок">
+          <Field label="Платёж в месяц" hint={credit ? "Сколько списывают каждый месяц" : "Для кредитов и рассрочек"}>
             <input
               className={inputClass}
               style={inputStyle}
@@ -297,15 +308,18 @@ export function WalletEditor({
               placeholder="необязательно"
             />
           </Field>
-          <label className="mb-3 flex items-center gap-3">
-            <input
-              type="checkbox"
-              className="h-5 w-5"
-              checked={isRecurring}
-              onChange={(e) => setIsRecurring(e.target.checked)}
-            />
-            <span className="text-sm">Ежемесячный платёж</span>
-          </label>
+          {/* У кредита платёж ежемесячный по определению — галочку не спрашиваем. */}
+          {credit ? null : (
+            <label className="mb-3 flex items-center gap-3">
+              <input
+                type="checkbox"
+                className="h-5 w-5"
+                checked={isRecurring}
+                onChange={(e) => setIsRecurring(e.target.checked)}
+              />
+              <span className="text-sm">Ежемесячный платёж</span>
+            </label>
+          )}
           {isRecurring ? (
             <Field label="Число месяца">
               <input

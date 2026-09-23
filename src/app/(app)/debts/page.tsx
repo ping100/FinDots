@@ -22,10 +22,13 @@ export default function DebtsPage() {
   // Возврат долга мне: деньги идут из долга в выбранный кошелёк.
   const [returning, setReturning] = useState<Wallet | null>(null);
   const [editor, setEditor] =
-    useState<{ wallet?: Wallet | null; kind: WalletKind } | null>(null);
+    useState<{ wallet?: Wallet | null; kind: WalletKind; credit?: boolean } | null>(null);
 
   const live = wallets.filter((w) => !w.archived);
-  const owed = live.filter((w) => w.kind === "debt_out");
+  // Кредит отличается от долга тем, что гасится частями по графику, а не
+  // отдаётся целиком, — поэтому у него свой раздел и свой платёж.
+  const credits = live.filter((w) => w.kind === "debt_out" && !!w.monthly_payment);
+  const owed = live.filter((w) => w.kind === "debt_out" && !w.monthly_payment);
   const due = live.filter((w) => w.kind === "debt_in");
   const moneyWallets = live.filter((w) => w.kind === "cash" || w.kind === "card");
 
@@ -33,11 +36,24 @@ export default function DebtsPage() {
     <div className="mx-auto w-full max-w-md px-4 pb-28 pt-3">
       <h1 className="mb-1 text-xl font-semibold">Долги и обязательные платежи</h1>
       <p className="mb-4 text-xs leading-snug" style={{ color: "var(--muted)" }}>
-        Долг — это то, что нужно отдать целиком: он гасится переносом денег из
-        кошелька, здесь или перетаскиванием на главном экране. Пока не отдан,
-        он откладывается из «можно тратить сегодня». Аренда и подписки — не
-        долги: они живут блоком «Каждый месяц» под расходами.
+        Кредит гасится частями по графику, долг — целиком. И то и другое
+        закрывается переносом денег из кошелька: здесь или перетаскиванием на
+        главном экране. Пока не отдано, откладывается из «можно тратить
+        сегодня». Аренда и подписки — не долги: они живут блоком «Каждый
+        месяц» под расходами.
       </p>
+
+      <Group title="Кредиты и рассрочки" empty="Кредитов нет">
+        {credits.map((w) => (
+          <DebtCard
+            key={w.id}
+            wallet={w}
+            amount={balanceOf(w.id)}
+            onPay={() => setPaying(w)}
+            onEdit={() => setEditor({ wallet: w, kind: "debt_out", credit: true })}
+          />
+        ))}
+      </Group>
 
       <Group title="Я должен" empty="Долгов нет">
         {owed.map((w) => (
@@ -65,8 +81,14 @@ export default function DebtsPage() {
       </Group>
 
       <div className="space-y-2">
+        <Button
+          variant="ghost"
+          onClick={() => setEditor({ wallet: null, kind: "debt_out", credit: true })}
+        >
+          Добавить кредит или рассрочку
+        </Button>
         <Button variant="ghost" onClick={() => setEditor({ wallet: null, kind: "debt_out" })}>
-          Добавить долг или кредит
+          Добавить долг
         </Button>
         <Button variant="ghost" onClick={() => setEditor({ wallet: null, kind: "debt_in" })}>
           Записать, что мне должны
@@ -137,6 +159,7 @@ export default function DebtsPage() {
         wallet={editor?.wallet}
         defaultKind={editor?.kind ?? "debt_out"}
         kinds={editor ? [editor.kind] : undefined}
+        credit={editor?.credit}
         onClose={() => setEditor(null)}
       />
 
@@ -219,7 +242,8 @@ function DebtCard({
           </span>
           {wallet.monthly_payment ? (
             <span className="block text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-              платёж {formatMoney(wallet.monthly_payment, wallet.currency)}
+              {formatMoney(wallet.monthly_payment, wallet.currency)}
+              {wallet.recurring_day ? ` · ${wallet.recurring_day}-го` : " в месяц"}
             </span>
           ) : null}
         </span>

@@ -6,13 +6,30 @@ import { Icon } from "@/lib/icons";
 import { createClient } from "@/lib/supabase/client";
 import { useStore } from "@/components/DataProvider";
 import { CategoryEditor } from "@/components/CategoryEditor";
-import { Button } from "@/components/ui";
+import { CURRENT_BUILD, applyUpdate, serverBuild } from "@/lib/update";
 import type { TaskCategory } from "@/lib/types";
 
 export default function SettingsPage() {
   const router = useRouter();
   const { profile, categories, saveProfile, saveCategory, deleteCategory } = useStore();
   const [editing, setEditing] = useState<TaskCategory | null | undefined>(undefined);
+  const [checking, setChecking] = useState(false);
+  const [updateNote, setUpdateNote] = useState<string | null>(null);
+
+  const checkUpdate = async () => {
+    if (checking) return;
+    setChecking(true);
+    setUpdateNote(null);
+    const build = await serverBuild();
+    if (!build) setUpdateNote("Не дозвонились до сервера — проверьте интернет");
+    else if (build === CURRENT_BUILD) setUpdateNote("У вас последняя версия");
+    else {
+      setUpdateNote("Есть новая версия, обновляю…");
+      await applyUpdate();
+      return;
+    }
+    setChecking(false);
+  };
 
   const live = categories.filter((c) => !c.archived);
 
@@ -82,15 +99,28 @@ export default function SettingsPage() {
         )}
       </section>
 
-      <Button
-        variant="ghost"
-        onClick={async () => {
-          await createClient().auth.signOut();
-          router.replace("/login");
-        }}
-      >
-        Выйти
-      </Button>
+      <Group>
+        <Row
+          label={checking ? "Проверяю…" : "Обновить приложение"}
+          value={CURRENT_BUILD}
+          hint={
+            updateNote ??
+            "Приложение проверяет обновления само, но если обещанного не видно — нажмите здесь"
+          }
+          onClick={() => void checkUpdate()}
+        />
+      </Group>
+
+      <Group>
+        <Row
+          label="Выйти"
+          danger
+          onClick={async () => {
+            await createClient().auth.signOut();
+            router.replace("/login");
+          }}
+        />
+      </Group>
 
       <CategoryEditor
         open={editing !== undefined}
@@ -99,6 +129,69 @@ export default function SettingsPage() {
         onSave={saveCategory}
         onDelete={deleteCategory}
       />
+    </div>
+  );
+}
+
+function Group({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mb-4 overflow-hidden rounded-2xl" style={{ background: "var(--surface)" }}>
+      {children}
+    </div>
+  );
+}
+
+function Row({
+  label,
+  value,
+  hint,
+  danger,
+  onClick,
+}: {
+  label: string;
+  value?: string;
+  hint?: string;
+  danger?: boolean;
+  onClick?: () => void;
+}) {
+  const content = (
+    <>
+      <span className="flex-1">
+        <span
+          className="block text-[0.9375rem]"
+          style={{ color: danger ? "var(--danger)" : undefined }}
+        >
+          {label}
+        </span>
+        {hint ? (
+          <span
+            className="mt-0.5 block text-[0.6875rem] leading-snug"
+            style={{ color: "var(--muted)" }}
+          >
+            {hint}
+          </span>
+        ) : null}
+      </span>
+      {value ? (
+        <span className="text-[0.9375rem]" style={{ color: "var(--muted)" }}>
+          {value}
+        </span>
+      ) : null}
+      {onClick && !danger ? <Icon name="chevron-right" size={16} className="opacity-30" /> : null}
+    </>
+  );
+
+  const className =
+    "flex w-full items-center gap-3 px-4 py-3.5 text-left [&:not(:first-child)]:border-t";
+  const style = { borderColor: "var(--border)" };
+
+  return onClick ? (
+    <button onClick={onClick} className={className} style={style}>
+      {content}
+    </button>
+  ) : (
+    <div className={className} style={style}>
+      {content}
     </div>
   );
 }

@@ -1,7 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-const PUBLIC_PATHS = ["/login", "/auth"];
+// /api/version отдаёт только отпечаток сборки и нужен до входа тоже: иначе
+// проверка обновления на экране логина молча упиралась бы в редирект.
+const PUBLIC_PATHS = ["/login", "/auth", "/api/version"];
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -48,6 +50,6 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|icons/.*|.*\\.(?:png|svg|jpg|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|icons/.*|.*\\.(?:png|svg|jpg|webp)$).*)",
   ],
 };

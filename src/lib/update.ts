@@ -8,6 +8,36 @@
  */
 export const CURRENT_BUILD = process.env.NEXT_PUBLIC_BUILD ?? "dev";
 
+/**
+ * Когда собрана версия, которая сейчас открыта, — по-человечески.
+ *
+ * Считать это можно только в браузере: время переводится в часовой пояс
+ * читателя, а он у сервера и у телефона разный. Посчитай мы строку при
+ * отрисовке на сервере — React увидел бы расхождение и ругнулся.
+ */
+export function buildMoment(now = new Date()): string | null {
+  const raw = process.env.NEXT_PUBLIC_BUILT_AT;
+  if (!raw) return null;
+  const at = new Date(raw);
+  if (Number.isNaN(at.getTime())) return null;
+
+  const day = (d: Date) => d.toLocaleDateString("ru-RU");
+  const time = at.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+
+  if (day(at) === day(now)) return `сегодня, ${time}`;
+
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (day(at) === day(yesterday)) return `вчера, ${time}`;
+
+  // Давние сборки — просто датой: час в них уже никому не интересен.
+  return at.toLocaleDateString("ru-RU", {
+    day: "numeric",
+    month: "long",
+    ...(at.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }),
+  });
+}
+
 /** Отпечаток сборки на сервере; null — не дозвонились (нет сети). */
 export async function serverBuild(): Promise<string | null> {
   try {

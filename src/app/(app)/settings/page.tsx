@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AI_MODELS, type AiModel } from "@/lib/aiModels";
 import { TEXT_SCALES } from "@/lib/textScale";
-import { CURRENT_BUILD, applyUpdate, serverBuild } from "@/lib/update";
+import { CURRENT_BUILD, applyUpdate, buildMoment, serverBuild } from "@/lib/update";
 import { Icon } from "@/lib/icons";
 import { CURRENCIES, parseAmount, symbolOf } from "@/lib/money";
 import { createClient } from "@/lib/supabase/client";
@@ -51,6 +51,10 @@ export default function SettingsPage() {
   }, [sheet, models]);
   const [checking, setChecking] = useState(false);
   const [updateNote, setUpdateNote] = useState<string | null>(null);
+  // Считаем после отрисовки: строка зависит от часового пояса телефона, а
+  // на сервере он другой — React заметил бы расхождение.
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+  useEffect(() => setUpdatedAt(buildMoment()), []);
 
   const checkUpdate = async () => {
     if (checking) return;
@@ -153,10 +157,10 @@ export default function SettingsPage() {
       <Group>
         <Row
           label={checking ? "Проверяю…" : "Обновить приложение"}
-          value={CURRENT_BUILD}
+          value={updatedAt ?? undefined}
           hint={
             updateNote ??
-            "Приложение проверяет обновления само, но если обещанного не видно — нажмите здесь"
+            "Показано, когда обновлялись в последний раз. Приложение следит за этим само, но если обещанного не видно — нажмите здесь"
           }
           onClick={() => void checkUpdate()}
         />

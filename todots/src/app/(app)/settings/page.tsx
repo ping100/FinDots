@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/lib/icons";
 import { createClient } from "@/lib/supabase/client";
 import { useStore } from "@/components/DataProvider";
 import { CategoryEditor } from "@/components/CategoryEditor";
-import { CURRENT_BUILD, applyUpdate, serverBuild } from "@/lib/update";
+import { CURRENT_BUILD, applyUpdate, buildMoment, serverBuild } from "@/lib/update";
 import type { TaskCategory } from "@/lib/types";
 
 export default function SettingsPage() {
@@ -15,6 +15,10 @@ export default function SettingsPage() {
   const [editing, setEditing] = useState<TaskCategory | null | undefined>(undefined);
   const [checking, setChecking] = useState(false);
   const [updateNote, setUpdateNote] = useState<string | null>(null);
+  // Считаем после отрисовки: строка зависит от часового пояса телефона, а
+  // на сервере он другой — React заметил бы расхождение.
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+  useEffect(() => setUpdatedAt(buildMoment()), []);
 
   const checkUpdate = async () => {
     if (checking) return;
@@ -102,10 +106,10 @@ export default function SettingsPage() {
       <Group>
         <Row
           label={checking ? "Проверяю…" : "Обновить приложение"}
-          value={CURRENT_BUILD}
+          value={updatedAt ?? undefined}
           hint={
             updateNote ??
-            "Приложение проверяет обновления само, но если обещанного не видно — нажмите здесь"
+            "Показано, когда обновлялись в последний раз. Приложение следит за этим само, но если обещанного не видно — нажмите здесь"
           }
           onClick={() => void checkUpdate()}
         />

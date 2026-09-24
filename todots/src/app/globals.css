@@ -136,6 +136,18 @@ textarea,
   animation: page-in 0.2s ease-out;
 }
 
+/* Появление с задержкой: элемент есть в разметке сразу, но прозрачен первые
+   250 мс. Нужно именно на CSS — состояние React оживает только после
+   загрузки бандла, а до тех пор человек смотрел бы в пустой экран. */
+@keyframes delayed-in {
+  from {
+    opacity: 0;
+  }
+}
+.animate-delayed {
+  animation: delayed-in 0.25s ease-out 0.25s both;
+}
+
 @keyframes lift-in {
   from {
     opacity: 0;

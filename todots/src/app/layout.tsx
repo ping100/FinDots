@@ -17,6 +17,8 @@ export const metadata: Metadata = {
   title: TITLE,
   description: DESCRIPTION,
   manifest: "/manifest.webmanifest",
+  // iOS до 16.4 значок из манифеста не берёт — ему нужен именно этот тег.
+  icons: { apple: "/icons/icon-180.png" },
   appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "ToDots" },
 };
 

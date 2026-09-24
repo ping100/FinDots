@@ -17,6 +17,7 @@ import { convert } from "@/lib/money";
 import type { Draft } from "@/lib/importCsv";
 import { maturedAccruals, toISODate } from "@/lib/savings";
 import { scaleFactor } from "@/lib/textScale";
+import { rememberLook } from "@/lib/look";
 import type {
   Category,
   CurrencyCode,
@@ -217,8 +218,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
   // приложении описан в rem и подтягивается за ним.
   useEffect(() => {
     if (!profile) return;
+    const fontSize = `${16 * scaleFactor(profile.text_scale)}px`;
     document.documentElement.classList.toggle("dark", profile.theme === "dark");
-    document.documentElement.style.fontSize = `${16 * scaleFactor(profile.text_scale)}px`;
+    document.documentElement.style.fontSize = fontSize;
+    // Запоминаем на устройстве, чтобы в следующий раз экран ожидания
+    // открылся сразу в нужной теме, не дожидаясь профиля.
+    rememberLook(profile.theme, fontSize);
   }, [profile]);
 
   /** Пересчитать производные данные после записи. */

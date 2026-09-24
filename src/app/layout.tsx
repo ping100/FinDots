@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Onest } from "next/font/google";
 import { RegisterSW } from "@/components/RegisterSW";
+import { LOOK_SCRIPT } from "@/lib/look";
 import "./globals.css";
 
 /**
@@ -59,6 +60,13 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ru" className={onest.variable}>
+      <head>
+        {/* До первой отрисовки: ставим запомненную тему и кегль, иначе
+            человек с тёмной темой ловит вспышку белого экрана, пока из базы
+            едет профиль. Отсюда и dangerouslySetInnerHTML — другого способа
+            выполнить код раньше React не существует. */}
+        <script dangerouslySetInnerHTML={{ __html: LOOK_SCRIPT }} />
+      </head>
       <body>
         {children}
         <RegisterSW />

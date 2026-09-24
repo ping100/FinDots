@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Icon } from "@/lib/icons";
 import { useProvider } from "@/lib/providers";
+import { rememberedTheme } from "@/lib/look";
 import { Logo } from "@/components/Logo";
 import { GoogleButton } from "@/components/GoogleButton";
 import { Button, Field, inputClass, inputStyle } from "@/components/ui";
@@ -46,10 +47,12 @@ function LoginForm() {
     if (params.get("error")) setProblem("Вход через Google не завершился — попробуйте ещё раз");
   }, [params]);
 
-  // До входа профиля ещё нет, а значит нет и сохранённой темы. Берём
-  // системную: человеку с тёмным телефоном не за что получать вспышку
-  // белого экрана. После входа тему переставит DataProvider по профилю.
+  // До входа профиля ещё нет. Если на этом устройстве уже выбирали тему —
+  // держим её: скрипт в <head> её уже поставил, и трогать не надо. Если
+  // человек здесь впервые, следим за системной, чтобы с тёмным телефоном он
+  // не получил вспышку белого. После входа тему поставит DataProvider.
   useEffect(() => {
+    if (rememberedTheme()) return;
     const query = window.matchMedia("(prefers-color-scheme: dark)");
     const apply = () => document.documentElement.classList.toggle("dark", query.matches);
     apply();

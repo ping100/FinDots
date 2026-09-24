@@ -12,6 +12,7 @@ import {
 } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
+import { rememberTheme } from "@/lib/look";
 import type { Profile, Task, TaskCategory } from "@/lib/types";
 
 export interface Store {
@@ -115,6 +116,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!profile) return;
     document.documentElement.classList.toggle("dark", profile.theme === "dark");
+    // Запоминаем на устройстве, чтобы в следующий раз экран ожидания
+    // открылся сразу в нужной теме, не дожидаясь профиля.
+    rememberTheme(profile.theme);
   }, [profile]);
 
   const refresh = useCallback(async () => {

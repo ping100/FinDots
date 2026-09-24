@@ -40,6 +40,9 @@ body {
 
 body {
   font-family: var(--font-sans);
+  /* По горизонтали листать нечего: экран один. Без этого браузер норовит
+     принять горизонтальный жест за «назад». */
+  overscroll-behavior-x: none;
   overscroll-behavior-y: none;
   -webkit-tap-highlight-color: transparent;
   /* Долгое нажатие занято перетаскиванием задачи на другой день — без этих

@@ -77,6 +77,10 @@ export function Shell({ children }: { children: ReactNode }) {
               <Fragment key={tab.href}>
                 <Link
                   href={tab.href}
+                  // replace, а не push: вкладки — это не «страницы, по которым
+                  // ходят вперёд-назад». Иначе на айфоне свайп от левого края
+                  // листает их историю, хотя приложение про такое не думает.
+                  replace
                   className="flex flex-1 flex-col items-center gap-0.5 rounded-2xl py-1.5"
                   style={{
                     color: pathname === tab.href ? "var(--accent)" : "var(--muted)",

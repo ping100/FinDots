@@ -1,0 +1,189 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: var(--font-onest), ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+/* Токены и шрифт общие с Findots — это одна экосистема, не два случайно
+   похожих приложения. */
+:root {
+  --bg: #f2f2f7;
+  --surface: #ffffff;
+  --surface-2: #eceef3;
+  --text: #0b0b0d;
+  --muted: #8a8a8f;
+  --border: #e3e4e9;
+  --accent: #007aff;
+  --danger: #e5383b;
+  --ok: #34c759;
+}
+
+.dark {
+  --bg: #0b0f16;
+  --surface: #151b24;
+  --surface-2: #1d2531;
+  --text: #e8edf5;
+  --muted: #8b97a8;
+  --border: #253040;
+  --accent: #60a5fa;
+  --danger: #f87171;
+  --ok: #4ade80;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+body {
+  font-family: var(--font-sans);
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
+  /* Долгое нажатие занято перетаскиванием задачи на другой день — без этих
+     правил iOS перехватывает его как выделение текста. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+input,
+textarea,
+[contenteditable],
+.selectable {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.pb-safe {
+  padding-bottom: calc(env(safe-area-inset-bottom) + 0.5rem);
+}
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+
+@layer base {
+  input,
+  select,
+  textarea,
+  button {
+    font: inherit;
+    color: inherit;
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+@keyframes rise {
+  from {
+    transform: translateY(12px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+.animate-rise {
+  animation: rise 0.18s ease-out;
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes sheet-out {
+  to {
+    transform: translateY(100%);
+  }
+}
+.animate-sheet {
+  animation: sheet-in 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.animate-sheet-out {
+  animation: sheet-out 0.2s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+.animate-fade {
+  animation: fade-in 0.2s ease-out;
+}
+.animate-fade-out {
+  animation: fade-in 0.18s ease-in reverse forwards;
+}
+
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.animate-page {
+  animation: page-in 0.2s ease-out;
+}
+
+@keyframes lift-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+.animate-lift {
+  animation: lift-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Знак ToDots/Findots: те же три кружка, что и на главном экране Findots. */
+@keyframes dot-in {
+  from {
+    opacity: 0;
+    transform: translate(var(--dx), var(--dy)) scale(0.3);
+  }
+  to {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+}
+.animate-dot {
+  animation: dot-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes dot-breathe {
+  0%,
+  65%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  32% {
+    opacity: 0.3;
+    transform: scale(0.7);
+  }
+}
+.animate-breathe {
+  animation: dot-breathe 1.3s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

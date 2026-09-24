@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -12,10 +12,10 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { Icon } from "@/lib/icons";
 import { dayLabel, today } from "@/lib/dates";
 import type { DragPayload, DropTarget, Task } from "@/lib/types";
 import { useStore } from "@/components/DataProvider";
+import { useAddAction } from "@/components/Shell";
 import { Calendar } from "@/components/Calendar";
 import { TaskList } from "@/components/TaskList";
 import { QuickAdd } from "@/components/QuickAdd";
@@ -36,10 +36,14 @@ export default function TodayPage() {
     }),
   );
 
-  const openNew = () => {
+  const openNew = useCallback(() => {
     setEditingTask(null);
     setSheetOpen(true);
-  };
+  }, []);
+  // «+» рисует нижняя панель — окно открывается отсюда, потому что здесь
+  // известен выбранный в календаре день.
+  useAddAction(openNew);
+
   const openEdit = (task: Task) => {
     setEditingTask(task);
     setSheetOpen(true);
@@ -130,15 +134,6 @@ export default function TodayPage() {
           ) : null}
         </div>
       </div>
-
-      <button
-        onClick={openNew}
-        aria-label="Новая задача"
-        className="fixed bottom-24 right-5 z-30 flex h-14 w-14 items-center justify-center rounded-full text-white transition-transform active:scale-95"
-        style={{ background: "var(--accent)", boxShadow: "0 8px 20px rgba(0,0,0,0.25)" }}
-      >
-        <Icon name="plus" size={26} />
-      </button>
 
       <DragOverlay dropAnimation={null}>
         {draggedTask ? (

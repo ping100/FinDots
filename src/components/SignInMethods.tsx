@@ -21,6 +21,7 @@ export function SignInMethods() {
   const [identities, setIdentities] = useState<UserIdentity[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const [linked, setLinked] = useState(false);
 
   const reload = useCallback(async () => {
     const { data } = await createClient().auth.getUserIdentities();
@@ -31,6 +32,18 @@ export function SignInMethods() {
     void reload();
   }, [reload]);
 
+  // Возврат от Google приводит человека обратно в настройки, и без единого
+  // слова о том, чем дело кончилось. Метку в адресе оставляет сам переход;
+  // прочитав её, убираем — иначе подтверждение всплывёт снова при обновлении
+  // страницы, уже безо всякого повода.
+  useEffect(() => {
+    const url = new URL(location.href);
+    if (url.searchParams.get("linked") !== "google") return;
+    setLinked(true);
+    url.searchParams.delete("linked");
+    history.replaceState(null, "", url.pathname + url.search);
+  }, []);
+
   const google = identities?.find((item) => item.provider === "google");
   const onlyOne = (identities?.length ?? 0) < 2;
 
@@ -39,7 +52,9 @@ export function SignInMethods() {
     setProblem(null);
     const { error } = await createClient().auth.linkIdentity({
       provider: "google",
-      options: { redirectTo: `${location.origin}/auth/callback?next=/settings` },
+      options: {
+        redirectTo: `${location.origin}/auth/callback?next=${encodeURIComponent("/settings?linked=google")}`,
+      },
     });
     if (error) {
       setBusy(false);
@@ -56,6 +71,7 @@ export function SignInMethods() {
     if (!google) return;
     setBusy(true);
     setProblem(null);
+    setLinked(false);
     const { error } = await createClient().auth.unlinkIdentity(google);
     setBusy(false);
     if (error) setProblem(error.message);
@@ -100,6 +116,12 @@ export function SignInMethods() {
         <p className="mt-2 text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
           Отвязать нельзя: другого способа войти нет. Сначала добавьте вход по
           почте.
+        </p>
+      ) : null}
+
+      {linked && google ? (
+        <p className="animate-rise mt-2 text-[0.75rem]" style={{ color: "var(--ok)" }}>
+          Google привязан
         </p>
       ) : null}
 

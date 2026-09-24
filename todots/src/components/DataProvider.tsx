@@ -88,6 +88,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
         .select("*")
         .order("date", { ascending: true, nullsFirst: false })
         .order("time", { ascending: true, nullsFirst: false })
+        .order("sort_order")
+        .order("created_at")
         .limit(2000),
     ]);
 
@@ -121,6 +123,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       .select("*")
       .order("date", { ascending: true, nullsFirst: false })
       .order("time", { ascending: true, nullsFirst: false })
+      .order("sort_order")
+      .order("created_at")
       .limit(2000);
     setTasks((t.data ?? []) as Task[]);
   }, [supabase]);

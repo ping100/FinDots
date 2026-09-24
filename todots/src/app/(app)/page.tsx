@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import {
   DndContext,
   DragOverlay,
+  MeasuringStrategy,
   PointerSensor,
   pointerWithin,
   useSensor,
@@ -15,7 +16,7 @@ import { Icon } from "@/lib/icons";
 import { dayLabel, today } from "@/lib/dates";
 import type { DragPayload, DropTarget, Task } from "@/lib/types";
 import { useStore } from "@/components/DataProvider";
-import { DateStrip } from "@/components/DateStrip";
+import { Calendar } from "@/components/Calendar";
 import { TaskList } from "@/components/TaskList";
 import { QuickAdd } from "@/components/QuickAdd";
 
@@ -70,6 +71,9 @@ export default function TodayPage() {
       id="todots"
       sensors={sensors}
       collisionDetection={pointerWithin}
+      // Лента дат прокручивается, и однажды снятые координаты кружков
+      // устаревают: задача уезжала на день, соседний с тем, куда её бросили.
+      measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
       onDragStart={(event: DragStartEvent) => {
         setDragging(event.active.id as string);
         if (navigator.vibrate) navigator.vibrate(8);
@@ -82,7 +86,7 @@ export default function TodayPage() {
           <h1 className="text-xl font-semibold">{dayLabel(selected)}</h1>
         </header>
 
-        <DateStrip selected={selected} onSelect={setSelected} loadedDates={loadedDates} />
+        <Calendar selected={selected} onSelect={setSelected} loadedDates={loadedDates} />
 
         <div className="mt-4 space-y-5">
           {untimed.length || timed.length ? (

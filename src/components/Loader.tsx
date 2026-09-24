@@ -6,22 +6,21 @@ import { Logo } from "./Logo";
 /**
  * Экран ожидания, пока подтягиваются данные.
  *
- * Показывается не сразу: при быстрой загрузке мелькнувший и тут же
- * пропавший знак раздражает сильнее, чем полсекунды пустоты. Зато если
- * связь плохая — через несколько секунд появляется строчка, объясняющая,
+ * Знак есть в разметке сразу, но первые 250 мс прозрачен: при быстрой
+ * загрузке мелькнувший и тут же пропавший знак раздражает сильнее, чем
+ * полсекунды пустоты. Задержка живёт в CSS, а не в состоянии React, — иначе
+ * сервер отдаёт пустую страницу, и до оживления бандла (на телефоне это
+ * секунды) человек смотрит в белый экран.
+ *
+ * Если связь плохая, через несколько секунд появляется строчка, объясняющая,
  * что происходит: молчащий экран человек считает зависшим.
  */
 export function Loader() {
-  const [visible, setVisible] = useState(false);
   const [slow, setSlow] = useState(false);
 
   useEffect(() => {
-    const show = setTimeout(() => setVisible(true), 250);
     const warn = setTimeout(() => setSlow(true), 5000);
-    return () => {
-      clearTimeout(show);
-      clearTimeout(warn);
-    };
+    return () => clearTimeout(warn);
   }, []);
 
   return (
@@ -32,20 +31,16 @@ export function Loader() {
       role="status"
       aria-label="Загружаю"
     >
-      {visible ? (
-        <>
-          <div className="animate-fade">
-            <Logo size={64} breathing />
-          </div>
-          {slow ? (
-            <p
-              className="animate-fade max-w-[16rem] text-center text-[0.8125rem] leading-snug"
-              style={{ color: "var(--muted)" }}
-            >
-              Связь медленная — данные ещё идут
-            </p>
-          ) : null}
-        </>
+      <div className="animate-delayed">
+        <Logo size={64} breathing />
+      </div>
+      {slow ? (
+        <p
+          className="animate-fade max-w-[16rem] text-center text-[0.8125rem] leading-snug"
+          style={{ color: "var(--muted)" }}
+        >
+          Связь медленная — данные ещё идут
+        </p>
       ) : null}
     </div>
   );

@@ -98,22 +98,3 @@ export type DragPayload =
 export type DropTarget =
   | { target: "wallet"; walletId: string }
   | { target: "category"; categoryId: string };
-
-/**
- * Задача Todots. Живёт в той же базе, что и деньги: учётная запись одна на
- * оба приложения, и разводить их по разным проектам значило бы просить
- * человека входить дважды.
- */
-export interface Task {
-  id: string;
-  title: string;
-  /** Без даты — просто «когда-нибудь», такие лежат отдельной кучкой. */
-  date: string | null;
-  time: string | null;
-  priority: "low" | "medium" | "high";
-  done: boolean;
-  sort_order: number;
-  note: string | null;
-  remind: boolean;
-  created_at: string;
-}

@@ -16,6 +16,19 @@ const PATHS: Record<string, ReactNode> = {
   "chevron-down": <path d="M6 9.5l6 6 6-6" />,
   "chevron-right": <path d="M9.5 6l6 6-6 6" />,
   "chevron-left": <path d="M14.5 6l-6 6 6 6" />,
+  // Задачам: время дела и напоминание о нём.
+  clock: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3.5 2" />
+    </>
+  ),
+  bell: (
+    <>
+      <path d="M6 10a6 6 0 0 1 12 0c0 4 1.5 5.5 1.5 5.5h-15S6 14 6 10z" />
+      <path d="M10 18a2 2 0 0 0 4 0" />
+    </>
+  ),
   eye: (
     <>
       <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" />

@@ -20,16 +20,12 @@ const APPS = [
     color: "#22c55e",
   },
   {
-    // Пока на своём адресе: приложение готово, но ещё не переехало под общий
-    // домен. До переезда вход в нём отдельный — куки одного домена на другой
-    // не распространяются.
-    href: "https://todots-inky.vercel.app",
+    href: "/tasks",
     name: "Todots",
     what: "Задачи",
     hint: "Что сделать сегодня, что переносится и что горит",
     icon: "list",
     color: "#60a5fa",
-    away: true,
   },
 ];
 
@@ -71,17 +67,7 @@ export default function Home() {
               <Icon name={app.icon} size={24} />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block text-[1.0625rem] font-semibold">
-                {app.what}
-                {app.away ? (
-                  <span
-                    className="ml-2 align-middle text-[0.625rem] font-normal"
-                    style={{ color: "var(--muted)" }}
-                  >
-                    пока отдельно
-                  </span>
-                ) : null}
-              </span>
+              <span className="block text-[1.0625rem] font-semibold">{app.what}</span>
               <span
                 className="mt-0.5 block text-[0.75rem] leading-snug"
                 style={{ color: "var(--muted)" }}

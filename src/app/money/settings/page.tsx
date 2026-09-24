@@ -13,6 +13,7 @@ import { DataTransfer } from "@/components/DataTransfer";
 import { StatementImport } from "@/components/StatementImport";
 import { Guide } from "@/components/Guide";
 import { SignInMethods } from "@/components/SignInMethods";
+import { AppSwitch } from "@/components/AppSwitch";
 import { Button, Field, Sheet, inputClass, inputStyle } from "@/components/ui";
 
 export default function SettingsPage() {
@@ -88,6 +89,8 @@ export default function SettingsPage() {
   return (
     <div className="mx-auto w-full max-w-md px-4 pb-32">
       <h1 className="py-2 text-[1.625rem] font-semibold">Настройки</h1>
+
+      <AppSwitch from="money" />
 
       <Group>
         <Row

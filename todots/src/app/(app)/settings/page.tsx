@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Icon } from "@/lib/icons";
 import { createClient } from "@/lib/supabase/client";
 import { useStore } from "@/components/DataProvider";
+import { SignInMethods } from "@/components/SignInMethods";
 import { CURRENT_BUILD, applyUpdate, buildMoment, serverBuild } from "@/lib/update";
 
 export default function SettingsPage() {
@@ -65,6 +66,15 @@ export default function SettingsPage() {
           hint={updateNote ?? "Приложение следит за обновлениями само. Если обещанного не видно — нажмите здесь"}
           onClick={() => void checkUpdate()}
         />
+      </Group>
+
+      <Group>
+        <Row
+          label="Аккаунт"
+          value={profile?.display_name ?? undefined}
+          hint="Задачи привязаны к этой учётной записи и видны только вам"
+        />
+        <SignInMethods />
       </Group>
 
       <Group>

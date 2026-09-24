@@ -70,6 +70,13 @@ export function TaskCard({
           <p className="mt-0.5 flex items-center gap-1 text-xs" style={{ color: "var(--muted)" }}>
             <Icon name="clock" size={12} />
             {task.time.slice(0, 5)}
+            {/* Колокольчик — единственное, что отличает «просто во столько»
+                от «дёрни меня во столько». */}
+            {task.remind ? (
+              <span className="flex items-center" style={{ color: "var(--accent)" }}>
+                <Icon name="bell" size={12} />
+              </span>
+            ) : null}
           </p>
         ) : null}
       </div>

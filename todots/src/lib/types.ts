@@ -20,8 +20,10 @@ export interface Task {
   title: string;
   /** ISO yyyy-mm-dd; null — без даты, лежит в «Когда-нибудь». */
   date: string | null;
-  /** HH:mm; задаёт и сортировку внутри дня, и момент напоминания. */
+  /** HH:mm; задаёт порядок внутри дня. Может не быть — «когда угодно за день». */
   time: string | null;
+  /** Дёрнуть телефон в это время. Без времени напоминать не о чем. */
+  remind: boolean;
   category_id: string | null;
   priority: Priority;
   done: boolean;

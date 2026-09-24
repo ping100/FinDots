@@ -33,6 +33,7 @@ export function QuickAdd({
   const [title, setTitle] = useState("");
   const [date, setDate] = useState<string | null>(defaultDate);
   const [time, setTime] = useState("");
+  const [remind, setRemind] = useState(false);
   const [priority, setPriority] = useState<Priority>("medium");
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -42,9 +43,24 @@ export function QuickAdd({
     setTitle(task?.title ?? "");
     setDate(task ? task.date : defaultDate);
     setTime(task?.time?.slice(0, 5) ?? "");
+    setRemind(task?.remind ?? false);
     setPriority(task?.priority ?? "medium");
     setCategoryId(task?.category_id ?? null);
   }, [open, task, defaultDate]);
+
+  /**
+   * Время — выбор из двух состояний, а не поле, которое можно «не трогать».
+   * Пустое системное поле времени на телефоне показывает текущий час, и
+   * понять, задано время или нет, невозможно.
+   */
+  const setTimed = (on: boolean) => {
+    if (on) {
+      if (!time) setTime(new Date().toTimeString().slice(0, 5));
+      return;
+    }
+    setTime("");
+    setRemind(false);
+  };
 
   const save = async () => {
     if (!title.trim()) return;
@@ -55,6 +71,7 @@ export function QuickAdd({
         title: title.trim(),
         date,
         time: time || null,
+        remind: !!time && remind,
         priority,
         category_id: categoryId,
         done: task?.done ?? false,
@@ -125,22 +142,70 @@ export function QuickAdd({
             </button>
           ))}
         </div>
-        <div className="flex gap-2">
-          <input
-            type="date"
-            className={inputClass}
-            style={inputStyle}
-            value={date ?? ""}
-            onChange={(e) => setDate(e.target.value || null)}
-          />
-          <input
-            type="time"
-            className={inputClass}
-            style={{ ...inputStyle, maxWidth: "8.5rem" }}
-            value={time}
-            onChange={(e) => setTime(e.target.value)}
-          />
+        <input
+          type="date"
+          className={inputClass}
+          style={inputStyle}
+          value={date ?? ""}
+          onChange={(e) => setDate(e.target.value || null)}
+        />
+      </FieldGroup>
+
+      <FieldGroup label="Время">
+        <div className="mb-2 flex flex-wrap gap-2">
+          {[
+            { label: "Без времени", on: false },
+            { label: "Ко времени", on: true },
+          ].map((option) => (
+            <button
+              key={option.label}
+              onClick={() => setTimed(option.on)}
+              className="rounded-full px-3 py-1.5 text-sm"
+              style={{
+                background: !!time === option.on ? "var(--accent)" : "var(--surface-2)",
+                color: !!time === option.on ? "#fff" : "var(--text)",
+              }}
+            >
+              {option.label}
+            </button>
+          ))}
         </div>
+
+        {time ? (
+          <>
+            <input
+              type="time"
+              className={inputClass}
+              style={inputStyle}
+              value={time}
+              onChange={(e) => setTime(e.target.value)}
+            />
+            <button
+              onClick={() => setRemind((v) => !v)}
+              aria-pressed={remind}
+              className="mt-2 flex w-full items-center gap-2.5 rounded-2xl border px-4 py-3 text-left text-sm"
+              style={{
+                borderColor: remind ? "var(--accent)" : "var(--border)",
+                background: remind ? "color-mix(in srgb, var(--accent) 12%, transparent)" : undefined,
+              }}
+            >
+              <span style={{ color: remind ? "var(--accent)" : "var(--muted)" }}>
+                <Icon name="bell" size={18} />
+              </span>
+              <span className="flex-1">
+                Напомнить
+                <span className="mt-0.5 block text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+                  {remind ? "Пришлём уведомление в это время" : "Просто запись, без уведомления"}
+                </span>
+              </span>
+              {remind ? (
+                <span style={{ color: "var(--accent)" }}>
+                  <Icon name="check" size={18} />
+                </span>
+              ) : null}
+            </button>
+          </>
+        ) : null}
       </FieldGroup>
 
       <FieldGroup label="Приоритет">

@@ -482,7 +482,7 @@ export default function AnalyticsPage() {
         </Button>
       ) : (
         // Без ключа кнопка только выдала бы ошибку — ведём сразу туда, где его заводят.
-        <Link href="/settings">
+        <Link href="/money/settings">
           <Button variant="ghost">Добавить ключ OpenRouter в настройках</Button>
         </Link>
       )}

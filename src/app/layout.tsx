@@ -19,8 +19,8 @@ const onest = Onest({
   variable: "--font-onest",
 });
 
-const TITLE = "Findots — трекер расходов";
-const DESCRIPTION = "Учёт личных финансов: доходы, кошельки и расходы";
+const TITLE = "Dots — деньги и задачи";
+const DESCRIPTION = "Findots и Todots: личные финансы и список дел под одним входом";
 
 export const metadata: Metadata = {
   // Без metadataBase относительные пути в og остаются относительными, а
@@ -29,17 +29,17 @@ export const metadata: Metadata = {
   title: TITLE,
   description: DESCRIPTION,
   manifest: "/manifest.webmanifest",
-  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Findots" },
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Dots" },
   // Без своей картинки Telegram и прочие цепляют иконку вкладки — она в SVG,
   // рисовать его они не умеют, и в превью получается белый прямоугольник.
   openGraph: {
     type: "website",
-    siteName: "Findots",
+    siteName: "Dots",
     locale: "ru_RU",
     title: TITLE,
     description: DESCRIPTION,
     url: "/",
-    images: [{ url: "/og.png", width: 1200, height: 630, alt: "Findots" }],
+    images: [{ url: "/og.png", width: 1200, height: 630, alt: "Dots" }],
   },
   twitter: {
     card: "summary_large_image",

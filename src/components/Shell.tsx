@@ -8,11 +8,11 @@ import { Loader } from "./Loader";
 import { Welcome } from "./Welcome";
 
 const TABS = [
-  { href: "/", label: "Панель", icon: "grid" },
-  { href: "/operations", label: "История", icon: "list" },
-  { href: "/analytics", label: "Отчет", icon: "pie" },
-  { href: "/debts", label: "Долги", icon: "debt_out" },
-  { href: "/settings", label: "Настройки", icon: "gear" },
+  { href: "/money", label: "Панель", icon: "grid" },
+  { href: "/money/operations", label: "История", icon: "list" },
+  { href: "/money/analytics", label: "Отчет", icon: "pie" },
+  { href: "/money/debts", label: "Долги", icon: "debt_out" },
+  { href: "/money/settings", label: "Настройки", icon: "gear" },
 ];
 
 export function Shell({ children }: { children: React.ReactNode }) {

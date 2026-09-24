@@ -199,7 +199,7 @@ export default function OperationsPage() {
       ))}
 
       <Link
-        href="/"
+        href="/money"
         aria-label="Добавить операцию"
         className="fixed bottom-24 right-5 flex h-14 w-14 items-center justify-center rounded-full text-white"
         style={{ background: "var(--accent)", boxShadow: "0 6px 20px rgba(0,0,0,0.22)" }}

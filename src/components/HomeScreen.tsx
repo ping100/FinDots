@@ -232,7 +232,7 @@ export function HomeScreen() {
       <div className="mx-auto w-full max-w-md px-4 pb-32">
         <header className="flex items-center justify-between py-2">
           <Link
-            href="/settings"
+            href="/money/settings"
             className="flex h-10 w-10 items-center justify-center rounded-full text-base font-medium"
             style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
           >
@@ -646,7 +646,7 @@ export function HomeScreen() {
           >
             Свернуть все блоки
           </Button>
-          <Link href="/settings" className="block">
+          <Link href="/money/settings" className="block">
             <Button variant="ghost">Настройки</Button>
           </Link>
         </div>

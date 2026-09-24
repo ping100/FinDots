@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Icon } from "@/lib/icons";
 import { addDays, today } from "@/lib/dates";
-import type { Priority, Task, TaskCategory } from "@/lib/types";
+import type { Priority, Task } from "@/lib/types";
 import { Button, FieldGroup, Sheet, inputClass, inputStyle } from "./ui";
 
 const PRIORITIES: { value: Priority; color: string; label: string }[] = [
@@ -17,7 +17,6 @@ export function QuickAdd({
   onClose,
   task,
   defaultDate,
-  categories,
   onSave,
   onDelete,
 }: {
@@ -26,7 +25,6 @@ export function QuickAdd({
   /** Заполненная — редактирование, null — новая задача. */
   task: Task | null;
   defaultDate: string;
-  categories: TaskCategory[];
   onSave: (task: Partial<Task> & { id?: string }) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 }) {
@@ -35,7 +33,6 @@ export function QuickAdd({
   const [time, setTime] = useState("");
   const [remind, setRemind] = useState(false);
   const [priority, setPriority] = useState<Priority>("medium");
-  const [categoryId, setCategoryId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
 
@@ -46,7 +43,6 @@ export function QuickAdd({
     setTime(task?.time?.slice(0, 5) ?? "");
     setRemind(task?.remind ?? false);
     setPriority(task?.priority ?? "medium");
-    setCategoryId(task?.category_id ?? null);
     setConfirming(false);
   }, [open, task, defaultDate]);
 
@@ -75,7 +71,6 @@ export function QuickAdd({
         time: time || null,
         remind: !!time && remind,
         priority,
-        category_id: categoryId,
         done: task?.done ?? false,
       });
       onClose();
@@ -235,43 +230,6 @@ export function QuickAdd({
         </div>
       </FieldGroup>
 
-      {categories.length > 0 ? (
-        <FieldGroup label="Категория" hint="Заводятся в Настройках">
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => setCategoryId(null)}
-              className="rounded-full px-3 py-1.5 text-sm"
-              style={{
-                background: categoryId === null ? "var(--surface-2)" : "transparent",
-                border: "1px solid var(--border)",
-              }}
-            >
-              Без категории
-            </button>
-            {categories
-              .filter((c) => !c.archived)
-              .map((c) => (
-                <button
-                  key={c.id}
-                  onClick={() => setCategoryId(c.id)}
-                  className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm text-white"
-                  style={{
-                    background: c.color,
-                    outline: categoryId === c.id ? "2px solid var(--text)" : "none",
-                    outlineOffset: 2,
-                  }}
-                >
-                  <Icon name={c.icon} size={13} />
-                  {c.name}
-                </button>
-              ))}
-          </div>
-        </FieldGroup>
-      ) : (
-        <p className="text-xs" style={{ color: "var(--muted)" }}>
-          Категорий пока нет — их можно завести в Настройках.
-        </p>
-      )}
     </Sheet>
   );
 }

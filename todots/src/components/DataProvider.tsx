@@ -13,14 +13,13 @@ import {
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { rememberTheme } from "@/lib/look";
-import type { Profile, Task, TaskCategory } from "@/lib/types";
+import type { Profile, Task } from "@/lib/types";
 
 export interface Store {
   ready: boolean;
   error: string | null;
   userId: string | null;
   profile: Profile | null;
-  categories: TaskCategory[];
   tasks: Task[];
 
   refresh: () => Promise<void>;
@@ -31,8 +30,6 @@ export interface Store {
   rescheduleTask: (id: string, date: string | null) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
 
-  saveCategory: (category: Partial<TaskCategory> & { id?: string }) => Promise<void>;
-  deleteCategory: (id: string) => Promise<void>;
 
   saveProfile: (patch: Partial<Profile>) => Promise<void>;
 }
@@ -68,7 +65,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [categories, setCategories] = useState<TaskCategory[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
 
   const load = useCallback(async (retry = true) => {
@@ -81,9 +77,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }
     setUserId(user.id);
 
-    const [p, c, t] = await Promise.all([
+    const [p, t] = await Promise.all([
       supabase().from("profiles").select("*").eq("id", user.id).single(),
-      supabase().from("task_categories").select("*").order("sort_order"),
       supabase()
         .from("tasks")
         .select("*")
@@ -94,7 +89,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         .limit(2000),
     ]);
 
-    const firstError = [p, c, t].find((res) => res.error)?.error;
+    const firstError = [p, t].find((res) => res.error)?.error;
     if (firstError && transient(firstError.message) && retry) {
       await supabase().auth.refreshSession();
       await new Promise((done) => setTimeout(done, 600));
@@ -104,7 +99,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
     else setError(null);
 
     if (p.data) setProfile(p.data as Profile);
-    setCategories((c.data ?? []) as TaskCategory[]);
     setTasks((t.data ?? []) as Task[]);
     setReady(true);
   }, [supabase]);
@@ -191,36 +185,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [guard, supabase],
   );
 
-  const reloadCategories = useCallback(async () => {
-    const c = await supabase().from("task_categories").select("*").order("sort_order");
-    setCategories((c.data ?? []) as TaskCategory[]);
-  }, [supabase]);
-
-  const saveCategory: Store["saveCategory"] = useCallback(
-    async (category) => {
-      const { id, ...fields } = category;
-      const res = id
-        ? await supabase().from("task_categories").update(fields).eq("id", id)
-        : await supabase().from("task_categories").insert({ ...fields, user_id: userId });
-      if (res.error) {
-        setError(res.error.message);
-        throw new Error(res.error.message);
-      }
-      await reloadCategories();
-    },
-    [reloadCategories, supabase, userId],
-  );
-
-  /** Категорию не удаляем физически — иначе задачи в истории теряют имя. */
-  const deleteCategory: Store["deleteCategory"] = useCallback(
-    async (id) => {
-      const res = await supabase().from("task_categories").update({ archived: true }).eq("id", id);
-      if (res.error) throw new Error(res.error.message);
-      await reloadCategories();
-    },
-    [reloadCategories, supabase],
-  );
-
   const saveProfile: Store["saveProfile"] = useCallback(
     async (patch) => {
       if (!userId) return;
@@ -237,20 +201,17 @@ export function DataProvider({ children }: { children: ReactNode }) {
       error,
       userId,
       profile,
-      categories,
       tasks,
       refresh,
       saveTask,
       toggleDone,
       rescheduleTask,
       deleteTask,
-      saveCategory,
-      deleteCategory,
       saveProfile,
     }),
     [
-      ready, error, userId, profile, categories, tasks, refresh,
-      saveTask, toggleDone, rescheduleTask, deleteTask, saveCategory, deleteCategory, saveProfile,
+      ready, error, userId, profile, tasks, refresh,
+      saveTask, toggleDone, rescheduleTask, deleteTask, saveProfile,
     ],
   );
 

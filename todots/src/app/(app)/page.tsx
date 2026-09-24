@@ -21,7 +21,7 @@ import { TaskList } from "@/components/TaskList";
 import { QuickAdd } from "@/components/QuickAdd";
 
 export default function TodayPage() {
-  const { categories, tasks, toggleDone, saveTask, deleteTask, rescheduleTask } = useStore();
+  const { tasks, toggleDone, saveTask, deleteTask, rescheduleTask } = useStore();
 
   const [selected, setSelected] = useState(today());
   const [dragging, setDragging] = useState<string | null>(null);
@@ -96,7 +96,6 @@ export default function TodayPage() {
           {untimed.length || timed.length ? (
             <TaskList
               tasks={[...untimed, ...timed]}
-              categories={categories}
               onToggle={toggleDone}
               onOpen={openEdit}
             />
@@ -112,7 +111,7 @@ export default function TodayPage() {
                 Выполнено ({done.length})
               </summary>
               <div className="mt-2">
-                <TaskList tasks={done} categories={categories} onToggle={toggleDone} onOpen={openEdit} />
+                <TaskList tasks={done} onToggle={toggleDone} onOpen={openEdit} />
               </div>
             </details>
           ) : null}
@@ -125,8 +124,7 @@ export default function TodayPage() {
               <div className="mt-2">
                 <TaskList
                   tasks={unscheduled}
-                  categories={categories}
-                  onToggle={toggleDone}
+                      onToggle={toggleDone}
                   onOpen={openEdit}
                 />
               </div>
@@ -151,7 +149,7 @@ export default function TodayPage() {
         onClose={() => setSheetOpen(false)}
         task={editingTask}
         defaultDate={selected}
-        categories={categories}
+       
         onSave={saveTask}
         onDelete={deleteTask}
       />

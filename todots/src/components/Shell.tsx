@@ -63,7 +63,10 @@ export function Shell({ children }: { children: ReactNode }) {
           {children}
         </div>
 
-        <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 px-3 pb-2">
+        {/* Отступ снизу ровно один — безопасная зона. Раньше к ней добавлялись
+            ещё 8px из pb-2, и панель висела над краем: в браузере почти
+            незаметно, а в приложении с домашней полоской — заметный зазор. */}
+        <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 px-3">
           <div
             className="mx-auto flex max-w-md items-center justify-around rounded-[22px] px-1 py-1.5"
             style={{

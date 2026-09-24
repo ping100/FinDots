@@ -5,14 +5,11 @@ import { useRouter } from "next/navigation";
 import { Icon } from "@/lib/icons";
 import { createClient } from "@/lib/supabase/client";
 import { useStore } from "@/components/DataProvider";
-import { CategoryEditor } from "@/components/CategoryEditor";
 import { CURRENT_BUILD, applyUpdate, buildMoment, serverBuild } from "@/lib/update";
-import type { TaskCategory } from "@/lib/types";
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { profile, categories, saveProfile, saveCategory, deleteCategory } = useStore();
-  const [editing, setEditing] = useState<TaskCategory | null | undefined>(undefined);
+  const { profile, saveProfile } = useStore();
   const [checking, setChecking] = useState(false);
   const [updateNote, setUpdateNote] = useState<string | null>(null);
   // Считаем после отрисовки: строка зависит от часового пояса телефона, а
@@ -34,8 +31,6 @@ export default function SettingsPage() {
     }
     setChecking(false);
   };
-
-  const live = categories.filter((c) => !c.archived);
 
   return (
     <div className="mx-auto w-full max-w-md px-4 pb-32 pt-3">
@@ -62,55 +57,12 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      <section className="mb-6">
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm" style={{ color: "var(--muted)" }}>
-            Категории
-          </h2>
-          <button
-            onClick={() => setEditing(null)}
-            className="flex items-center gap-1 text-sm font-medium"
-            style={{ color: "var(--accent)" }}
-          >
-            <Icon name="plus" size={15} />
-            Добавить
-          </button>
-        </div>
-        {live.length === 0 ? (
-          <p className="text-sm" style={{ color: "var(--muted)" }}>
-            Пока ни одной — задачи можно оставлять и без категории.
-          </p>
-        ) : (
-          <div className="overflow-hidden rounded-2xl" style={{ border: "1px solid var(--border)" }}>
-            {live.map((category, index) => (
-              <button
-                key={category.id}
-                onClick={() => setEditing(category)}
-                className="flex w-full items-center gap-3 px-4 py-3 text-left"
-                style={{ borderTop: index ? "1px solid var(--border)" : undefined }}
-              >
-                <span
-                  className="flex h-9 w-9 items-center justify-center rounded-full text-white"
-                  style={{ background: category.color }}
-                >
-                  <Icon name={category.icon} size={17} />
-                </span>
-                <span className="flex-1 text-sm font-medium">{category.name}</span>
-                <Icon name="chevron-right" size={16} />
-              </button>
-            ))}
-          </div>
-        )}
-      </section>
-
       <Group>
         <Row
           label={checking ? "Проверяю…" : "Обновить приложение"}
           value={updatedAt ?? undefined}
-          hint={
-            updateNote ??
-            "Показано, когда обновлялись в последний раз. Приложение следит за этим само, но если обещанного не видно — нажмите здесь"
-          }
+          valueLabel="Последнее обновление"
+          hint={updateNote ?? "Приложение следит за обновлениями само. Если обещанного не видно — нажмите здесь"}
           onClick={() => void checkUpdate()}
         />
       </Group>
@@ -126,13 +78,6 @@ export default function SettingsPage() {
         />
       </Group>
 
-      <CategoryEditor
-        open={editing !== undefined}
-        onClose={() => setEditing(undefined)}
-        category={editing ?? null}
-        onSave={saveCategory}
-        onDelete={deleteCategory}
-      />
     </div>
   );
 }
@@ -148,12 +93,15 @@ function Group({ children }: { children: React.ReactNode }) {
 function Row({
   label,
   value,
+  valueLabel,
   hint,
   danger,
   onClick,
 }: {
   label: string;
   value?: string;
+  /** Что означает число справа. Без подписи «сегодня, 19:56» ни о чём. */
+  valueLabel?: string;
   hint?: string;
   danger?: boolean;
   onClick?: () => void;
@@ -177,8 +125,15 @@ function Row({
         ) : null}
       </span>
       {value ? (
-        <span className="text-[0.9375rem]" style={{ color: "var(--muted)" }}>
-          {value}
+        <span className="shrink-0 text-right">
+          {valueLabel ? (
+            <span className="block text-[0.625rem]" style={{ color: "var(--muted)" }}>
+              {valueLabel}
+            </span>
+          ) : null}
+          <span className="block text-[0.9375rem]" style={{ color: "var(--muted)" }}>
+            {value}
+          </span>
         </span>
       ) : null}
       {onClick && !danger ? <Icon name="chevron-right" size={16} className="opacity-30" /> : null}

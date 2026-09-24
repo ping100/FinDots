@@ -158,10 +158,8 @@ export default function SettingsPage() {
         <Row
           label={checking ? "Проверяю…" : "Обновить приложение"}
           value={updatedAt ?? undefined}
-          hint={
-            updateNote ??
-            "Показано, когда обновлялись в последний раз. Приложение следит за этим само, но если обещанного не видно — нажмите здесь"
-          }
+          valueLabel="Последнее обновление"
+          hint={updateNote ?? "Приложение следит за обновлениями само. Если обещанного не видно — нажмите здесь"}
           onClick={() => void checkUpdate()}
         />
       </Group>
@@ -455,12 +453,15 @@ function Group({ children }: { children: React.ReactNode }) {
 function Row({
   label,
   value,
+  valueLabel,
   hint,
   danger,
   onClick,
 }: {
   label: string;
   value?: string;
+  /** Что означает число справа. Без подписи «сегодня, 19:56» ни о чём. */
+  valueLabel?: string;
   hint?: string;
   danger?: boolean;
   onClick?: () => void;
@@ -478,8 +479,15 @@ function Row({
         ) : null}
       </span>
       {value ? (
-        <span className="text-[0.9375rem]" style={{ color: "var(--muted)" }}>
-          {value}
+        <span className="shrink-0 text-right">
+          {valueLabel ? (
+            <span className="block text-[0.625rem]" style={{ color: "var(--muted)" }}>
+              {valueLabel}
+            </span>
+          ) : null}
+          <span className="block text-[0.9375rem]" style={{ color: "var(--muted)" }}>
+            {value}
+          </span>
         </span>
       ) : null}
       {onClick && !danger ? (

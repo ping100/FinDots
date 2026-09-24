@@ -1,17 +1,15 @@
 "use client";
 
-import type { Task, TaskCategory } from "@/lib/types";
+import type { Task } from "@/lib/types";
 import { TaskCard } from "./TaskCard";
 
 export function TaskList({
   tasks,
-  categories,
   onToggle,
   onOpen,
   empty,
 }: {
   tasks: Task[];
-  categories: TaskCategory[];
   onToggle: (id: string) => void;
   onOpen: (task: Task) => void;
   empty?: string;
@@ -30,7 +28,6 @@ export function TaskList({
         <TaskCard
           key={task.id}
           task={task}
-          category={categories.find((c) => c.id === task.category_id)}
           onToggle={() => onToggle(task.id)}
           onOpen={() => onOpen(task)}
         />

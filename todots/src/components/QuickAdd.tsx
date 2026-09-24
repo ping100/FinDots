@@ -37,6 +37,7 @@ export function QuickAdd({
   const [priority, setPriority] = useState<Priority>("medium");
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -46,6 +47,7 @@ export function QuickAdd({
     setRemind(task?.remind ?? false);
     setPriority(task?.priority ?? "medium");
     setCategoryId(task?.category_id ?? null);
+    setConfirming(false);
   }, [open, task, defaultDate]);
 
   /**
@@ -88,12 +90,21 @@ export function QuickAdd({
       title={task ? "Задача" : "Новая задача"}
       onClose={onClose}
       footer={
-        <div className="flex gap-2">
+        <div className="space-y-2">
+          <Button onClick={save} disabled={busy || !title.trim()}>
+            {task ? "Сохранить" : "Добавить"}
+          </Button>
+          {/* Под «Сохранить», а не рядом: удаление не должно соперничать за
+              палец с обычным действием. И в два нажатия — задача удаляется
+              насовсем, вернуть её неоткуда. */}
           {task ? (
             <Button
-              variant="danger"
-              className="w-auto px-4"
+              variant={confirming ? "danger" : "ghost"}
               onClick={async () => {
+                if (!confirming) {
+                  setConfirming(true);
+                  return;
+                }
                 setBusy(true);
                 await onDelete(task.id);
                 setBusy(false);
@@ -101,12 +112,9 @@ export function QuickAdd({
               }}
               disabled={busy}
             >
-              <Icon name="close" size={18} />
+              {confirming ? "Нажмите ещё раз — удалить насовсем" : "Удалить задачу"}
             </Button>
           ) : null}
-          <Button onClick={save} disabled={busy || !title.trim()}>
-            {task ? "Сохранить" : "Добавить"}
-          </Button>
         </div>
       }
     >

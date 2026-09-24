@@ -47,11 +47,15 @@ export function CategoryEditor({
       title={category ? "Категория" : "Новая категория"}
       onClose={onClose}
       footer={
-        <div className="flex gap-2">
+        <div className="space-y-2">
+          <Button onClick={save} disabled={busy || !name.trim()}>
+            Сохранить
+          </Button>
+          {/* Не «удалить»: категория уезжает из списка, а задачи, которым её
+              уже поставили, название не теряют. Подтверждать тут нечего. */}
           {category ? (
             <Button
-              variant="danger"
-              className="w-auto px-4"
+              variant="ghost"
               onClick={async () => {
                 setBusy(true);
                 await onDelete(category.id);
@@ -60,12 +64,9 @@ export function CategoryEditor({
               }}
               disabled={busy}
             >
-              Удалить
+              Убрать из списка
             </Button>
           ) : null}
-          <Button onClick={save} disabled={busy || !name.trim()}>
-            Сохранить
-          </Button>
         </div>
       }
     >

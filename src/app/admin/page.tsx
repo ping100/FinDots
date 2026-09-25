@@ -424,6 +424,11 @@ function Users({
           <div key={user.id} className="rounded-2xl p-3.5" style={{ background: "var(--surface)" }}>
             <div className="flex items-baseline justify-between gap-3">
               <p className="min-w-0 truncate text-[0.9375rem] font-medium">
+                {user.number !== null ? (
+                  <span className="mr-1.5 font-normal tabular-nums" style={{ color: "var(--muted)" }}>
+                    ID {user.number}
+                  </span>
+                ) : null}
                 {user.display_name || user.email || "без имени"}
               </p>
               {isOnline(user, now) ? (

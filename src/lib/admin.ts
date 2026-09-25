@@ -7,6 +7,8 @@
  */
 export interface AdminUser {
   id: string;
+  /** Порядковый номер: 1, 2, 3… — его человек видит у себя в настройках. */
+  number: number | null;
   email: string | null;
   display_name: string | null;
   created_at: string;

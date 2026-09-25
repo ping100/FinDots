@@ -6,6 +6,7 @@ import { Icon } from "@/lib/icons";
 import { createClient } from "@/lib/supabase/client";
 import { useStore } from "@/components/tasks/DataProvider";
 import { SignInMethods } from "@/components/SignInMethods";
+import { UserNumber } from "@/components/UserNumber";
 import { AppSwitch } from "@/components/AppSwitch";
 import { AdminLink } from "@/components/AdminLink";
 import { CURRENT_BUILD, applyUpdate, buildMoment, serverBuild } from "@/lib/update";
@@ -79,6 +80,7 @@ export default function SettingsPage() {
           value={profile?.display_name ?? undefined}
           hint="Задачи привязаны к этой учётной записи и видны только вам"
         />
+        <UserNumber />
         <SignInMethods />
       </Group>
 

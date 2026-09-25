@@ -53,7 +53,7 @@ export function SignInMethods() {
     const { error } = await createClient().auth.linkIdentity({
       provider: "google",
       options: {
-        redirectTo: `${location.origin}/auth/callback?next=${encodeURIComponent("/settings?linked=google")}`,
+        redirectTo: `${location.origin}/auth/callback?next=${encodeURIComponent(`${location.pathname}?linked=google`)}`,
       },
     });
     if (error) {

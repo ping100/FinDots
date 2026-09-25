@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { Logo } from "@/components/Logo";
-import { Icon } from "@/lib/icons";
+import { HomeCard } from "@/components/HomeCard";
+import { HomeAdminCard } from "@/components/HomeAdminCard";
 
 /**
  * Развилка: одна учётная запись, два приложения.
@@ -50,39 +50,22 @@ export default function Home() {
 
       <div className="space-y-3">
         {APPS.map((app, index) => (
-          <Link
+          <HomeCard
             key={app.href}
             href={app.href}
-            className="animate-lift flex items-center gap-4 rounded-3xl p-4 transition active:scale-[0.98]"
-            style={{
-              background: "var(--surface)",
-              border: "1px solid var(--border)",
-              animationDelay: `${400 + index * 70}ms`,
-            }}
-          >
-            <span
-              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white"
-              style={{ background: app.color }}
-            >
-              <Icon name={app.icon} size={24} />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-[1.0625rem] font-semibold">{app.what}</span>
-              <span
-                className="mt-0.5 block text-[0.75rem] leading-snug"
-                style={{ color: "var(--muted)" }}
-              >
-                {app.hint}
-              </span>
-            </span>
-            <Icon name="chevron-right" size={18} className="shrink-0 opacity-30" />
-          </Link>
+            title={app.what}
+            hint={app.hint}
+            icon={app.icon}
+            color={app.color}
+            delay={400 + index * 70}
+          />
         ))}
+        <HomeAdminCard delay={540} />
       </div>
 
       <p
         className="animate-lift mt-6 text-center text-xs leading-snug"
-        style={{ color: "var(--muted)", animationDelay: "560ms" }}
+        style={{ color: "var(--muted)", animationDelay: "610ms" }}
       >
         Учётная запись одна на оба — вошли один раз и пользуетесь обоими.
       </p>

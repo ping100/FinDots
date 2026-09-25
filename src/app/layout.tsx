@@ -3,6 +3,7 @@ import { Onest } from "next/font/google";
 import { RegisterSW } from "@/components/RegisterSW";
 import { NoEdgeSwipe } from "@/components/NoEdgeSwipe";
 import { Presence } from "@/components/Presence";
+import { ReturnHome } from "@/components/ReturnHome";
 import { LOOK_SCRIPT } from "@/lib/look";
 import "./globals.css";
 
@@ -74,6 +75,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <RegisterSW />
         <NoEdgeSwipe />
         <Presence />
+        <ReturnHome />
       </body>
     </html>
   );

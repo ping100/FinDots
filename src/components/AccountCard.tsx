@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Icon } from "@/lib/icons";
 import { useMe } from "@/lib/me";
 import { Avatar } from "./Avatar";
+import { GoogleMark } from "./GoogleButton";
 import { Button, Sheet, inputClass, inputStyle } from "./ui";
 
 /**
@@ -81,8 +82,19 @@ export function AccountCard({
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
           />
+          {me?.googleName && me.googleName !== draft.trim() ? (
+            <button
+              type="button"
+              onClick={() => setDraft(me.googleName ?? "")}
+              className="flex items-center gap-2 rounded-2xl px-3.5 py-2 text-[0.8125rem] font-medium transition active:scale-[0.98]"
+              style={{ background: "var(--surface-2)" }}
+            >
+              <GoogleMark size={14} />
+              Взять из Google: {me.googleName}
+            </button>
+          ) : null}
           <p className="text-[0.75rem] leading-snug" style={{ color: "var(--muted)" }}>
-            По имени приложение здоровается: «Доброе утро, {draft.trim() || "…"}».
+            По имени приложение здоровается: «Доброе утро, {draft.trim().split(/\s+/)[0] || "…"}».
             {me?.avatar ? " Фото — из вашего Google." : ""}
           </p>
           <Button type="submit" disabled={busy || !draft.trim()}>

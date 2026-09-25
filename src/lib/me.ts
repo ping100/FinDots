@@ -9,6 +9,8 @@ export interface Me {
   email: string | null;
   name: string | null;
   avatar: string | null;
+  /** Имя из Google — если Google привязан. */
+  googleName: string | null;
 }
 
 /** Картинка профиля Google — если Google привязан. */
@@ -17,6 +19,13 @@ export function avatarOf(user: User): string | null {
   const data = google?.identity_data ?? {};
   const url = (data.avatar_url ?? data.picture) as string | undefined;
   return url || null;
+}
+
+function googleNameOf(user: User): string | null {
+  const google = user.identities?.find((item) => item.provider === "google");
+  const data = google?.identity_data ?? {};
+  const name = ((data.name ?? data.full_name) as string | undefined)?.trim();
+  return name || null;
 }
 
 /**
@@ -32,7 +41,7 @@ export function useMe(): { me: Me | null; reload: () => void } {
     const user = data.user;
     if (!user) return;
     const { data: profile } = await supabase.from("profiles").select("display_name").eq("id", user.id).maybeSingle();
-    setMe({ id: user.id, email: user.email ?? null, name: profile?.display_name ?? null, avatar: avatarOf(user) });
+    setMe({ id: user.id, email: user.email ?? null, name: profile?.display_name ?? null, avatar: avatarOf(user), googleName: googleNameOf(user) });
   }, []);
 
   useEffect(() => {

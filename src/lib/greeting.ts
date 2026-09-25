@@ -11,12 +11,15 @@ export function greeting(date = new Date()): string {
 }
 
 /**
- * Имя для обращения. Без имени при регистрации профиль получает начало
- * почты — «wd-15» — и обращаться так к человеку странно: лучше без имени.
+ * Имя для обращения — только имя, без фамилии: из Google приходит «Имя
+ * Фамилия», а «Доброе утро, Иван Петров» звучит как письмо из банка.
+ *
+ * Без имени при регистрации профиль получает начало почты — «wd-15» — и
+ * обращаться так к человеку странно: лучше без имени.
  */
 export function addressName(name: string | null | undefined, email: string | null | undefined): string | null {
   const clean = name?.trim();
   if (!clean) return null;
   if (email && clean === email.split("@")[0]) return null;
-  return clean;
+  return clean.split(/\s+/)[0];
 }

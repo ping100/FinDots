@@ -16,6 +16,8 @@ export interface AdminUser {
   /** Последняя отметка «я здесь» из открытого приложения. */
   online_at: string | null;
   providers: string[];
+  /** Почта привязанного Google; null — Google не привязан. */
+  google_email: string | null;
   wallets: number;
   transactions: number;
   tasks_open: number;

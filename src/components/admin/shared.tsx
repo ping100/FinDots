@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { GoogleMark } from "@/components/GoogleButton";
 import { REFRESH, isOnline, plural, sinceLabel, type AdminOverview, type AdminUser } from "@/lib/admin";
 
 /**
@@ -12,8 +13,15 @@ import { REFRESH, isOnline, plural, sinceLabel, type AdminOverview, type AdminUs
  * Пускает сама база: функция отвечает отказом всем, кого нет в таблице
  * admins. Своей проверки здесь нет — она была бы лишь видимостью защиты.
  */
+/**
+ * Последняя сводка — на весь сеанс. Переход с главной админки в список и
+ * обратно показывает её сразу, а свежую подтягивает тихо: иначе каждый
+ * переход — белый экран ожидания и два запроса к базе.
+ */
+let cached: AdminOverview | null = null;
+
 export function useOverview() {
-  const [data, setData] = useState<AdminOverview | null>(null);
+  const [data, setData] = useState<AdminOverview | null>(cached);
   const [denied, setDenied] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -35,11 +43,12 @@ export function useOverview() {
       else setProblem(error.message);
       return;
     }
-    setData(overview as AdminOverview);
+    cached = overview as AdminOverview;
+    setData(cached);
   }, []);
 
   useEffect(() => {
-    void load();
+    void load(cached !== null);
     const timer = setInterval(() => {
       if (document.visibilityState === "visible") void load(true);
     }, REFRESH);
@@ -97,8 +106,6 @@ export function OnlineDot() {
   return <span aria-hidden className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ background: "var(--ok)" }} />;
 }
 
-const PROVIDERS: Record<string, string> = { email: "почту", google: "Google" };
-
 /** Карточка человека: только счётчики — ни сумм, ни названий, ни текстов. */
 export function UserCard({ user, now }: { user: AdminUser; now: number }) {
   return (
@@ -146,11 +153,22 @@ export function UserCard({ user, now }: { user: AdminUser; now: number }) {
           <span style={{ color: "var(--muted)" }}>ИИ-разбор: </span>
           {user.has_ai_key ? `${user.ai_calls} ${plural(user.ai_calls, "раз", "раза", "раз")}` : "нет ключа"}
         </span>
+        <span className="col-span-2 flex min-w-0 items-center gap-1.5">
+          <span className="shrink-0" style={{ color: "var(--muted)" }}>Google:</span>
+          {user.google_email ? (
+            <>
+              <GoogleMark size={12} />
+              <span className="truncate">{user.google_email}</span>
+            </>
+          ) : (
+            <span style={{ color: "var(--muted)" }}>не привязан</span>
+          )}
+        </span>
       </div>
 
       <p className="mt-2 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-        появился {sinceLabel(user.created_at)} · входит через{" "}
-        {user.providers.map((p) => PROVIDERS[p] ?? p).join(" и ") || "—"}
+        появился {sinceLabel(user.created_at)}
+        {user.providers.includes("email") ? "" : " · без пароля, только через Google"}
       </p>
     </div>
   );

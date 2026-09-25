@@ -18,6 +18,7 @@ import type { Draft } from "@/lib/importCsv";
 import { maturedAccruals, toISODate } from "@/lib/savings";
 import { scaleFactor } from "@/lib/textScale";
 import { rememberLook } from "@/lib/look";
+import { useMoneyHidden } from "@/lib/privacy";
 import type {
   Category,
   CurrencyCode,
@@ -31,6 +32,8 @@ import type {
 
 export interface Store {
   ready: boolean;
+  /** Суммы скрыты «глазком». Здесь — чтобы переключение перерисовало все экраны. */
+  moneyHidden: boolean;
   error: string | null;
   userId: string | null;
   profile: Profile | null;
@@ -809,9 +812,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [refresh, supabase, userId],
   );
 
+  const moneyHidden = useMoneyHidden();
+
   const value = useMemo<Store>(
     () => ({
       ready,
+      moneyHidden,
       error,
       userId,
       profile,
@@ -846,7 +852,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       deleteAiKey,
     }),
     [
-      ready, error, userId, profile, rates, wallets, categories, balances, pools,
+      ready, moneyHidden, error, userId, profile, rates, wallets, categories, balances, pools,
       transactions, balanceOf, poolOf, toBase, refresh, addIncome, allocate,
       addExpense, addTransfer, setWalletBalance, accrueInterest, updateTransaction, deleteTransaction,
       saveWallet, deleteWallet, saveCategory, addSubcategory, importDrafts, deleteCategory, saveProfile, saveRate,

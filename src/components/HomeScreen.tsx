@@ -27,6 +27,7 @@ import { CategoryEditor } from "./CategoryEditor";
 import { WalletEditor } from "./WalletEditor";
 import { WalletSheet } from "./WalletSheet";
 import { AddBubble, Bubble, Button, PickerSheet, Sheet } from "./ui";
+import { setMoneyHidden } from "@/lib/privacy";
 
 type Dialog =
   | { kind: "income"; category: Category }
@@ -47,7 +48,7 @@ export function HomeScreen() {
   const {
     profile, wallets, categories, transactions, rates,
     balanceOf, poolOf, toBase,
-    addIncome, allocate, addExpense, addTransfer, saveProfile, addSubcategory,
+    addIncome, allocate, addExpense, addTransfer, saveProfile, addSubcategory, moneyHidden,
   } = useStore();
 
   const [offset, setOffset] = useState(0);
@@ -248,14 +249,26 @@ export function HomeScreen() {
             {monthLabel(offset)}
             <Icon name="chevron-down" size={14} className="opacity-50" />
           </button>
-          <button
-            onClick={() => setMenu(true)}
-            aria-label="Меню"
-            className="flex h-10 w-10 items-center justify-center justify-self-end rounded-full"
-            style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
-          >
-            <span className="text-lg leading-none">···</span>
-          </button>
+          <div className="flex items-center gap-2 justify-self-end">
+            {/* Глазок: скрыть все суммы на всех экранах денег. */}
+            <button
+              onClick={() => setMoneyHidden(!moneyHidden)}
+              aria-label={moneyHidden ? "Показать суммы" : "Скрыть суммы"}
+              aria-pressed={moneyHidden}
+              className="flex h-10 w-10 items-center justify-center rounded-full"
+              style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+            >
+              <Icon name={moneyHidden ? "eye-off" : "eye"} size={18} />
+            </button>
+            <button
+              onClick={() => setMenu(true)}
+              aria-label="Меню"
+              className="flex h-10 w-10 items-center justify-center rounded-full"
+              style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+            >
+              <span className="text-lg leading-none">···</span>
+            </button>
+          </div>
         </header>
 
         {/* Только для текущего месяца: для прошедших «сколько можно сегодня»

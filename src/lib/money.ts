@@ -1,4 +1,5 @@
 import type { CurrencyCode, ExchangeRate } from "./types";
+import { MASK, moneyHidden } from "./privacy";
 
 export const CURRENCIES: { code: CurrencyCode; symbol: string; name: string }[] = [
   { code: "KZT", symbol: "₸", name: "Тенге" },
@@ -29,6 +30,7 @@ export function convert(
 }
 
 export function formatMoney(amount: number, currency: CurrencyCode): string {
+  if (moneyHidden()) return `${MASK} ${symbolOf(currency)}`;
   const rounded = Math.round(amount * 100) / 100;
   const fractionDigits = Number.isInteger(rounded) ? 0 : 2;
   return (

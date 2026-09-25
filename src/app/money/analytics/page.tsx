@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Icon } from "@/lib/icons";
 import { formatMoney, monthLabel, monthRange } from "@/lib/money";
+import { maskDigits } from "@/lib/privacy";
 import { buildBuckets, type Grouping } from "@/lib/report";
 import { useStore } from "@/components/DataProvider";
 import { IncomeExpenseChart, NetChart, SERIES, ShareBar } from "@/components/charts";
@@ -42,7 +43,7 @@ const GROUPINGS: { id: Grouping; label: string }[] = [
 ];
 
 export default function AnalyticsPage() {
-  const { transactions, categories, profile, aiKeyHint, toBase } = useStore();
+  const { transactions, categories, profile, aiKeyHint, toBase, moneyHidden } = useStore();
   const [mode, setMode] = useState<Mode>("spent");
   const [grouping, setGrouping] = useState<Grouping>("day");
   const [offset, setOffset] = useState(0);
@@ -514,7 +515,7 @@ export default function AnalyticsPage() {
           className="selectable animate-fade mt-3 whitespace-pre-wrap rounded-2xl p-4 text-sm leading-relaxed"
           style={{ background: "var(--surface)" }}
         >
-          {plain(advice)}
+          {moneyHidden ? maskDigits(plain(advice)) : plain(advice)}
         </div>
       ) : null}
     </div>

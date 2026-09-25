@@ -1,4 +1,5 @@
 import type { Transaction } from "./types";
+import { MASK, moneyHidden } from "./privacy";
 import { monthRange } from "./money";
 
 export type Grouping = "day" | "week" | "month";
@@ -89,6 +90,7 @@ export function buildBuckets(
 
 /** Короткая подпись для оси: точные суммы живут в подсказке и в таблице. */
 export function tickLabel(value: number): string {
+  if (value !== 0 && moneyHidden()) return MASK;
   const abs = Math.abs(value);
   if (abs >= 1_000_000) return `${(value / 1_000_000).toFixed(1).replace(".", ",")} млн`;
   if (abs >= 1000) return `${Math.round(value / 1000)} тыс`;

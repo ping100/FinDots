@@ -17,11 +17,14 @@ import { disablePush } from "@/lib/pushClient";
 import { AccountCard } from "@/components/AccountCard";
 import { AppSwitch } from "@/components/AppSwitch";
 import { AdminLink } from "@/components/AdminLink";
+import { CategoryEditor } from "@/components/tasks/CategoryEditor";
+import type { TaskCategory } from "@/lib/tasks/types";
 import { CURRENT_BUILD, applyUpdate, buildMoment, serverBuild } from "@/lib/update";
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { profile, saveProfile } = useStore();
+  const { profile, categories, saveCategory, deleteCategory, saveProfile } = useStore();
+  const [editingCategory, setEditingCategory] = useState<TaskCategory | null | undefined>(undefined);
   const [checking, setChecking] = useState(false);
   const [updateNote, setUpdateNote] = useState<string | null>(null);
   // Считаем после отрисовки: строка зависит от часового пояса телефона, а
@@ -111,6 +114,44 @@ export default function SettingsPage() {
         </div>
       </div>
 
+      <SettingsHeading>Категории</SettingsHeading>
+      {categories.filter((c) => !c.archived).length === 0 ? (
+        <p className="-mt-1 mb-2 px-1 text-[0.75rem] leading-snug" style={{ color: "var(--muted)" }}>
+          Пока ни одной — задачи можно оставлять и без категории.
+        </p>
+      ) : null}
+      <Group>
+        {categories
+          .filter((c) => !c.archived)
+          .map((category) => (
+            <button
+              key={category.id}
+              onClick={() => setEditingCategory(category)}
+              className="flex w-full items-center gap-3 px-4 py-3.5 text-left [&:not(:first-child)]:border-t"
+              style={{ borderColor: "var(--border)" }}
+            >
+              <span
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white"
+                style={{ background: category.color }}
+              >
+                <Icon name={category.icon} size={17} />
+              </span>
+              <span className="flex-1 text-[0.9375rem]">{category.name}</span>
+              <Icon name="chevron-right" size={16} className="opacity-30" />
+            </button>
+          ))}
+        <button
+          onClick={() => setEditingCategory(null)}
+          className="flex w-full items-center gap-3 px-4 py-3.5 text-left [&:not(:first-child)]:border-t"
+          style={{ borderColor: "var(--border)", color: "var(--accent)" }}
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full" style={{ background: "var(--surface-2)" }}>
+            <Icon name="plus" size={17} />
+          </span>
+          <span className="flex-1 text-[0.9375rem] font-medium">Добавить категорию</span>
+        </button>
+      </Group>
+
       <SettingsHeading>Помощь</SettingsHeading>
       <Group>
         <PrivacyLink from="/tasks/settings" />
@@ -143,6 +184,14 @@ export default function SettingsPage() {
           onClick={() => void checkUpdate()}
         />
       </Group>
+
+      <CategoryEditor
+        open={editingCategory !== undefined}
+        onClose={() => setEditingCategory(undefined)}
+        category={editingCategory ?? null}
+        onSave={saveCategory}
+        onDelete={deleteCategory}
+      />
     </div>
   );
 }

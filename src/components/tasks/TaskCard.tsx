@@ -2,7 +2,7 @@
 
 import { useDraggable } from "@dnd-kit/core";
 import { Icon } from "@/lib/icons";
-import type { DragPayload, Priority, Task } from "@/lib/tasks/types";
+import type { DragPayload, Priority, Task, TaskCategory } from "@/lib/tasks/types";
 
 const PRIORITY_COLOR: Record<Priority, string> = {
   low: "#8b97a8",
@@ -12,10 +12,12 @@ const PRIORITY_COLOR: Record<Priority, string> = {
 
 export function TaskCard({
   task,
+  category,
   onToggle,
   onOpen,
 }: {
   task: Task;
+  category: TaskCategory | undefined;
   onToggle: () => void;
   onOpen: () => void;
 }) {
@@ -79,6 +81,15 @@ export function TaskCard({
         ) : null}
       </div>
 
+      {category ? (
+        <span
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white"
+          style={{ background: category.color }}
+          aria-label={category.name}
+        >
+          <Icon name={category.icon} size={14} />
+        </span>
+      ) : null}
     </div>
   );
 }

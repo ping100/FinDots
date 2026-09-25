@@ -7,6 +7,15 @@
  */
 export type Priority = "low" | "medium" | "high";
 
+export interface TaskCategory {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  sort_order: number;
+  archived: boolean;
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -16,6 +25,7 @@ export interface Task {
   time: string | null;
   /** Дёрнуть телефон в это время. Без времени напоминать не о чем. */
   remind: boolean;
+  category_id: string | null;
   priority: Priority;
   done: boolean;
   sort_order: number;

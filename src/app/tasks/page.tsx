@@ -20,11 +20,13 @@ import { Calendar } from "@/components/tasks/Calendar";
 import { TaskList } from "@/components/tasks/TaskList";
 import { QuickAdd } from "@/components/tasks/QuickAdd";
 import { AppSwitchPill } from "@/components/AppSwitch";
+import { Icon } from "@/lib/icons";
 
 export default function TodayPage() {
-  const { tasks, toggleDone, saveTask, deleteTask, rescheduleTask } = useStore();
+  const { tasks, categories, toggleDone, saveTask, deleteTask, rescheduleTask } = useStore();
 
   const [selected, setSelected] = useState(today());
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -50,11 +52,18 @@ export default function TodayPage() {
     setSheetOpen(true);
   };
 
-  const dayTasks = tasks.filter((t) => t.date === selected);
+  // Фильтр по категории — единственное, чего категориям не хватало раньше:
+  // можно было завесить задачу цветным кружком, но не посмотреть только
+  // «Работу» отдельно от всего остального.
+  const byCategory = (list: Task[]) =>
+    categoryFilter ? list.filter((t) => t.category_id === categoryFilter) : list;
+  const liveCategories = categories.filter((c) => !c.archived);
+
+  const dayTasks = byCategory(tasks.filter((t) => t.date === selected));
   const untimed = dayTasks.filter((t) => !t.time && !t.done);
   const timed = dayTasks.filter((t) => t.time && !t.done);
   const done = dayTasks.filter((t) => t.done);
-  const unscheduled = tasks.filter((t) => t.date === null && !t.done);
+  const unscheduled = byCategory(tasks.filter((t) => t.date === null && !t.done));
 
   const loadedDates = useMemo(
     () => new Set(tasks.filter((t) => !t.done && t.date).map((t) => t.date as string)),
@@ -94,16 +103,42 @@ export default function TodayPage() {
 
         <Calendar selected={selected} onSelect={setSelected} loadedDates={loadedDates} />
 
+        {liveCategories.length > 0 ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {liveCategories.map((c) => {
+              const on = categoryFilter === c.id;
+              return (
+                <button
+                  key={c.id}
+                  onClick={() => setCategoryFilter(on ? null : c.id)}
+                  aria-pressed={on}
+                  className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm text-white transition"
+                  style={{
+                    background: c.color,
+                    opacity: categoryFilter && !on ? 0.4 : 1,
+                    outline: on ? "2px solid var(--text)" : "none",
+                    outlineOffset: 2,
+                  }}
+                >
+                  <Icon name={c.icon} size={13} />
+                  {c.name}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+
         <div className="mt-4 space-y-5">
           {untimed.length || timed.length ? (
             <TaskList
               tasks={[...untimed, ...timed]}
+              categories={categories}
               onToggle={toggleDone}
               onOpen={openEdit}
             />
           ) : (
             <p className="py-10 text-center text-sm" style={{ color: "var(--muted)" }}>
-              Пусто — самое время выдохнуть
+              {categoryFilter ? "Пусто в этой категории" : "Пусто — самое время выдохнуть"}
             </p>
           )}
 
@@ -113,7 +148,7 @@ export default function TodayPage() {
                 Выполнено ({done.length})
               </summary>
               <div className="mt-2">
-                <TaskList tasks={done} onToggle={toggleDone} onOpen={openEdit} />
+                <TaskList tasks={done} categories={categories} onToggle={toggleDone} onOpen={openEdit} />
               </div>
             </details>
           ) : null}
@@ -126,7 +161,8 @@ export default function TodayPage() {
               <div className="mt-2">
                 <TaskList
                   tasks={unscheduled}
-                      onToggle={toggleDone}
+                  categories={categories}
+                  onToggle={toggleDone}
                   onOpen={openEdit}
                 />
               </div>
@@ -151,7 +187,7 @@ export default function TodayPage() {
         onClose={() => setSheetOpen(false)}
         task={editingTask}
         defaultDate={selected}
-       
+        categories={categories}
         onSave={saveTask}
         onDelete={deleteTask}
       />

@@ -10,6 +10,7 @@ import { SignInMethods } from "@/components/SignInMethods";
 import { UserNumber } from "@/components/UserNumber";
 import { SupportRow } from "@/components/SupportRow";
 import { SettingsHeading } from "@/components/SettingsHeading";
+import { PrivacyLink } from "@/components/PrivacyLink";
 import { TEXT_SCALES } from "@/lib/textScale";
 import { PushSettings } from "@/components/tasks/PushSettings";
 import { disablePush } from "@/lib/pushClient";
@@ -110,7 +111,11 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <SupportRow heading="Помощь" />
+      <SettingsHeading>Помощь</SettingsHeading>
+      <Group>
+        <PrivacyLink from="/tasks/settings" />
+      </Group>
+      <SupportRow />
 
       <SettingsHeading>Приложения</SettingsHeading>
       <AppSwitch from="tasks" />

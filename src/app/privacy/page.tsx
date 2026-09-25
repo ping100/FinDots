@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { Icon } from "@/lib/icons";
+import { BackButton } from "@/components/BackButton";
 
 export const metadata: Metadata = {
   title: "Политика конфиденциальности — Dots",
@@ -23,14 +22,7 @@ export default function PrivacyPage() {
   return (
     <div className="pt-safe mx-auto w-full max-w-md px-5 pb-16">
       <header className="flex items-center gap-2 py-3">
-        <Link
-          href="/"
-          aria-label="На главную"
-          className="-ml-2 flex h-9 w-9 items-center justify-center rounded-full"
-          style={{ color: "var(--muted)" }}
-        >
-          <Icon name="chevron-left" size={20} />
-        </Link>
+        <BackButton />
         <h1 className="text-[1.375rem] font-semibold leading-tight">Политика конфиденциальности</h1>
       </header>
       <p className="text-[0.75rem]" style={{ color: "var(--muted)" }}>

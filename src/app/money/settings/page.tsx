@@ -17,6 +17,7 @@ import { SignInMethods } from "@/components/SignInMethods";
 import { UserNumber } from "@/components/UserNumber";
 import { SupportRow } from "@/components/SupportRow";
 import { SettingsHeading } from "@/components/SettingsHeading";
+import { PrivacyLink } from "@/components/PrivacyLink";
 import { disablePush } from "@/lib/pushClient";
 import { AccountCard } from "@/components/AccountCard";
 import { AppSwitch } from "@/components/AppSwitch";
@@ -172,6 +173,7 @@ export default function SettingsPage() {
           hint="Та же инструкция, что после регистрации — можно открыть в любой момент"
           onClick={() => setGuide(true)}
         />
+        <PrivacyLink from="/money/settings" />
       </Group>
       <button
         onClick={() => setGuide(true)}

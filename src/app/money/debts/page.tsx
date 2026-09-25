@@ -6,6 +6,7 @@ import { formatMoney } from "@/lib/money";
 import type { Wallet, WalletKind } from "@/lib/types";
 import { useStore } from "@/components/DataProvider";
 import { AmountSheet } from "@/components/AmountSheet";
+import { toISODate } from "@/lib/savings";
 import { WalletEditor } from "@/components/WalletEditor";
 import { Button } from "@/components/ui";
 
@@ -14,6 +15,13 @@ function daysLeft(date: string): number {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return Math.round((new Date(date).getTime() - today.getTime()) / 86_400_000);
+}
+
+/** Ближайшее число месяца: сегодня, если ещё не прошло, иначе — в следующем. */
+function nextRecurringDate(day: number, today = new Date()): Date {
+  const base = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const thisMonth = new Date(base.getFullYear(), base.getMonth(), day);
+  return thisMonth >= base ? thisMonth : new Date(base.getFullYear(), base.getMonth() + 1, day);
 }
 
 export default function DebtsPage() {
@@ -204,7 +212,14 @@ function DebtCard({
   actionLabel?: string;
   onEdit: () => void;
 }) {
-  const left = wallet.due_date ? daysLeft(wallet.due_date) : null;
+  // У кредита обычно платёж каждый месяц, а «Дата погашения» — это конец
+  // всего срока, часто через годы. Напоминать и подсвечивать красным нужно
+  // перед ближайшим ежемесячным платежом, а не перед этой далёкой датой.
+  const recurring = wallet.is_recurring && wallet.recurring_day != null;
+  const nextDue = recurring
+    ? toISODate(nextRecurringDate(wallet.recurring_day!))
+    : wallet.due_date;
+  const left = nextDue ? daysLeft(nextDue) : null;
   const remind =
     left != null && wallet.reminder_days != null && left <= wallet.reminder_days;
 
@@ -225,14 +240,18 @@ function DebtCard({
         </span>
         <button className="flex-1 text-left" onClick={onEdit}>
           <span className="block text-sm font-medium">{wallet.name}</span>
-          {wallet.due_date ? (
+          {nextDue ? (
             <span
               className="block text-[0.6875rem]"
               style={{ color: remind ? "var(--danger)" : "var(--muted)" }}
             >
-              {left != null && left < 0
-                ? `просрочено на ${-left} дн.`
-                : `осталось ${left} дн. · до ${new Date(wallet.due_date).toLocaleDateString("ru-RU")}`}
+              {recurring
+                ? left === 0
+                  ? "платёж сегодня"
+                  : `платёж через ${left} дн. · ${new Date(nextDue).toLocaleDateString("ru-RU")}`
+                : left != null && left < 0
+                  ? `просрочено на ${-left} дн.`
+                  : `осталось ${left} дн. · до ${new Date(nextDue).toLocaleDateString("ru-RU")}`}
             </span>
           ) : null}
         </button>

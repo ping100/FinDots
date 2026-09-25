@@ -48,10 +48,18 @@ export function DailyAllowance() {
 
       if (wallet.is_recurring && wallet.recurring_day != null && wallet.monthly_payment) {
         if (wallet.recurring_day >= now.getDate()) {
-          upcoming.push({
-            name: wallet.name,
-            amount: toBase(wallet.monthly_payment, wallet.currency),
-          });
+          // Платёж за этот месяц уже мог уйти («Внести платёж» раньше срока) —
+          // тогда деньги уже списаны с баланса, и резервировать их ещё раз
+          // не нужно: иначе «можно тратить» дважды теряет одну и ту же сумму.
+          const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+          const paidThisMonth = transactions.reduce((sum, t) => {
+            if (t.type !== "transfer" || t.to_wallet_id !== wallet.id) return sum;
+            const at = new Date(t.occurred_at);
+            if (at < monthStart || at >= monthEnd) return sum;
+            return sum + toBase(Number(t.amount), t.currency);
+          }, 0);
+          const remaining = toBase(wallet.monthly_payment, wallet.currency) - paidThisMonth;
+          if (remaining > 0.5) upcoming.push({ name: wallet.name, amount: remaining });
         }
         continue;
       }

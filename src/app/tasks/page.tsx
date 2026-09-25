@@ -19,6 +19,7 @@ import { useAddAction } from "@/components/tasks/Shell";
 import { Calendar } from "@/components/tasks/Calendar";
 import { TaskList } from "@/components/tasks/TaskList";
 import { QuickAdd } from "@/components/tasks/QuickAdd";
+import { AppSwitchPill } from "@/components/AppSwitch";
 
 export default function TodayPage() {
   const { tasks, toggleDone, saveTask, deleteTask, rescheduleTask } = useStore();
@@ -88,6 +89,7 @@ export default function TodayPage() {
       <div className="mx-auto w-full max-w-md px-4 pb-32">
         <header className="flex items-center justify-between py-3">
           <h1 className="text-xl font-semibold">{dayLabel(selected)}</h1>
+          <AppSwitchPill from="tasks" />
         </header>
 
         <Calendar selected={selected} onSelect={setSelected} loadedDates={loadedDates} />

@@ -21,6 +21,7 @@ import { gridColumns, scaleFactor } from "@/lib/textScale";
 import type { Category, DragPayload, Wallet, WalletKind } from "@/lib/types";
 import { useStore } from "./DataProvider";
 import { AmountSheet } from "./AmountSheet";
+import { AppSwitchPill } from "./AppSwitch";
 import { DailyAllowance } from "./DailyAllowance";
 import { CategoryEditor } from "./CategoryEditor";
 import { WalletEditor } from "./WalletEditor";
@@ -230,14 +231,16 @@ export function HomeScreen() {
       onDragCancel={() => setDragging(null)}
     >
       <div className="mx-auto w-full max-w-md px-4 pb-32">
-        <header className="flex items-center justify-between py-2">
-          <Link
-            href="/money/settings"
-            className="flex h-10 w-10 items-center justify-center rounded-full text-base font-medium"
-            style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
-          >
-            {(profile?.display_name ?? "?").slice(0, 1).toUpperCase()}
-          </Link>
+        {/* Три колонки, крайние равной ширины: кнопка слева шире кнопки
+            меню справа, и при простом justify-between месяц съезжал бы из
+            центра. */}
+        <header className="grid grid-cols-[1fr_auto_1fr] items-center py-2">
+          {/* Раньше здесь был кружок с буквой имени, ведущий в настройки, —
+              но настройки и так в нижней панели. Место нужнее переходу в
+              задачи: иначе до них добираться через настройки. */}
+          <div className="justify-self-start">
+            <AppSwitchPill from="money" />
+          </div>
           <button
             onClick={() => setMonthPicker(true)}
             className="flex items-center gap-1.5 text-[0.9375rem] font-semibold uppercase tracking-wide"
@@ -248,7 +251,7 @@ export function HomeScreen() {
           <button
             onClick={() => setMenu(true)}
             aria-label="Меню"
-            className="flex h-10 w-10 items-center justify-center rounded-full"
+            className="flex h-10 w-10 items-center justify-center justify-self-end rounded-full"
             style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
           >
             <span className="text-lg leading-none">···</span>

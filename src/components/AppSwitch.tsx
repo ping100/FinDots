@@ -52,3 +52,28 @@ export function AppSwitch({ from }: { from: "money" | "tasks" }) {
     </Link>
   );
 }
+
+/**
+ * Та же дверь, но компактная — для шапки. Карточка в настройках спрятана
+ * за двумя нажатиями, и её не находят: переходить хочется с главного
+ * экрана, одним касанием.
+ */
+export function AppSwitchPill({ from }: { from: "money" | "tasks" }) {
+  const app = OTHER[from];
+  return (
+    <Link
+      href={app.href}
+      aria-label={`Перейти в ${app.title.toLowerCase()}`}
+      className="flex h-10 items-center gap-1.5 rounded-full pl-1.5 pr-3.5 text-[0.8125rem] font-medium transition active:scale-95"
+      style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+    >
+      <span
+        className="flex h-7 w-7 items-center justify-center rounded-full text-white"
+        style={{ background: app.color }}
+      >
+        <Icon name={app.icon} size={15} />
+      </span>
+      {app.title}
+    </Link>
+  );
+}

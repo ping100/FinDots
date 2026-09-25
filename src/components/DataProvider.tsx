@@ -101,15 +101,14 @@ export interface Store {
     onProgress?: (done: number, total: number) => void,
   ) => Promise<{ added: number; categories: number; wallets: number }>;
   deleteCategory: (id: string) => Promise<void>;
+  /** Удаляет все операции, кошельки и категории насовсем — чистый лист. */
+  resetMoneyData: () => Promise<void>;
 
   saveProfile: (patch: Partial<Profile>) => Promise<void>;
   saveRate: (code: CurrencyCode, rate: number) => Promise<void>;
   saveAiKey: (key: string) => Promise<void>;
   deleteAiKey: () => Promise<void>;
 }
-
-/** Куда падают проценты по вкладам. Заводится сама при первом начислении. */
-const INTEREST_CATEGORY = "Проценты";
 
 /**
  * Ошибки, которые проходят сами со второй попытки.
@@ -428,9 +427,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [supabase]);
 
   /**
-   * Проценты по вкладу — это доход, а не появление денег из воздуха, поэтому
-   * пишем их как обычное поступление плюс разнос на сам вклад: тогда они
-   * видны в отчётах и их можно поправить или удалить, как любую операцию.
+   * Проценты по вкладу прибавляются к нему напрямую, отдельной операцией —
+   * без дохода в категориях и отчётах. Раньше начисление писалось парой
+   * «доход + разнос», и в «Доходах» на главном экране заводилась своя
+   * категория «Проценты», хотя эти деньги никуда, кроме вклада, не шли.
    *
    * Отдельного сервера с расписанием нет, так что начисление делает сам
    * пользователь одной кнопкой, когда месяц уже прошёл. Дата последнего
@@ -445,51 +445,17 @@ export function DataProvider({ children }: { children: ReactNode }) {
       const due = maturedAccruals(wallet, transactions, toWallet);
       if (!due.length) return 0;
 
-      let category = categories.find((c) => c.kind === "income" && c.name === INTEREST_CATEGORY);
-      if (!category) {
-        const created = await supabase()
-          .from("categories")
-          .insert({
-            user_id: userId,
-            kind: "income",
-            name: INTEREST_CATEGORY,
-            icon: "percent",
-            color: "#0d9488",
-          })
-          .select("*")
-          .single();
-        if (created.error) throw new Error(created.error.message);
-        category = created.data as Category;
-      }
-
-      // Каждый месяц пишем отдельной парой строк, по очереди: так в истории
-      // видно, за какой период сколько пришло, и разнос точно привязан к
-      // своему поступлению — без угадывания порядка вставки.
+      // Каждый месяц — отдельной операцией: так в истории видно, за какой
+      // период сколько накапало, и её можно поправить или удалить как любую.
       for (const period of due) {
-        const at = period.to.toISOString();
-        const income = await supabase()
-          .from("transactions")
-          .insert({
-            user_id: userId,
-            type: "income",
-            amount: period.amount,
-            currency: wallet.currency,
-            category_id: category.id,
-            note: wallet.name,
-            occurred_at: at,
-          })
-          .select("id")
-          .single();
-        if (income.error) throw new Error(income.error.message);
-
         const moved = await supabase().from("transactions").insert({
           user_id: userId,
-          type: "allocation",
+          type: "adjustment",
           amount: period.amount,
           currency: wallet.currency,
           wallet_id: wallet.id,
-          parent_id: (income.data as { id: string }).id,
-          occurred_at: at,
+          note: "Проценты по вкладу",
+          occurred_at: period.to.toISOString(),
         });
         if (moved.error) throw new Error(moved.error.message);
       }
@@ -503,7 +469,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       await Promise.all([reloadDictionaries(), refresh()]);
       return due.reduce((sum, period) => sum + period.amount, 0);
     },
-    [categories, rates, refresh, reloadDictionaries, supabase, transactions, userId, wallets],
+    [rates, refresh, reloadDictionaries, supabase, transactions, userId, wallets],
   );
 
   const updateTransaction: Store["updateTransaction"] = useCallback(
@@ -542,6 +508,23 @@ export function DataProvider({ children }: { children: ReactNode }) {
     },
     [refresh, reloadDictionaries, supabase],
   );
+
+  /**
+   * Полная очистка денег: операции, кошельки и категории удаляются насовсем,
+   * а не архивируются, как при обычном удалении, — вернуть их неоткуда.
+   * Учётная запись, вход и настройки (валюта, тема, ключ ИИ) не трогаются.
+   * Порядок важен: операции ссылаются на кошельки и категории.
+   */
+  const resetMoneyData: Store["resetMoneyData"] = useCallback(async () => {
+    if (!userId) return;
+    const tx = await supabase().from("transactions").delete().eq("user_id", userId);
+    if (tx.error) throw new Error(tx.error.message);
+    const w = await supabase().from("wallets").delete().eq("user_id", userId);
+    if (w.error) throw new Error(w.error.message);
+    const c = await supabase().from("categories").delete().eq("user_id", userId);
+    if (c.error) throw new Error(c.error.message);
+    await Promise.all([reloadDictionaries(), refresh()]);
+  }, [refresh, reloadDictionaries, supabase, userId]);
 
   /**
    * Подкатегория, заведённая прямо в окне траты. Возвращает её id, чтобы
@@ -844,6 +827,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       deleteTransaction,
       saveWallet,
       deleteWallet,
+      resetMoneyData,
       saveCategory,
       addSubcategory,
       importDrafts,
@@ -857,7 +841,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       ready, moneyHidden, error, userId, profile, rates, wallets, categories, balances, pools,
       transactions, balanceOf, poolOf, toBase, refresh, addIncome, allocate,
       addExpense, addTransfer, setWalletBalance, accrueInterest, updateTransaction, deleteTransaction,
-      saveWallet, deleteWallet, saveCategory, addSubcategory, importDrafts, deleteCategory, saveProfile, saveRate,
+      saveWallet, deleteWallet, resetMoneyData, saveCategory, addSubcategory, importDrafts, deleteCategory, saveProfile, saveRate,
       aiKeyHint, saveAiKey, deleteAiKey,
     ],
   );

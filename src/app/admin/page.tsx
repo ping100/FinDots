@@ -90,10 +90,13 @@ function Totals({ data }: { data: AdminOverview }) {
     <>
       <div className="grid grid-cols-2 gap-2">
         {tiles.map((id) => (
+          // Нажатие ловит сама плитка: подписи и значки внутри касание
+          // пропускают насквозь. Иначе iPhone засчитывал нажатие только
+          // по стрелке, а по числу и подписи — нет.
           <Link
             key={id}
             href={`/admin/${id}`}
-            className="rounded-2xl p-3.5 transition active:scale-[0.98]"
+            className="block cursor-pointer touch-manipulation rounded-2xl p-3.5 transition active:scale-[0.98] [&_*]:pointer-events-none"
             style={{ background: "var(--surface)" }}
           >
             <span

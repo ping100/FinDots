@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AI_MODELS, type AiModel } from "@/lib/aiModels";
 import { TEXT_SCALES } from "@/lib/textScale";
+import { THEMES, THEME_AUTO_HINT } from "@/lib/look";
 import { CURRENT_BUILD, applyUpdate, buildMoment, serverBuild } from "@/lib/update";
 import { Icon } from "@/lib/icons";
 import { CURRENCIES, parseAmount, symbolOf } from "@/lib/money";
@@ -123,7 +124,7 @@ export default function SettingsPage() {
         />
         <Row
           label="Тема"
-          value={profile?.theme === "dark" ? "Тёмная" : "Светлая"}
+          value={THEMES.find((item) => item.id === profile?.theme)?.label ?? "Светлая"}
           onClick={() => setSheet("theme")}
         />
         <Row
@@ -224,24 +225,27 @@ export default function SettingsPage() {
       </Sheet>
 
       <Sheet open={sheet === "theme"} title="Тема" onClose={() => setSheet(null)}>
-        <div className="flex gap-2 pb-2">
-          {(["light", "dark"] as const).map((theme) => (
+        <div className="flex gap-2">
+          {THEMES.map(({ id, label }) => (
             <button
-              key={theme}
+              key={id}
               onClick={() => {
-                void saveProfile({ theme });
+                void saveProfile({ theme: id });
                 setSheet(null);
               }}
               className="flex-1 rounded-2xl px-3 py-3 text-sm"
               style={{
-                background: profile?.theme === theme ? "var(--accent)" : "var(--surface-2)",
-                color: profile?.theme === theme ? "#fff" : "inherit",
+                background: profile?.theme === id ? "var(--accent)" : "var(--surface-2)",
+                color: profile?.theme === id ? "#fff" : "inherit",
               }}
             >
-              {theme === "dark" ? "Тёмная" : "Светлая"}
+              {label}
             </button>
           ))}
         </div>
+        <p className="pb-2 pt-3 text-[0.75rem] leading-snug" style={{ color: "var(--muted)" }}>
+          {THEME_AUTO_HINT}
+        </p>
       </Sheet>
 
       <Sheet open={sheet === "size"} title="Размер шрифта" onClose={() => setSheet(null)}>

@@ -12,6 +12,38 @@ export const SCALE_KEY = "dots.scale";
 
 export const BACKGROUNDS = { light: "#f2f2f7", dark: "#0b0f16" };
 
+/** «system» — как на телефоне, и вслед за ним при смене на лету. */
+export type ThemeChoice = "light" | "dark" | "system";
+
+export const THEMES: { id: ThemeChoice; label: string }[] = [
+  { id: "light", label: "Светлая" },
+  { id: "dark", label: "Тёмная" },
+  { id: "system", label: "Авто" },
+];
+
+export const THEME_AUTO_HINT = "Авто — как на телефоне: светлая или тёмная вслед за системной темой.";
+
+export const SYSTEM_DARK = "(prefers-color-scheme: dark)";
+
+/** Покрасить страницу: класс на html и цвет строки состояния. */
+export function paintTheme(choice: ThemeChoice | string | null): void {
+  const dark = choice === "dark" || ((!choice || choice === "system") && matchMedia(SYSTEM_DARK).matches);
+  document.documentElement.classList.toggle("dark", dark);
+  document
+    .querySelector('meta[name="theme-color"]')
+    ?.setAttribute("content", dark ? BACKGROUNDS.dark : BACKGROUNDS.light);
+}
+
+/**
+ * Поставить вид из профиля и запомнить его на устройстве. Общая для денег
+ * и задач: профиль у них один, и вид должен быть один.
+ */
+export function applyLook(theme: ThemeChoice, fontSize: string): void {
+  paintTheme(theme);
+  document.documentElement.style.fontSize = fontSize;
+  rememberLook(theme, fontSize);
+}
+
 /** Запомнить выбор на этом устройстве. Приватный режим молча игнорируем. */
 export function rememberLook(theme: string | undefined, fontSize: string): void {
   try {
@@ -43,7 +75,7 @@ export const LOOK_SCRIPT = `
 try {
   var d = document.documentElement;
   var t = localStorage.getItem(${JSON.stringify(THEME_KEY)}) || localStorage.getItem("findots.theme");
-  if (!t) t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  if (!t || t === 'system') t = matchMedia(${JSON.stringify(SYSTEM_DARK)}).matches ? 'dark' : 'light';
   if (t === 'dark') d.classList.add('dark');
   var s = localStorage.getItem(${JSON.stringify(SCALE_KEY)}) || localStorage.getItem("findots.scale");
   if (s) d.style.fontSize = s;

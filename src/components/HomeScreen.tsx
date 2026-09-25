@@ -48,7 +48,7 @@ export function HomeScreen() {
   const {
     profile, wallets, categories, transactions, rates,
     balanceOf, poolOf, toBase,
-    addIncome, allocate, addExpense, addTransfer, saveProfile, addSubcategory, moneyHidden,
+    addIncome, allocate, addExpense, addTransfer, addSubcategory, moneyHidden,
   } = useStore();
 
   const [offset, setOffset] = useState(0);
@@ -648,14 +648,6 @@ export function HomeScreen() {
 
       <Sheet open={menu} title="Ещё" onClose={() => setMenu(false)}>
         <div className="space-y-2 pb-2">
-          <Button
-            variant="ghost"
-            onClick={() =>
-              saveProfile({ theme: profile?.theme === "dark" ? "light" : "dark" })
-            }
-          >
-            {profile?.theme === "dark" ? "Светлая тема" : "Тёмная тема"}
-          </Button>
           <Button
             variant="ghost"
             onClick={() => setCollapsed({ income: true, wallets: true, expenses: true })}

@@ -17,7 +17,7 @@ import { convert } from "@/lib/money";
 import type { Draft } from "@/lib/importCsv";
 import { maturedAccruals, toISODate } from "@/lib/savings";
 import { scaleFactor } from "@/lib/textScale";
-import { rememberLook } from "@/lib/look";
+import { applyLook } from "@/lib/look";
 import { useMoneyHidden } from "@/lib/privacy";
 import type {
   Category,
@@ -222,11 +222,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!profile) return;
     const fontSize = `${16 * scaleFactor(profile.text_scale)}px`;
-    document.documentElement.classList.toggle("dark", profile.theme === "dark");
-    document.documentElement.style.fontSize = fontSize;
-    // Запоминаем на устройстве, чтобы в следующий раз экран ожидания
-    // открылся сразу в нужной теме, не дожидаясь профиля.
-    rememberLook(profile.theme, fontSize);
+    // Заодно запоминаем на устройстве, чтобы в следующий раз экран ожидания
+    // открылся сразу в нужном виде, не дожидаясь профиля.
+    applyLook(profile.theme, fontSize);
   }, [profile]);
 
   /** Пересчитать производные данные после записи. */

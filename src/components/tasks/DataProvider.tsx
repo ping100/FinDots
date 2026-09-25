@@ -12,7 +12,7 @@ import {
 } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
-import { rememberLook } from "@/lib/look";
+import { applyLook } from "@/lib/look";
 import { scaleFactor } from "@/lib/textScale";
 import type { Task } from "@/lib/tasks/types";
 import type { Profile } from "@/lib/types";
@@ -115,11 +115,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!profile) return;
     const fontSize = `${16 * scaleFactor(profile.text_scale)}px`;
-    document.documentElement.classList.toggle("dark", profile.theme === "dark");
-    document.documentElement.style.fontSize = fontSize;
-    // Запоминаем на устройстве, чтобы в следующий раз экран ожидания
+    // Заодно запоминаем на устройстве, чтобы в следующий раз экран ожидания
     // открылся сразу в нужном виде, не дожидаясь профиля.
-    rememberLook(profile.theme, fontSize);
+    applyLook(profile.theme, fontSize);
   }, [profile]);
 
   const refresh = useCallback(async () => {

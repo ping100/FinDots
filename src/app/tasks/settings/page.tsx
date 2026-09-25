@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/lib/icons";
+import { THEMES, THEME_AUTO_HINT } from "@/lib/look";
 import { createClient } from "@/lib/supabase/client";
 import { useStore } from "@/components/tasks/DataProvider";
 import { SignInMethods } from "@/components/SignInMethods";
@@ -48,20 +49,23 @@ export default function SettingsPage() {
           Тема
         </h2>
         <div className="flex gap-2">
-          {(["light", "dark"] as const).map((value) => (
+          {THEMES.map(({ id, label }) => (
             <button
-              key={value}
-              onClick={() => void saveProfile({ theme: value })}
-              className="flex-1 rounded-2xl border px-4 py-2.5 text-sm font-medium"
+              key={id}
+              onClick={() => void saveProfile({ theme: id })}
+              className="flex-1 rounded-2xl border px-3 py-2.5 text-sm font-medium"
               style={{
-                borderColor: profile?.theme === value ? "var(--accent)" : "var(--border)",
-                background: profile?.theme === value ? "var(--surface-2)" : "transparent",
+                borderColor: profile?.theme === id ? "var(--accent)" : "var(--border)",
+                background: profile?.theme === id ? "var(--surface-2)" : "transparent",
               }}
             >
-              {value === "light" ? "Светлая" : "Тёмная"}
+              {label}
             </button>
           ))}
         </div>
+        <p className="mt-2 text-[0.75rem] leading-snug" style={{ color: "var(--muted)" }}>
+          {THEME_AUTO_HINT}
+        </p>
       </section>
 
       <Group>

@@ -7,7 +7,6 @@ import { Icon } from "@/lib/icons";
 import { Logo } from "@/components/Logo";
 import { GoogleButton } from "@/components/GoogleButton";
 import { useProvider } from "@/lib/providers";
-import { rememberedTheme } from "@/lib/look";
 import { TURNSTILE_SITE_KEY, Turnstile } from "@/components/Turnstile";
 import { Button, Field, inputClass, inputStyle } from "@/components/ui";
 
@@ -56,19 +55,6 @@ function LoginForm() {
 
   // Без ключа капчи её просто нет, и вход ничем не отличается от прежнего.
   const captchaRequired = !!TURNSTILE_SITE_KEY;
-
-  // До входа профиля ещё нет. Если на этом устройстве уже выбирали тему —
-  // держим её: скрипт в <head> её уже поставил, и трогать не надо. Если
-  // человек здесь впервые, следим за системной, чтобы с тёмным телефоном он
-  // не получил вспышку белого. После входа тему поставит DataProvider.
-  useEffect(() => {
-    if (rememberedTheme()) return;
-    const query = window.matchMedia("(prefers-color-scheme: dark)");
-    const apply = () => document.documentElement.classList.toggle("dark", query.matches);
-    apply();
-    query.addEventListener("change", apply);
-    return () => query.removeEventListener("change", apply);
-  }, []);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();

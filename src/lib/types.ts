@@ -1,3 +1,4 @@
+import type { ThemeChoice } from "./look";
 export type WalletKind = "cash" | "card" | "savings" | "debt_out" | "debt_in";
 export type CategoryKind = "income" | "expense";
 export type TxType = "income" | "allocation" | "expense" | "transfer" | "adjustment";
@@ -8,7 +9,7 @@ export interface Profile {
   id: string;
   display_name: string | null;
   base_currency: CurrencyCode;
-  theme: "dark" | "light";
+  theme: ThemeChoice;
   text_scale: "small" | "medium" | "large";
   ai_model: string;
   /** Приветствие после регистрации уже показывали. */

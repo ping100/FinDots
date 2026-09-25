@@ -40,11 +40,12 @@ export default function AdminPage() {
     requestAnimationFrame(() => usersRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   };
 
-  const load = useCallback(async () => {
-    setBusy(true);
+  // quiet — фоновое обновление: без «Обновляю…» на кнопке каждые полминуты.
+  const load = useCallback(async (quiet = false) => {
+    if (!quiet) setBusy(true);
     setProblem(null);
     const { data: overview, error } = await createClient().rpc("admin_overview");
-    setBusy(false);
+    if (!quiet) setBusy(false);
     if (error) {
       // 42501 — «нет прав»: это ответ базы, а не сбой, и показывать его
       // надо иначе, чем обрыв связи.
@@ -58,6 +59,14 @@ export default function AdminPage() {
   useEffect(() => {
     void load();
     setBuilt(buildMoment());
+  }, [load]);
+
+  // «Онлайн» стареет за минуты — пока админка на экране, освежаем её сами.
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") void load(true);
+    }, REFRESH);
+    return () => clearInterval(timer);
   }, [load]);
 
   if (denied) {
@@ -110,7 +119,12 @@ export default function AdminPage() {
           <SupabaseLimits data={data} />
           <VercelBlock built={built} />
           <div ref={usersRef} className="scroll-mt-4">
-            <Users users={data.users} filter={filter} onReset={() => setFilter("all")} />
+            <Users
+              users={data.users}
+              now={new Date(data.generated_at).getTime()}
+              filter={filter}
+              onReset={() => setFilter("all")}
+            />
           </div>
           <p className="mt-6 text-center text-[0.6875rem]" style={{ color: "var(--muted)" }}>
             Данные на {new Date(data.generated_at).toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}
@@ -139,17 +153,30 @@ function Card({ children }: { children: React.ReactNode }) {
  */
 const FILTERS = {
   all: { label: "Всего пользователей", title: "Все", test: () => true },
-  new_7d: { label: "Новых за неделю", title: "Новые за неделю", test: (u: AdminUser) => within(u.created_at, 7) },
-  active_7d: { label: "Активных за неделю", title: "Активные за неделю", test: (u: AdminUser) => within(u.last_seen, 7) },
-  active_30d: { label: "Активных за месяц", title: "Активные за месяц", test: (u: AdminUser) => within(u.last_seen, 30) },
-  money: { label: "Деньгами пользуются", title: "Пользуются деньгами", test: (u: AdminUser) => u.transactions > 0 },
-  tasks: { label: "Задачами пользуются", title: "Пользуются задачами", test: (u: AdminUser) => u.tasks_open + u.tasks_done > 0 },
-} satisfies Record<string, { label: string; title: string; test: (u: AdminUser) => boolean }>;
+  online: { label: "Онлайн сейчас", title: "Онлайн сейчас", test: isOnline },
+  new_7d: { label: "Новых за неделю", title: "Новые за неделю", test: (u, now) => within(u.created_at, now, 7 * DAY) },
+  active_30d: { label: "Активных за месяц", title: "Активные за месяц", test: (u, now) => within(u.last_seen, now, 30 * DAY) },
+  money: { label: "Деньгами пользуются", title: "Пользуются деньгами", test: (u) => u.transactions > 0 },
+  tasks: { label: "Задачами пользуются", title: "Пользуются задачами", test: (u) => u.tasks_open + u.tasks_done > 0 },
+} satisfies Record<string, { label: string; title: string; test: (u: AdminUser, now: number) => boolean }>;
 
 type FilterId = keyof typeof FILTERS;
 
-function within(iso: string | null, days: number): boolean {
-  return iso !== null && Date.now() - new Date(iso).getTime() < days * 86_400_000;
+const DAY = 86_400_000;
+/** Приложение отмечается раз в минуту; две минуты — с запасом на одну пропущенную. */
+const ONLINE_WINDOW = 2 * 60_000;
+const REFRESH = 30_000;
+
+/**
+ * «Сейчас» — момент, когда база собрала сводку, а не часы телефона: они
+ * могут уйти на минуту-другую, и онлайн-статус начал бы врать.
+ */
+function within(iso: string | null, now: number, ms: number): boolean {
+  return iso !== null && now - new Date(iso).getTime() < ms;
+}
+
+function isOnline(u: AdminUser, now: number): boolean {
+  return within(u.online_at, now, ONLINE_WINDOW);
 }
 
 /** Главные числа — крупно, по два в ряд: на телефоне больше не влезает. */
@@ -163,8 +190,9 @@ function Totals({
   onPick: (id: FilterId) => void;
 }) {
   const t = data.totals;
-  const count = (id: FilterId) => data.users.filter(FILTERS[id].test).length;
-  const tiles: FilterId[] = ["all", "new_7d", "active_7d", "active_30d"];
+  const now = new Date(data.generated_at).getTime();
+  const count = (id: FilterId) => data.users.filter((u) => FILTERS[id].test(u, now)).length;
+  const tiles: FilterId[] = ["all", "online", "new_7d", "active_30d"];
   const inline = (id: FilterId) => (
     <button
       onClick={() => onPick(id)}
@@ -192,7 +220,10 @@ function Totals({
               }}
             >
               <span className="flex items-center justify-between gap-2 text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
-                {FILTERS[id].label}
+                <span className="flex items-center gap-1.5">
+                  {id === "online" ? <OnlineDot /> : null}
+                  {FILTERS[id].label}
+                </span>
                 <Icon name="chevron-right" size={12} className="shrink-0 opacity-50" />
               </span>
               <span className="mt-1 block text-[1.625rem] font-semibold tabular-nums">{count(id)}</span>
@@ -349,18 +380,25 @@ function VercelBlock({ built }: { built: string | null }) {
 
 const PROVIDERS: Record<string, string> = { email: "почту", google: "Google" };
 
+/** Зелёная точка «в сети» — рядом всегда слово, одного цвета мало. */
+function OnlineDot() {
+  return <span aria-hidden className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ background: "var(--ok)" }} />;
+}
+
 function Users({
   users,
+  now,
   filter,
   onReset,
 }: {
   users: AdminUser[];
+  now: number;
   filter: FilterId;
   onReset: () => void;
 }) {
   // Сверху — кто был недавно: их и хочется видеть первыми.
   const sorted = users
-    .filter(FILTERS[filter].test)
+    .filter((u) => FILTERS[filter].test(u, now))
     .sort((a, b) => (b.last_seen ?? "").localeCompare(a.last_seen ?? ""));
   return (
     <>
@@ -388,9 +426,16 @@ function Users({
               <p className="min-w-0 truncate text-[0.9375rem] font-medium">
                 {user.display_name || user.email || "без имени"}
               </p>
-              <p className="shrink-0 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-                был {sinceLabel(user.last_seen)}
-              </p>
+              {isOnline(user, now) ? (
+                <p className="flex shrink-0 items-center gap-1.5 text-[0.6875rem] font-medium">
+                  <OnlineDot />
+                  онлайн
+                </p>
+              ) : (
+                <p className="shrink-0 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+                  был {sinceLabel(user.last_seen)}
+                </p>
+              )}
             </div>
             {user.display_name && user.email ? (
               <p className="truncate text-[0.75rem]" style={{ color: "var(--muted)" }}>

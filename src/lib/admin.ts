@@ -11,6 +11,8 @@ export interface AdminUser {
   display_name: string | null;
   created_at: string;
   last_seen: string | null;
+  /** Последняя отметка «я здесь» из открытого приложения. */
+  online_at: string | null;
   providers: string[];
   wallets: number;
   transactions: number;
@@ -24,6 +26,7 @@ export interface AdminOverview {
   generated_at: string;
   users: AdminUser[];
   totals: {
+    online: number;
     users: number;
     new_7d: number;
     new_30d: number;

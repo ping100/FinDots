@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Logo } from "@/components/Logo";
 import { HomeCard } from "@/components/HomeCard";
 import { HomeAdminCard } from "@/components/HomeAdminCard";
@@ -32,7 +33,9 @@ const APPS = [
 export default function Home() {
   return (
     <div className="auth-glow mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center px-6 py-8">
-      <div className="mb-7 flex flex-col items-center text-center">
+      {/* Поля сверху и над ссылкой внизу делят свободное место поровну:
+          развилка остаётся посередине, а ссылка прижата к низу. */}
+      <div className="mb-7 mt-auto flex flex-col items-center text-center">
         <Logo size={64} animated />
         <h1
           className="animate-lift mt-4 text-[1.75rem] font-semibold tracking-tight"
@@ -69,6 +72,14 @@ export default function Home() {
       >
         Учётная запись одна на оба — вошли один раз и пользуетесь обоими.
       </p>
+
+      <Link
+        href="/privacy"
+        className="animate-lift mt-auto self-center pt-8 text-[0.6875rem] underline decoration-dotted underline-offset-2"
+        style={{ color: "var(--muted)", animationDelay: "660ms" }}
+      >
+        Политика конфиденциальности
+      </Link>
     </div>
   );
 }

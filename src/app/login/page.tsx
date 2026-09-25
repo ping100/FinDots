@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Icon } from "@/lib/icons";
@@ -122,7 +123,7 @@ function LoginForm() {
 
   return (
     <div className="auth-glow mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center px-6 py-8">
-      <div className="mb-6 flex flex-col items-center text-center">
+      <div className="mb-6 mt-auto flex flex-col items-center text-center">
         <Logo size={76} animated />
         <h1
           className="animate-lift mt-4 text-[1.75rem] font-semibold tracking-tight"
@@ -250,6 +251,15 @@ function LoginForm() {
         Данные видите только вы: каждая запись привязана к вашей учётной записи
         и закрыта на стороне базы.
       </p>
+
+      {/* До регистрации — самое время прочитать, что происходит с данными. */}
+      <Link
+        href="/privacy"
+        className="animate-lift mt-auto self-center pt-8 text-[0.6875rem] underline decoration-dotted underline-offset-2"
+        style={{ color: "var(--muted)", animationDelay: "600ms" }}
+      >
+        Политика конфиденциальности
+      </Link>
     </div>
   );
 }

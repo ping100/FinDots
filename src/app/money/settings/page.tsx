@@ -14,6 +14,7 @@ import { StatementImport } from "@/components/StatementImport";
 import { Guide } from "@/components/Guide";
 import { SignInMethods } from "@/components/SignInMethods";
 import { AppSwitch } from "@/components/AppSwitch";
+import { AdminLink } from "@/components/AdminLink";
 import { Button, Field, Sheet, inputClass, inputStyle } from "@/components/ui";
 
 export default function SettingsPage() {
@@ -91,6 +92,7 @@ export default function SettingsPage() {
       <h1 className="py-2 text-[1.625rem] font-semibold">Настройки</h1>
 
       <AppSwitch from="money" />
+      <AdminLink />
 
       <Group>
         <Row

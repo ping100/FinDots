@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useStore } from "@/components/tasks/DataProvider";
 import { SignInMethods } from "@/components/SignInMethods";
 import { AppSwitch } from "@/components/AppSwitch";
+import { AdminLink } from "@/components/AdminLink";
 import { CURRENT_BUILD, applyUpdate, buildMoment, serverBuild } from "@/lib/update";
 
 export default function SettingsPage() {
@@ -39,6 +40,7 @@ export default function SettingsPage() {
       <h1 className="mb-4 text-xl font-semibold">Настройки</h1>
 
       <AppSwitch from="tasks" />
+      <AdminLink />
 
       <section className="mb-6">
         <h2 className="mb-2 text-sm" style={{ color: "var(--muted)" }}>

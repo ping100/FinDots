@@ -25,7 +25,7 @@ const DESCRIPTION = "Findots и Todots: личные финансы и спис�
 export const metadata: Metadata = {
   // Без metadataBase относительные пути в og остаются относительными, а
   // мессенджеру нужен абсолютный адрес картинки.
-  metadataBase: new URL("https://findots.vercel.app"),
+  metadataBase: new URL("https://dotsapp.vercel.app"),
   title: TITLE,
   description: DESCRIPTION,
   manifest: "/manifest.webmanifest",

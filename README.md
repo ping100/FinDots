@@ -51,7 +51,7 @@ Supabase (Postgres + Auth, RLS) · Vercel.
 
 | | |
 |---|---|
-| Приложение | https://findots.vercel.app |
+| Приложение | https://dotsapp.vercel.app |
 | Vercel | проект `findots` в команде Mars6 |
 | Supabase | проект `findots`, регион eu-central-1 |
 | Репозиторий | `ping100/findots` |

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { Icon } from "@/lib/icons";
 import {
@@ -82,7 +82,10 @@ export function Calendar({
 
   const t = today();
   const days = expanded ? monthGrid(anchor) : weekDays(anchor);
-  const shift = (n: number) => setAnchor(expanded ? addMonths(anchor, n) : addWeeks(anchor, n));
+  const shift = (n: number) =>
+    setAnchor((current) => (expanded ? addMonths(current, n) : addWeeks(current, n)));
+
+  const swipe = useSwipe(shift);
 
   return (
     <div className="select-none">
@@ -144,18 +147,117 @@ export function Calendar({
             {head}
           </span>
         ))}
-        {days.map((date) => (
-          <DayCell
-            key={date}
-            date={date}
-            selected={date === selected}
-            isToday={date === t}
-            loaded={loadedDates.has(date)}
-            faded={expanded && !isSameMonth(date, anchor)}
-            onSelect={onSelect}
-          />
-        ))}
+      </div>
+
+      {/* Дни листаются пальцем: неделя или месяц едут за ним, как в
+          календаре телефона. Вертикальный жест отдаём странице — по нему
+          прокручивается список задач. */}
+      <div ref={swipe.box} className="overflow-hidden" style={{ touchAction: "pan-y" }} {...swipe.handlers}>
+        <div
+          className="grid grid-cols-7"
+          style={{
+            transform: `translateX(${swipe.dx}px)`,
+            transition: swipe.sliding ? `transform ${SLIDE_MS}ms ease-out` : undefined,
+          }}
+        >
+          {days.map((date) => (
+            <DayCell
+              key={date}
+              date={date}
+              selected={date === selected}
+              isToday={date === t}
+              loaded={loadedDates.has(date)}
+              faded={expanded && !isSameMonth(date, anchor)}
+              onSelect={onSelect}
+            />
+          ))}
+        </div>
       </div>
     </div>
   );
+}
+
+const SLIDE_MS = 180;
+
+/**
+ * Листание свайпом. Пока палец не сдвинулся заметно, жест ничей: так
+ * касание по дню остаётся нажатием, а вертикальный жест — прокруткой.
+ * Сдвинулся вбок — ряд едет за пальцем; отпустили дальше четверти ширины
+ * или резким движением — уезжает, и с другой стороны въезжает соседний.
+ */
+function useSwipe(shift: (n: number) => void) {
+  const box = useRef<HTMLDivElement>(null);
+  const start = useRef<{ x: number; y: number; at: number; id: number; horizontal: boolean | null } | null>(null);
+  const swiped = useRef(false);
+  const [dx, setDx] = useState(0);
+  const [sliding, setSliding] = useState(false);
+
+  const settle = () => {
+    setSliding(true);
+    setDx(0);
+  };
+
+  const handlers = {
+    onPointerDown: (e: React.PointerEvent) => {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      start.current = { x: e.clientX, y: e.clientY, at: performance.now(), id: e.pointerId, horizontal: null };
+      swiped.current = false;
+    },
+    onPointerMove: (e: React.PointerEvent) => {
+      const s = start.current;
+      if (!s || s.id !== e.pointerId) return;
+      const mx = e.clientX - s.x;
+      const my = e.clientY - s.y;
+      if (s.horizontal === null) {
+        if (Math.abs(mx) < 8 && Math.abs(my) < 8) return;
+        s.horizontal = Math.abs(mx) > Math.abs(my);
+        // Захватываем указатель только когда жест точно наш: захват с
+        // первого касания увёл бы нажатие с кнопки дня на весь ряд.
+        if (s.horizontal) {
+          box.current?.setPointerCapture(e.pointerId);
+          setSliding(false);
+        }
+      }
+      if (s.horizontal) {
+        swiped.current = true;
+        setDx(mx);
+      }
+    },
+    onPointerUp: (e: React.PointerEvent) => {
+      const s = start.current;
+      start.current = null;
+      if (!s?.horizontal) return;
+      const mx = e.clientX - s.x;
+      const width = box.current?.offsetWidth ?? 320;
+      const fast = Math.abs(mx) / Math.max(1, performance.now() - s.at) > 0.5;
+      if (Math.abs(mx) < width / 4 && !(fast && Math.abs(mx) > 30)) {
+        settle();
+        return;
+      }
+      const dir = mx < 0 ? 1 : -1;
+      setSliding(true);
+      setDx(-dir * width);
+      setTimeout(() => {
+        // Соседний отрезок ставим за краем с другой стороны без анимации
+        // и уже оттуда въезжаем — так видно, откуда он пришёл.
+        setSliding(false);
+        shift(dir);
+        setDx(dir * width);
+        requestAnimationFrame(() => requestAnimationFrame(settle));
+      }, SLIDE_MS);
+    },
+    onPointerCancel: () => {
+      start.current = null;
+      settle();
+    },
+    // После свайпа палец отпускают над каким-то днём — это не выбор дня.
+    onClickCapture: (e: React.MouseEvent) => {
+      if (!swiped.current) return;
+      swiped.current = false;
+      e.preventDefault();
+      e.stopPropagation();
+    },
+  };
+
+  return { box, dx, sliding, handlers };
 }

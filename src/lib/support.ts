@@ -41,6 +41,26 @@ export async function markRead(userId?: string): Promise<void> {
   await createClient().rpc("support_mark_read", userId ? { p_user: userId } : {});
 }
 
+/** Последний непрочитанный ответ администратора — для баннера при входе. */
+export interface UnreadReply {
+  id: number;
+  body: string;
+  /** Сколько всего непрочитанных ответов — не только этот. */
+  count: number;
+}
+
+export async function latestUnreadReply(): Promise<UnreadReply | null> {
+  const { data, count } = await createClient()
+    .from("support_messages")
+    .select("id, body", { count: "exact" })
+    .eq("from_admin", true)
+    .is("read_at", null)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  const row = data?.[0];
+  return row ? { id: row.id, body: row.body, count: count ?? 1 } : null;
+}
+
 export function messageTime(iso: string): string {
   const at = new Date(iso);
   const today = new Date();

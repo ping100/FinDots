@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Onest } from "next/font/google";
-import { RegisterSW } from "@/components/RegisterSW";
+import { BottomBanners } from "@/components/BottomBanners";
 import { NoEdgeSwipe } from "@/components/NoEdgeSwipe";
 import { Presence } from "@/components/Presence";
 import { ReturnHome } from "@/components/ReturnHome";
@@ -76,7 +76,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         {children}
-        <RegisterSW />
+        <BottomBanners />
         <NoEdgeSwipe />
         <Presence />
         <ReturnHome />

@@ -44,41 +44,42 @@ export function RegisterSW() {
 
   if (!ready) return null;
 
+  // Позиция внизу экрана — общая для всех таких полос, задаёт её
+  // BottomBanners: одновременно с этой может показаться ещё и полоса про
+  // ответ администратора, и класть их друг на друга нельзя.
   return (
-    <div className="pb-safe animate-rise fixed inset-x-3 bottom-3 z-[70] mx-auto max-w-md">
-      <div
-        className="flex items-center gap-3 rounded-2xl px-4 py-3"
-        style={{
-          background: "var(--surface)",
-          border: "1px solid var(--accent)",
-          boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
-        }}
-      >
-        <span className="flex-1 text-sm leading-snug">
-          Вышла новая версия
-          <span className="block text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-            Записи не потеряются — они хранятся на сервере
-          </span>
+    <div
+      className="animate-rise flex items-center gap-3 rounded-2xl px-4 py-3"
+      style={{
+        background: "var(--surface)",
+        border: "1px solid var(--accent)",
+        boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
+      }}
+    >
+      <span className="flex-1 text-sm leading-snug">
+        Вышла новая версия
+        <span className="block text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+          Записи не потеряются — они хранятся на сервере
         </span>
-        <button
-          onClick={() => {
-            setBusy(true);
-            void applyUpdate();
-          }}
-          disabled={busy}
-          className="shrink-0 rounded-full px-4 py-2 text-sm font-semibold text-white transition-transform duration-100 active:scale-95 disabled:opacity-50"
-          style={{ background: "var(--accent)" }}
-        >
-          {busy ? "Обновляю…" : "Обновить"}
-        </button>
-        <button
-          onClick={() => setReady(false)}
-          aria-label="Позже"
-          className="shrink-0 rounded-full p-1 opacity-50"
-        >
-          <span className="text-lg leading-none">×</span>
-        </button>
-      </div>
+      </span>
+      <button
+        onClick={() => {
+          setBusy(true);
+          void applyUpdate();
+        }}
+        disabled={busy}
+        className="shrink-0 rounded-full px-4 py-2 text-sm font-semibold text-white transition-transform duration-100 active:scale-95 disabled:opacity-50"
+        style={{ background: "var(--accent)" }}
+      >
+        {busy ? "Обновляю…" : "Обновить"}
+      </button>
+      <button
+        onClick={() => setReady(false)}
+        aria-label="Позже"
+        className="shrink-0 rounded-full p-1 opacity-50"
+      >
+        <span className="text-lg leading-none">×</span>
+      </button>
     </div>
   );
 }

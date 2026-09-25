@@ -17,7 +17,17 @@ export function useIsAdmin(): boolean | null {
 
   useEffect(() => {
     let alive = true;
-    asked ??= Promise.resolve(createClient().rpc("is_admin")).then(({ data }) => data === true, () => false);
+    asked ??= (async () => {
+      const supabase = createClient();
+      // Компонент теперь монтируется и на входе, и на публичных страницах —
+      // без сессии спрашивать базу незачем, и так понятно, что не админ.
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) return false;
+      const { data } = await supabase.rpc("is_admin");
+      return data === true;
+    })().catch(() => false);
     // Неудачный ответ не запоминаем: иначе сбой сети спрятал бы админку
     // до перезагрузки.
     asked.then((value) => {

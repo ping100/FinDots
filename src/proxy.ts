@@ -37,7 +37,10 @@ export async function proxy(request: NextRequest) {
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    url.searchParams.set("next", request.nextUrl.pathname);
+    // Куда шёл — чтобы вернуть туда после входа. На главную и так
+    // вернёт, и «?next=%2F» в адресе только уродует ссылку, которой
+    // человек потом делится.
+    if (request.nextUrl.pathname !== "/") url.searchParams.set("next", request.nextUrl.pathname);
     return NextResponse.redirect(url);
   }
 

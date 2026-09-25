@@ -24,7 +24,8 @@ const onest = Onest({
 });
 
 const TITLE = "Dots — деньги и задачи";
-const DESCRIPTION = "Findots и Todots: личные финансы и список дел под одним входом";
+// Это же — подпись под ссылкой в мессенджерах: коротко, что внутри.
+const DESCRIPTION = "Личные финансы и список дел под одним входом: сколько можно потратить сегодня и что сегодня сделать";
 
 export const metadata: Metadata = {
   // Без metadataBase относительные пути в og остаются относительными, а
@@ -43,13 +44,15 @@ export const metadata: Metadata = {
     title: TITLE,
     description: DESCRIPTION,
     url: "/",
-    images: [{ url: "/og.png", width: 1200, height: 630, alt: "Dots" }],
+    // Новое имя файла, а не замена старого: мессенджеры надолго запоминают
+    // картинку по адресу и показывали бы прежнюю, с «Findots».
+    images: [{ url: "/og-dots.png", width: 1200, height: 630, alt: "Dots — деньги и задачи" }],
   },
   twitter: {
     card: "summary_large_image",
     title: TITLE,
     description: DESCRIPTION,
-    images: ["/og.png"],
+    images: ["/og-dots.png"],
   },
 };
 

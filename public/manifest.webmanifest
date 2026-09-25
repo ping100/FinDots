@@ -1,7 +1,7 @@
 {
   "name": "Dots — деньги и задачи",
   "short_name": "Dots",
-  "description": "Findots и Todots: личные финансы и список дел под одним входом",
+  "description": "Личные финансы и список дел под одним входом",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

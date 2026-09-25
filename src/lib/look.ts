@@ -7,8 +7,8 @@
  * перекраски. Поэтому выбранное запоминаем ещё и на самом устройстве и
  * применяем до первой отрисовки.
  */
-export const THEME_KEY = "findots.theme";
-export const SCALE_KEY = "findots.scale";
+export const THEME_KEY = "dots.theme";
+export const SCALE_KEY = "dots.scale";
 
 export const BACKGROUNDS = { light: "#f2f2f7", dark: "#0b0f16" };
 
@@ -26,7 +26,7 @@ export function rememberLook(theme: string | undefined, fontSize: string): void 
 /** Что запомнено на этом устройстве; null — ничего. */
 export function rememberedTheme(): string | null {
   try {
-    return localStorage.getItem(THEME_KEY);
+    return localStorage.getItem(THEME_KEY) ?? localStorage.getItem("findots.theme");
   } catch {
     return null;
   }
@@ -42,10 +42,10 @@ export function rememberedTheme(): string | null {
 export const LOOK_SCRIPT = `
 try {
   var d = document.documentElement;
-  var t = localStorage.getItem(${JSON.stringify(THEME_KEY)});
+  var t = localStorage.getItem(${JSON.stringify(THEME_KEY)}) || localStorage.getItem("findots.theme");
   if (!t) t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   if (t === 'dark') d.classList.add('dark');
-  var s = localStorage.getItem(${JSON.stringify(SCALE_KEY)});
+  var s = localStorage.getItem(${JSON.stringify(SCALE_KEY)}) || localStorage.getItem("findots.scale");
   if (s) d.style.fontSize = s;
   var m = document.querySelector('meta[name="theme-color"]');
   if (m) m.setAttribute('content', t === 'dark' ? ${JSON.stringify(BACKGROUNDS.dark)} : ${JSON.stringify(BACKGROUNDS.light)});

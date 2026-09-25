@@ -1,5 +1,5 @@
 /**
- * Знак Findots — те же три кружка, что на иконке приложения и на главном
+ * Знак Dots — те же три кружка, что на иконке приложения и на главном
  * экране: доход, кошелёк, расход. Цвета зашиты, а не берутся из темы:
  * логотип должен оставаться одним и тем же и в светлой, и в тёмной.
  *
@@ -31,7 +31,7 @@ export function Logo({
 }) {
   return (
     // viewBox обрезан по самим кружкам, иначе знак тонет в пустых полях
-    <svg width={size} height={size} viewBox="17.5 13.4 65 65" role="img" aria-label="Findots">
+    <svg width={size} height={size} viewBox="17.5 13.4 65 65" role="img" aria-label="Dots">
       {DOTS.map((dot) => (
         <circle
           key={dot.color}

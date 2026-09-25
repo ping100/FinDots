@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useStore } from "@/components/tasks/DataProvider";
 import { SignInMethods } from "@/components/SignInMethods";
 import { UserNumber } from "@/components/UserNumber";
+import { SupportRow } from "@/components/SupportRow";
 import { AppSwitch } from "@/components/AppSwitch";
 import { AdminLink } from "@/components/AdminLink";
 import { CURRENT_BUILD, applyUpdate, buildMoment, serverBuild } from "@/lib/update";
@@ -87,6 +88,8 @@ export default function SettingsPage() {
         <UserNumber />
         <SignInMethods />
       </Group>
+
+      <SupportRow />
 
       <Group>
         <Row

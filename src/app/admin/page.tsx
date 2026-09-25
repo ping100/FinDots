@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Icon } from "@/lib/icons";
 import { Loader } from "@/components/Loader";
 import { buildMoment } from "@/lib/update";
+import { SupportCard } from "@/components/admin/SupportCard";
 import { Denied, GeneratedAt, OnlineDot, Problem, RefreshButton, useOverview } from "@/components/admin/shared";
 import {
   LINKS,
@@ -51,6 +52,7 @@ export default function AdminPage() {
 
       {data ? (
         <>
+          <SupportCard />
           <Totals data={data} />
           <SupabaseLimits data={data} />
           <VercelBlock built={built} />

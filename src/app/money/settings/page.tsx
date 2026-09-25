@@ -15,6 +15,7 @@ import { StatementImport } from "@/components/StatementImport";
 import { Guide } from "@/components/Guide";
 import { SignInMethods } from "@/components/SignInMethods";
 import { UserNumber } from "@/components/UserNumber";
+import { SupportRow } from "@/components/SupportRow";
 import { AppSwitch } from "@/components/AppSwitch";
 import { AdminLink } from "@/components/AdminLink";
 import { Button, Field, Sheet, inputClass, inputStyle } from "@/components/ui";
@@ -171,6 +172,8 @@ export default function SettingsPage() {
           onClick={() => void checkUpdate()}
         />
       </Group>
+
+      <SupportRow />
 
       <Group>
         <Row label="Выйти" danger onClick={signOut} />

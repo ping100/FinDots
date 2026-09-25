@@ -39,6 +39,7 @@ function LoginForm() {
   const next = params.get("next") ?? "/";
   const googleReady = useProvider("google");
   const [mode, setMode] = useState<"in" | "up">("in");
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [shown, setShown] = useState(false);
@@ -79,6 +80,9 @@ function LoginForm() {
             options: {
               captchaToken: captcha,
               emailRedirectTo: `${location.origin}/auth/callback`,
+              // Имя уходит в профиль при создании учётной записи: его
+              // подхватывает триггер в базе (handle_new_user).
+              data: name.trim() ? { display_name: name.trim().slice(0, 40) } : undefined,
             },
           });
 
@@ -189,6 +193,21 @@ function LoginForm() {
           animationDelay: "470ms",
         }}
       >
+        {mode === "up" ? (
+          <Field label="Как вас зовут" hint="Чтобы приложение обращалось к вам по имени">
+            <input
+              required
+              autoComplete="given-name"
+              maxLength={40}
+              placeholder="Например, Алиса"
+              className={inputClass}
+              style={inputStyle}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </Field>
+        ) : null}
+
         <Field label="Почта">
           <input
             type="email"

@@ -18,6 +18,8 @@ export interface AdminUser {
   providers: string[];
   /** Почта привязанного Google; null — Google не привязан. */
   google_email: string | null;
+  /** Картинка профиля Google. */
+  avatar_url: string | null;
   wallets: number;
   transactions: number;
   tasks_open: number;

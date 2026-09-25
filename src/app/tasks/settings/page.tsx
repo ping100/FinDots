@@ -9,6 +9,7 @@ import { useStore } from "@/components/tasks/DataProvider";
 import { SignInMethods } from "@/components/SignInMethods";
 import { UserNumber } from "@/components/UserNumber";
 import { SupportRow } from "@/components/SupportRow";
+import { AccountCard } from "@/components/AccountCard";
 import { AppSwitch } from "@/components/AppSwitch";
 import { AdminLink } from "@/components/AdminLink";
 import { CURRENT_BUILD, applyUpdate, buildMoment, serverBuild } from "@/lib/update";
@@ -80,10 +81,10 @@ export default function SettingsPage() {
       </Group>
 
       <Group>
-        <Row
-          label="Аккаунт"
-          value={profile?.display_name ?? undefined}
+        <AccountCard
+          name={profile?.display_name}
           hint="Задачи привязаны к этой учётной записи и видны только вам"
+          onSaveName={(display_name) => saveProfile({ display_name })}
         />
         <UserNumber />
         <SignInMethods />

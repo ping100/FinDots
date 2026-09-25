@@ -16,6 +16,7 @@ import { Guide } from "@/components/Guide";
 import { SignInMethods } from "@/components/SignInMethods";
 import { UserNumber } from "@/components/UserNumber";
 import { SupportRow } from "@/components/SupportRow";
+import { AccountCard } from "@/components/AccountCard";
 import { AppSwitch } from "@/components/AppSwitch";
 import { AdminLink } from "@/components/AdminLink";
 import { Button, Field, Sheet, inputClass, inputStyle } from "@/components/ui";
@@ -106,10 +107,10 @@ export default function SettingsPage() {
       </Group>
 
       <Group>
-        <Row
-          label="Аккаунт"
-          value={profile?.display_name ?? undefined}
+        <AccountCard
+          name={profile?.display_name}
           hint="Данные привязаны к этой учётной записи и видны только вам"
+          onSaveName={(display_name) => saveProfile({ display_name })}
         />
         <UserNumber />
         <SignInMethods />

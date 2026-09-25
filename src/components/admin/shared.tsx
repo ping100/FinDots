@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { GoogleMark } from "@/components/GoogleButton";
+import { Avatar } from "@/components/Avatar";
 import { REFRESH, isOnline, plural, sinceLabel, type AdminOverview, type AdminUser } from "@/lib/admin";
 
 /**
@@ -111,7 +112,8 @@ export function UserCard({ user, now }: { user: AdminUser; now: number }) {
   return (
     <div className="rounded-2xl p-3.5" style={{ background: "var(--surface)" }}>
       <div className="flex items-baseline justify-between gap-3">
-        <p className="min-w-0 truncate text-[0.9375rem] font-medium">
+        <p className="flex min-w-0 items-center gap-2 truncate text-[0.9375rem] font-medium">
+          <Avatar url={user.avatar_url} name={user.display_name || user.email} size={28} />
           {user.number !== null ? (
             <span className="mr-1.5 font-normal tabular-nums" style={{ color: "var(--muted)" }}>
               ID {user.number}

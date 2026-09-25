@@ -6,6 +6,7 @@ import { Icon } from "@/lib/icons";
 import { Loader } from "@/components/Loader";
 import { Denied, useOverview } from "@/components/admin/shared";
 import { SupportComposer, SupportThread } from "@/components/SupportThread";
+import { Avatar } from "@/components/Avatar";
 import { SUPPORT_POLL, loadThread, markRead, messageTime, sendMessage, type SupportMessage } from "@/lib/support";
 import type { AdminUser } from "@/lib/admin";
 
@@ -70,6 +71,7 @@ export default function SupportPage() {
           >
             <Icon name="chevron-left" size={20} />
           </button>
+          <Avatar url={person?.avatar_url} name={name(person)} size={36} />
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-[1.125rem] font-semibold">
               {person?.number != null ? (
@@ -135,7 +137,8 @@ export default function SupportPage() {
                 style={{ background: "var(--surface)" }}
               >
                 <span className="flex items-baseline justify-between gap-3">
-                  <span className="min-w-0 truncate text-[0.9375rem] font-medium">
+                  <span className="flex min-w-0 items-center gap-2 truncate text-[0.9375rem] font-medium">
+                    <Avatar url={user?.avatar_url} name={name(user)} size={26} />
                     {user?.number != null ? (
                       <span className="mr-1.5 font-normal tabular-nums" style={{ color: "var(--muted)" }}>
                         ID {user.number}

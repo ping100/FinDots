@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Logo } from "@/components/Logo";
 import { HomeCard } from "@/components/HomeCard";
 import { HomeAdminCard } from "@/components/HomeAdminCard";
+import { Greeting } from "@/components/Greeting";
 
 /**
  * Развилка: одна учётная запись, два приложения.
@@ -43,6 +44,7 @@ export default function Home() {
         >
           Dots
         </h1>
+        <Greeting />
         <p
           className="animate-lift mt-1.5 text-sm leading-snug"
           style={{ color: "var(--muted)", animationDelay: "330ms" }}

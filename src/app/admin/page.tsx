@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Icon } from "@/lib/icons";
 import { Loader } from "@/components/Loader";
@@ -30,6 +30,15 @@ export default function AdminPage() {
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [built, setBuilt] = useState<string | null>(null);
+  const [filter, setFilter] = useState<FilterId>("all");
+  const usersRef = useRef<HTMLDivElement>(null);
+
+  // Нажали на плитку — показываем этих людей: список ниже экрана, и без
+  // прокрутки нажатие выглядело бы так, будто ничего не произошло.
+  const pick = (id: FilterId) => {
+    setFilter((current) => (current === id ? "all" : id));
+    requestAnimationFrame(() => usersRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
 
   const load = useCallback(async () => {
     setBusy(true);
@@ -97,10 +106,12 @@ export default function AdminPage() {
 
       {data ? (
         <>
-          <Totals data={data} />
+          <Totals data={data} filter={filter} onPick={pick} />
           <SupabaseLimits data={data} />
           <VercelBlock built={built} />
-          <Users users={data.users} />
+          <div ref={usersRef} className="scroll-mt-4">
+            <Users users={data.users} filter={filter} onReset={() => setFilter("all")} />
+          </div>
           <p className="mt-6 text-center text-[0.6875rem]" style={{ color: "var(--muted)" }}>
             Данные на {new Date(data.generated_at).toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}
           </p>
@@ -122,29 +133,75 @@ function Card({ children }: { children: React.ReactNode }) {
   );
 }
 
+/**
+ * Кого показать в списке. Плитки считают тем же правилом, что и фильтр:
+ * иначе на плитке «4», а в списке трое — и непонятно, кто из них врёт.
+ */
+const FILTERS = {
+  all: { label: "Всего пользователей", title: "Все", test: () => true },
+  new_7d: { label: "Новых за неделю", title: "Новые за неделю", test: (u: AdminUser) => within(u.created_at, 7) },
+  active_7d: { label: "Активных за неделю", title: "Активные за неделю", test: (u: AdminUser) => within(u.last_seen, 7) },
+  active_30d: { label: "Активных за месяц", title: "Активные за месяц", test: (u: AdminUser) => within(u.last_seen, 30) },
+  money: { label: "Деньгами пользуются", title: "Пользуются деньгами", test: (u: AdminUser) => u.transactions > 0 },
+  tasks: { label: "Задачами пользуются", title: "Пользуются задачами", test: (u: AdminUser) => u.tasks_open + u.tasks_done > 0 },
+} satisfies Record<string, { label: string; title: string; test: (u: AdminUser) => boolean }>;
+
+type FilterId = keyof typeof FILTERS;
+
+function within(iso: string | null, days: number): boolean {
+  return iso !== null && Date.now() - new Date(iso).getTime() < days * 86_400_000;
+}
+
 /** Главные числа — крупно, по два в ряд: на телефоне больше не влезает. */
-function Totals({ data }: { data: AdminOverview }) {
+function Totals({
+  data,
+  filter,
+  onPick,
+}: {
+  data: AdminOverview;
+  filter: FilterId;
+  onPick: (id: FilterId) => void;
+}) {
   const t = data.totals;
-  const tiles = [
-    { label: "Всего пользователей", value: t.users },
-    { label: "Новых за неделю", value: t.new_7d },
-    { label: "Активных за неделю", value: t.active_7d },
-    { label: "Активных за месяц", value: t.active_30d },
-  ];
+  const count = (id: FilterId) => data.users.filter(FILTERS[id].test).length;
+  const tiles: FilterId[] = ["all", "new_7d", "active_7d", "active_30d"];
+  const inline = (id: FilterId) => (
+    <button
+      onClick={() => onPick(id)}
+      aria-pressed={filter === id}
+      className="font-medium underline decoration-dotted underline-offset-2"
+      style={{ color: filter === id ? "var(--accent)" : "var(--text)" }}
+    >
+      {count(id)}
+    </button>
+  );
   return (
     <>
       <div className="grid grid-cols-2 gap-2">
-        {tiles.map((tile) => (
-          <div key={tile.label} className="rounded-2xl p-3.5" style={{ background: "var(--surface)" }}>
-            <p className="text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
-              {tile.label}
-            </p>
-            <p className="mt-1 text-[1.625rem] font-semibold tabular-nums">{tile.value}</p>
-          </div>
-        ))}
+        {tiles.map((id) => {
+          const on = filter === id && id !== "all";
+          return (
+            <button
+              key={id}
+              onClick={() => onPick(id)}
+              aria-pressed={on}
+              className="rounded-2xl p-3.5 text-left transition active:scale-[0.98]"
+              style={{
+                background: "var(--surface)",
+                boxShadow: on ? "inset 0 0 0 2px var(--accent)" : undefined,
+              }}
+            >
+              <span className="flex items-center justify-between gap-2 text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
+                {FILTERS[id].label}
+                <Icon name="chevron-right" size={12} className="shrink-0 opacity-50" />
+              </span>
+              <span className="mt-1 block text-[1.625rem] font-semibold tabular-nums">{count(id)}</span>
+            </button>
+          );
+        })}
       </div>
       <p className="mt-2 px-1 text-[0.75rem] leading-snug" style={{ color: "var(--muted)" }}>
-        Деньгами пользуются {t.money_users} · задачами {t.tasks_users}. Всего{" "}
+        Деньгами пользуются {inline("money")} · задачами {inline("tasks")}. Всего{" "}
         {t.transactions} {plural(t.transactions, "операция", "операции", "операций")} и {t.tasks}{" "}
         {plural(t.tasks, "задача", "задачи", "задач")}.
       </p>
@@ -292,12 +349,34 @@ function VercelBlock({ built }: { built: string | null }) {
 
 const PROVIDERS: Record<string, string> = { email: "почту", google: "Google" };
 
-function Users({ users }: { users: AdminUser[] }) {
+function Users({
+  users,
+  filter,
+  onReset,
+}: {
+  users: AdminUser[];
+  filter: FilterId;
+  onReset: () => void;
+}) {
   // Сверху — кто был недавно: их и хочется видеть первыми.
-  const sorted = [...users].sort((a, b) => (b.last_seen ?? "").localeCompare(a.last_seen ?? ""));
+  const sorted = users
+    .filter(FILTERS[filter].test)
+    .sort((a, b) => (b.last_seen ?? "").localeCompare(a.last_seen ?? ""));
   return (
     <>
-      <Heading>Пользователи</Heading>
+      <div className="mb-2 mt-6 flex items-baseline justify-between gap-3 px-1">
+        <h2 className="text-[0.9375rem] font-semibold">
+          {filter === "all" ? "Пользователи" : FILTERS[filter].title}
+          <span className="ml-1.5 font-normal tabular-nums" style={{ color: "var(--muted)" }}>
+            {sorted.length}
+          </span>
+        </h2>
+        {filter !== "all" ? (
+          <button onClick={onReset} className="text-[0.8125rem] font-medium" style={{ color: "var(--accent)" }}>
+            Показать всех
+          </button>
+        ) : null}
+      </div>
       <p className="-mt-1 mb-2 px-1 text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
         Только счётчики: суммы, названия операций и тексты задач здесь не видны —
         людям обещано, что их данные видят только они.
@@ -339,11 +418,16 @@ function Users({ users }: { users: AdminUser[] }) {
             </div>
 
             <p className="mt-2 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-              с {sinceLabel(user.created_at)} · входит через{" "}
+              появился {sinceLabel(user.created_at)} · входит через{" "}
               {user.providers.map((p) => PROVIDERS[p] ?? p).join(" и ") || "—"}
             </p>
           </div>
         ))}
+        {sorted.length === 0 ? (
+          <p className="rounded-2xl p-3.5 text-[0.8125rem]" style={{ background: "var(--surface)", color: "var(--muted)" }}>
+            Таких пока нет.
+          </p>
+        ) : null}
       </div>
     </>
   );

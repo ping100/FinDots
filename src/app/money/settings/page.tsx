@@ -11,6 +11,7 @@ import { CURRENCIES, parseAmount, symbolOf } from "@/lib/money";
 import { createClient } from "@/lib/supabase/client";
 import { useStore } from "@/components/DataProvider";
 import { DataTransfer } from "@/components/DataTransfer";
+import { ResetMoneyData } from "@/components/ResetMoneyData";
 import { StatementImport } from "@/components/StatementImport";
 import { Guide } from "@/components/Guide";
 import { SignInMethods } from "@/components/SignInMethods";
@@ -165,6 +166,10 @@ export default function SettingsPage() {
       </SettingsHeading>
       <StatementImport />
       <DataTransfer />
+
+      <Group>
+        <ResetMoneyData />
+      </Group>
 
       <SettingsHeading>Помощь</SettingsHeading>
       <Group>

@@ -1,7 +1,13 @@
 // Кэшируем только статику. Страницы и запросы к Supabase всегда идут в сеть:
 // это финансовые данные, и на общем телефоне кэш страницы одного пользователя
 // не должен достаться другому.
-const CACHE = "findots-static-v1";
+//
+// Кэш — свой у каждой версии приложения: версия приходит в адресе самого
+// service worker (sw.js?v=…). Новая версия — новый worker, и при его
+// включении прежний кэш удаляется. Раньше кэш был один на всё время, и
+// файлы каждой выкладки копились на телефоне бесконечно.
+const VERSION = new URL(self.location.href).searchParams.get("v") || "dev";
+const CACHE = `dots-static-${VERSION}`;
 
 self.addEventListener("install", () => self.skipWaiting());
 
@@ -32,8 +38,12 @@ self.addEventListener("fetch", (event) => {
       (hit) =>
         hit ??
         fetch(request).then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE).then((cache) => cache.put(request, copy));
+          // Кэшируем только удачные ответы: закэшированная ошибка
+          // отвечала бы ошибкой уже без всякой сети.
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE).then((cache) => cache.put(request, copy));
+          }
           return response;
         }),
     ),

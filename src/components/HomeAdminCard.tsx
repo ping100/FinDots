@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useIsAdmin } from "@/lib/useIsAdmin";
 import { HomeCard } from "./HomeCard";
 import { unreadSupport } from "./admin/SupportCard";
 
@@ -10,22 +10,18 @@ import { unreadSupport } from "./admin/SupportCard";
  * не защита: сводку отдаёт база и сама проверяет, кто спрашивает.
  */
 export function HomeAdminCard({ delay }: { delay: number }) {
-  const [admin, setAdmin] = useState(false);
+  const admin = useIsAdmin();
   const [unread, setUnread] = useState(0);
 
+  // Новые обращения видно прямо с развилки — не заходя в админку.
   useEffect(() => {
+    if (!admin) return;
     let alive = true;
-    createClient()
-      .rpc("is_admin")
-      .then(({ data }) => {
-        if (alive) setAdmin(data === true);
-        // Новые обращения видно прямо с развилки — не заходя в админку.
-        if (data === true) void unreadSupport().then((n) => alive && setUnread(n));
-      });
+    void unreadSupport().then((n) => alive && setUnread(n));
     return () => {
       alive = false;
     };
-  }, []);
+  }, [admin]);
 
   if (!admin) return null;
   return (

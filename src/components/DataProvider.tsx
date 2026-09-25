@@ -161,16 +161,20 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [aiKeyHint, setAiKeyHint] = useState<string | null>(null);
 
   const load = useCallback(async (retry = true) => {
+    // Кто вошёл — из сохранённой сессии, без запроса к серверу входа:
+    // proxy уже проверил вход по пути сюда, а доступ к строкам всё равно
+    // решает база. Лишний круг до сервера — это полсекунды на мобильном.
     const {
-      data: { user },
-    } = await supabase().auth.getUser();
+      data: { session },
+    } = await supabase().auth.getSession();
+    const user = session?.user;
     if (!user) {
       setReady(true);
       return;
     }
     setUserId(user.id);
 
-    const [p, r, w, c, b, ip, tx] = await Promise.all([
+    const [p, r, w, c, b, ip, tx, key] = await Promise.all([
       supabase().from("profiles").select("*").eq("id", user.id).single(),
       supabase().from("exchange_rates").select("code, rate_to_base"),
       // Архивные тоже: операция по убранной категории иначе теряет название
@@ -184,10 +188,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
         .select("*")
         .order("occurred_at", { ascending: false })
         .limit(5000),
+      // Полный ключ в браузер не тянем — только хвост из представления.
+      supabase().from("ai_key_status").select("hint").maybeSingle(),
     ]);
 
-    // Полный ключ в браузер не тянем — только хвост из представления.
-    const key = await supabase().from("ai_key_status").select("hint").maybeSingle();
     setAiKeyHint((key.data?.hint as string | undefined) ?? null);
 
     const firstError = [p, r, w, c, b, ip, tx].find((res) => res.error)?.error;

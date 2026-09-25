@@ -6,11 +6,13 @@
  * поэтому подгружается только в тот момент, когда человек выбрал файл.
  */
 export async function pdfLines(file: File): Promise<string[]> {
-  const pdfjs = await import("pdfjs-dist");
+  // legacy — с заплатками для iPhone без iOS 18.2 (см. scripts/copy-pdf-worker.mjs).
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
   pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
   const data = new Uint8Array(await file.arrayBuffer());
-  const doc = await pdfjs.getDocument({ data }).promise;
+  const task = pdfjs.getDocument({ data });
+  const doc = await task.promise;
 
   const lines: string[] = [];
   for (let n = 1; n <= doc.numPages; n += 1) {
@@ -34,6 +36,6 @@ export async function pdfLines(file: File): Promise<string[]> {
     }
   }
 
-  await doc.destroy();
+  await task.destroy();
   return lines;
 }

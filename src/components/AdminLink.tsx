@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Icon } from "@/lib/icons";
-import { createClient } from "@/lib/supabase/client";
+import { useIsAdmin } from "@/lib/useIsAdmin";
 
 /**
  * Вход в админку — только для тех, кого база считает админом.
@@ -12,19 +11,7 @@ import { createClient } from "@/lib/supabase/client";
  * и она сама проверяет, кто спрашивает.
  */
 export function AdminLink() {
-  const [admin, setAdmin] = useState(false);
-
-  useEffect(() => {
-    let alive = true;
-    createClient()
-      .rpc("is_admin")
-      .then(({ data }) => {
-        if (alive) setAdmin(data === true);
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
+  const admin = useIsAdmin();
 
   if (!admin) return null;
   return (

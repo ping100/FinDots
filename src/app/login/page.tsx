@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { safeNext } from "@/lib/safeNext";
 import { Icon } from "@/lib/icons";
 import { Logo } from "@/components/Logo";
 import { GoogleButton } from "@/components/GoogleButton";
@@ -36,7 +37,8 @@ function ruError(message: string): string {
 function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
-  const next = params.get("next") ?? "/";
+  // Только свои пути: ссылку на вход с чужим адресом может прислать кто угодно.
+  const next = safeNext(params.get("next"));
   const googleReady = useProvider("google");
   const [mode, setMode] = useState<"in" | "up">("in");
   const [name, setName] = useState("");

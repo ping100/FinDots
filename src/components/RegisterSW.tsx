@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { applyUpdate, updateAvailable } from "@/lib/update";
+import { CURRENT_BUILD, applyUpdate, updateAvailable } from "@/lib/update";
 
 /**
  * Регистрация service worker и присмотр за обновлениями.
@@ -24,7 +24,8 @@ export function RegisterSW() {
     if (process.env.NODE_ENV !== "production") return;
 
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch(() => {
+      // Версия в адресе — у каждой выкладки свой worker и свой кэш.
+      navigator.serviceWorker.register(`/sw.js?v=${CURRENT_BUILD}`).catch(() => {
         // Без service worker приложение работает как обычный сайт.
       });
     }

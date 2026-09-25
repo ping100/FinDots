@@ -70,9 +70,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [tasks, setTasks] = useState<Task[]>([]);
 
   const load = useCallback(async (retry = true) => {
+    // Кто вошёл — из сохранённой сессии, без запроса к серверу входа:
+    // proxy уже проверил вход по пути сюда, а доступ к строкам всё равно
+    // решает база. Лишний круг до сервера — это полсекунды на мобильном.
     const {
-      data: { user },
-    } = await supabase().auth.getUser();
+      data: { session },
+    } = await supabase().auth.getSession();
+    const user = session?.user;
     if (!user) {
       setReady(true);
       return;

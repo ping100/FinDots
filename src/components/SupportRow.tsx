@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 import { Icon } from "@/lib/icons";
+import { useIsAdmin } from "@/lib/useIsAdmin";
 import { SUPPORT_POLL, loadThread, markRead, sendMessage, type SupportMessage } from "@/lib/support";
 import { Sheet } from "./ui";
 import { SupportComposer, SupportThread } from "./SupportThread";
@@ -15,18 +15,17 @@ import { SupportComposer, SupportThread } from "./SupportThread";
  * строка не нужна — у него переписки в админке.
  */
 export function SupportRow() {
-  const [admin, setAdmin] = useState<boolean | null>(null);
+  const admin = useIsAdmin();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<SupportMessage[]>([]);
 
   const reload = useCallback(async () => setMessages(await loadThread()), []);
 
+  // Переписку грузим только не-админу: админу база отдала бы все
+  // обращения разом, а строка ему всё равно не показывается.
   useEffect(() => {
-    createClient()
-      .rpc("is_admin")
-      .then(({ data }) => setAdmin(data === true));
-    void reload();
-  }, [reload]);
+    if (admin === false) void reload();
+  }, [admin, reload]);
 
   // Пока переписка открыта — подтягиваем ответы и отмечаем их прочитанными.
   useEffect(() => {

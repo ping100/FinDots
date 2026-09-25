@@ -1,88 +1,35 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useEffect, useState } from "react";
 import { Icon } from "@/lib/icons";
 import { Loader } from "@/components/Loader";
 import { buildMoment } from "@/lib/update";
+import { Denied, GeneratedAt, OnlineDot, Problem, RefreshButton, useOverview } from "@/components/admin/shared";
 import {
   LINKS,
   SUPABASE_FREE,
+  VIEWS,
+  countView,
   formatBytes,
   plural,
   pressure,
-  sinceLabel,
   type AdminOverview,
-  type AdminUser,
+  type ViewId,
 } from "@/lib/admin";
 
 /**
- * Админка Dots.
- *
- * Пускает сама база: страница просто спрашивает сводку, а функция в базе
- * отвечает отказом всем, кого нет в таблице admins. Поэтому здесь нет
- * своей проверки — она была бы лишь видимостью защиты.
+ * Админка Dots: главные числа и лимиты. Люди — на отдельных экранах за
+ * плитками: список на главной рос бы с каждым пользователем и хоронил
+ * под собой лимиты.
  */
 export default function AdminPage() {
-  const [data, setData] = useState<AdminOverview | null>(null);
-  const [denied, setDenied] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const { data, denied, problem, busy, reload } = useOverview();
   const [built, setBuilt] = useState<string | null>(null);
-  const [filter, setFilter] = useState<FilterId>("all");
-  const usersRef = useRef<HTMLDivElement>(null);
 
-  // Нажали на плитку — показываем этих людей: список ниже экрана, и без
-  // прокрутки нажатие выглядело бы так, будто ничего не произошло.
-  const pick = (id: FilterId) => {
-    setFilter((current) => (current === id ? "all" : id));
-    requestAnimationFrame(() => usersRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
-  };
+  useEffect(() => setBuilt(buildMoment()), []);
 
-  // quiet — фоновое обновление: без «Обновляю…» на кнопке каждые полминуты.
-  const load = useCallback(async (quiet = false) => {
-    if (!quiet) setBusy(true);
-    setProblem(null);
-    const { data: overview, error } = await createClient().rpc("admin_overview");
-    if (!quiet) setBusy(false);
-    if (error) {
-      // 42501 — «нет прав»: это ответ базы, а не сбой, и показывать его
-      // надо иначе, чем обрыв связи.
-      if (error.code === "42501") setDenied(true);
-      else setProblem(error.message);
-      return;
-    }
-    setData(overview as AdminOverview);
-  }, []);
-
-  useEffect(() => {
-    void load();
-    setBuilt(buildMoment());
-  }, [load]);
-
-  // «Онлайн» стареет за минуты — пока админка на экране, освежаем её сами.
-  useEffect(() => {
-    const timer = setInterval(() => {
-      if (document.visibilityState === "visible") void load(true);
-    }, REFRESH);
-    return () => clearInterval(timer);
-  }, [load]);
-
-  if (denied) {
-    return (
-      <div className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="text-lg font-semibold">Сюда нельзя</p>
-        <p className="text-sm" style={{ color: "var(--muted)" }}>
-          Эта страница только для администратора.
-        </p>
-        <Link href="/" className="mt-2 text-sm" style={{ color: "var(--accent)" }}>
-          На главную
-        </Link>
-      </div>
-    );
-  }
-
+  if (denied) return <Denied />;
   if (!data && !problem) return <Loader />;
 
   return (
@@ -97,38 +44,17 @@ export default function AdminPage() {
           <Icon name="chevron-left" size={20} />
         </Link>
         <h1 className="flex-1 text-[1.625rem] font-semibold">Админка</h1>
-        <button
-          onClick={() => void load()}
-          disabled={busy}
-          className="rounded-full px-3.5 py-1.5 text-[0.8125rem] font-medium disabled:opacity-50"
-          style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
-        >
-          {busy ? "Обновляю…" : "Обновить"}
-        </button>
+        <RefreshButton busy={busy} onClick={reload} />
       </header>
 
-      {problem ? (
-        <p className="mb-4 rounded-2xl px-4 py-3 text-sm" style={{ background: "var(--surface)", color: "var(--danger)" }}>
-          {problem}
-        </p>
-      ) : null}
+      {problem ? <Problem text={problem} /> : null}
 
       {data ? (
         <>
-          <Totals data={data} filter={filter} onPick={pick} />
+          <Totals data={data} />
           <SupabaseLimits data={data} />
           <VercelBlock built={built} />
-          <div ref={usersRef} className="scroll-mt-4">
-            <Users
-              users={data.users}
-              now={new Date(data.generated_at).getTime()}
-              filter={filter}
-              onReset={() => setFilter("all")}
-            />
-          </div>
-          <p className="mt-6 text-center text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-            Данные на {new Date(data.generated_at).toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}
-          </p>
+          <GeneratedAt iso={data.generated_at} />
         </>
       ) : null}
     </div>
@@ -147,89 +73,42 @@ function Card({ children }: { children: React.ReactNode }) {
   );
 }
 
-/**
- * Кого показать в списке. Плитки считают тем же правилом, что и фильтр:
- * иначе на плитке «4», а в списке трое — и непонятно, кто из них врёт.
- */
-const FILTERS = {
-  all: { label: "Всего пользователей", title: "Все", test: () => true },
-  online: { label: "Онлайн сейчас", title: "Онлайн сейчас", test: isOnline },
-  new_7d: { label: "Новых за неделю", title: "Новые за неделю", test: (u, now) => within(u.created_at, now, 7 * DAY) },
-  active_30d: { label: "Активных за месяц", title: "Активные за месяц", test: (u, now) => within(u.last_seen, now, 30 * DAY) },
-  money: { label: "Деньгами пользуются", title: "Пользуются деньгами", test: (u) => u.transactions > 0 },
-  tasks: { label: "Задачами пользуются", title: "Пользуются задачами", test: (u) => u.tasks_open + u.tasks_done > 0 },
-} satisfies Record<string, { label: string; title: string; test: (u: AdminUser, now: number) => boolean }>;
-
-type FilterId = keyof typeof FILTERS;
-
-const DAY = 86_400_000;
-/** Приложение отмечается раз в минуту; две минуты — с запасом на одну пропущенную. */
-const ONLINE_WINDOW = 2 * 60_000;
-const REFRESH = 30_000;
-
-/**
- * «Сейчас» — момент, когда база собрала сводку, а не часы телефона: они
- * могут уйти на минуту-другую, и онлайн-статус начал бы врать.
- */
-function within(iso: string | null, now: number, ms: number): boolean {
-  return iso !== null && now - new Date(iso).getTime() < ms;
-}
-
-function isOnline(u: AdminUser, now: number): boolean {
-  return within(u.online_at, now, ONLINE_WINDOW);
-}
-
-/** Главные числа — крупно, по два в ряд: на телефоне больше не влезает. */
-function Totals({
-  data,
-  filter,
-  onPick,
-}: {
-  data: AdminOverview;
-  filter: FilterId;
-  onPick: (id: FilterId) => void;
-}) {
+/** Главные числа — крупно, по два в ряд. Каждая плитка ведёт к своему списку. */
+function Totals({ data }: { data: AdminOverview }) {
   const t = data.totals;
-  const now = new Date(data.generated_at).getTime();
-  const count = (id: FilterId) => data.users.filter((u) => FILTERS[id].test(u, now)).length;
-  const tiles: FilterId[] = ["all", "online", "new_7d", "active_30d"];
-  const inline = (id: FilterId) => (
-    <button
-      onClick={() => onPick(id)}
-      aria-pressed={filter === id}
+  const tiles: ViewId[] = ["all", "online", "new_7d", "active_30d"];
+  const inline = (id: ViewId) => (
+    <Link
+      href={`/admin/${id}`}
       className="font-medium underline decoration-dotted underline-offset-2"
-      style={{ color: filter === id ? "var(--accent)" : "var(--text)" }}
+      style={{ color: "var(--text)" }}
     >
-      {count(id)}
-    </button>
+      {countView(data, id)}
+    </Link>
   );
   return (
     <>
       <div className="grid grid-cols-2 gap-2">
-        {tiles.map((id) => {
-          const on = filter === id && id !== "all";
-          return (
-            <button
-              key={id}
-              onClick={() => onPick(id)}
-              aria-pressed={on}
-              className="rounded-2xl p-3.5 text-left transition active:scale-[0.98]"
-              style={{
-                background: "var(--surface)",
-                boxShadow: on ? "inset 0 0 0 2px var(--accent)" : undefined,
-              }}
+        {tiles.map((id) => (
+          <Link
+            key={id}
+            href={`/admin/${id}`}
+            className="rounded-2xl p-3.5 transition active:scale-[0.98]"
+            style={{ background: "var(--surface)" }}
+          >
+            <span
+              className="flex items-center justify-between gap-2 text-[0.6875rem] leading-snug"
+              style={{ color: "var(--muted)" }}
             >
-              <span className="flex items-center justify-between gap-2 text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
-                <span className="flex items-center gap-1.5">
-                  {id === "online" ? <OnlineDot /> : null}
-                  {FILTERS[id].label}
-                </span>
-                <Icon name="chevron-right" size={12} className="shrink-0 opacity-50" />
+              <span className="flex items-center gap-1.5">
+                {id === "online" ? <OnlineDot /> : null}
+                {VIEWS[id].label}
               </span>
-              <span className="mt-1 block text-[1.625rem] font-semibold tabular-nums">{count(id)}</span>
-            </button>
-          );
-        })}
+              <Icon name="chevron-right" size={12} className="shrink-0 opacity-50" />
+            </span>
+            <span className="mt-1 block text-[1.625rem] font-semibold tabular-nums">{countView(data, id)}</span>
+          </Link>
+        ))}
       </div>
       <p className="mt-2 px-1 text-[0.75rem] leading-snug" style={{ color: "var(--muted)" }}>
         Деньгами пользуются {inline("money")} · задачами {inline("tasks")}. Всего{" "}
@@ -374,111 +253,6 @@ function VercelBlock({ built }: { built: string | null }) {
           </p>
         ) : null}
       </Card>
-    </>
-  );
-}
-
-const PROVIDERS: Record<string, string> = { email: "почту", google: "Google" };
-
-/** Зелёная точка «в сети» — рядом всегда слово, одного цвета мало. */
-function OnlineDot() {
-  return <span aria-hidden className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ background: "var(--ok)" }} />;
-}
-
-function Users({
-  users,
-  now,
-  filter,
-  onReset,
-}: {
-  users: AdminUser[];
-  now: number;
-  filter: FilterId;
-  onReset: () => void;
-}) {
-  // Сверху — кто был недавно: их и хочется видеть первыми.
-  const sorted = users
-    .filter((u) => FILTERS[filter].test(u, now))
-    .sort((a, b) => (b.last_seen ?? "").localeCompare(a.last_seen ?? ""));
-  return (
-    <>
-      <div className="mb-2 mt-6 flex items-baseline justify-between gap-3 px-1">
-        <h2 className="text-[0.9375rem] font-semibold">
-          {filter === "all" ? "Пользователи" : FILTERS[filter].title}
-          <span className="ml-1.5 font-normal tabular-nums" style={{ color: "var(--muted)" }}>
-            {sorted.length}
-          </span>
-        </h2>
-        {filter !== "all" ? (
-          <button onClick={onReset} className="text-[0.8125rem] font-medium" style={{ color: "var(--accent)" }}>
-            Показать всех
-          </button>
-        ) : null}
-      </div>
-      <p className="-mt-1 mb-2 px-1 text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
-        Только счётчики: суммы, названия операций и тексты задач здесь не видны —
-        людям обещано, что их данные видят только они.
-      </p>
-      <div className="space-y-2">
-        {sorted.map((user) => (
-          <div key={user.id} className="rounded-2xl p-3.5" style={{ background: "var(--surface)" }}>
-            <div className="flex items-baseline justify-between gap-3">
-              <p className="min-w-0 truncate text-[0.9375rem] font-medium">
-                {user.number !== null ? (
-                  <span className="mr-1.5 font-normal tabular-nums" style={{ color: "var(--muted)" }}>
-                    ID {user.number}
-                  </span>
-                ) : null}
-                {user.display_name || user.email || "без имени"}
-              </p>
-              {isOnline(user, now) ? (
-                <p className="flex shrink-0 items-center gap-1.5 text-[0.6875rem] font-medium">
-                  <OnlineDot />
-                  онлайн
-                </p>
-              ) : (
-                <p className="shrink-0 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-                  был {sinceLabel(user.last_seen)}
-                </p>
-              )}
-            </div>
-            {user.display_name && user.email ? (
-              <p className="truncate text-[0.75rem]" style={{ color: "var(--muted)" }}>
-                {user.email}
-              </p>
-            ) : null}
-
-            <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[0.75rem]">
-              <span>
-                <span style={{ color: "var(--muted)" }}>Деньги: </span>
-                {user.transactions} {plural(user.transactions, "операция", "операции", "операций")}
-              </span>
-              <span>
-                <span style={{ color: "var(--muted)" }}>Задачи: </span>
-                {user.tasks_open} в работе, {user.tasks_done} сделано
-              </span>
-              <span>
-                <span style={{ color: "var(--muted)" }}>Кошельков: </span>
-                {user.wallets}
-              </span>
-              <span>
-                <span style={{ color: "var(--muted)" }}>ИИ-разбор: </span>
-                {user.has_ai_key ? `${user.ai_calls} ${plural(user.ai_calls, "раз", "раза", "раз")}` : "нет ключа"}
-              </span>
-            </div>
-
-            <p className="mt-2 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-              появился {sinceLabel(user.created_at)} · входит через{" "}
-              {user.providers.map((p) => PROVIDERS[p] ?? p).join(" и ") || "—"}
-            </p>
-          </div>
-        ))}
-        {sorted.length === 0 ? (
-          <p className="rounded-2xl p-3.5 text-[0.8125rem]" style={{ background: "var(--surface)", color: "var(--muted)" }}>
-            Таких пока нет.
-          </p>
-        ) : null}
-      </div>
     </>
   );
 }

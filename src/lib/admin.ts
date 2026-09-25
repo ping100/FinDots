@@ -99,3 +99,61 @@ export function pressure(share: number): { color: string; word: string | null } 
   if (share >= 0.8) return { color: "#f59e0b", word: "близко к пределу" };
   return { color: "var(--accent)", word: null };
 }
+
+const DAY = 86_400_000;
+/** Приложение отмечается раз в минуту; две минуты — с запасом на одну пропущенную. */
+const ONLINE_WINDOW = 2 * 60_000;
+/** Как часто админка на экране сама перезапрашивает сводку. */
+export const REFRESH = 30_000;
+
+/**
+ * «Сейчас» — момент, когда база собрала сводку, а не часы телефона: они
+ * могут уйти на минуту-другую, и онлайн-статус начал бы врать.
+ */
+function within(iso: string | null, now: number, ms: number): boolean {
+  return iso !== null && now - new Date(iso).getTime() < ms;
+}
+
+export function isOnline(u: AdminUser, now: number): boolean {
+  return within(u.online_at, now, ONLINE_WINDOW);
+}
+
+/**
+ * Списки пользователей. Плитки на главной админки считают тем же
+ * правилом, что и список за ними: иначе на плитке «4», а в списке трое —
+ * и непонятно, кто из них врёт.
+ */
+export const VIEWS = {
+  all: { label: "Всего пользователей", title: "Все пользователи", chip: "Все", test: () => true },
+  online: { label: "Онлайн сейчас", title: "Онлайн сейчас", chip: "Онлайн", test: isOnline },
+  new_7d: {
+    label: "Новых за неделю",
+    title: "Новые за неделю",
+    chip: "Новые",
+    test: (u, now) => within(u.created_at, now, 7 * DAY),
+  },
+  active_30d: {
+    label: "Активных за месяц",
+    title: "Активные за месяц",
+    chip: "Активные",
+    test: (u, now) => within(u.last_seen, now, 30 * DAY),
+  },
+  money: { label: "Деньгами пользуются", title: "Пользуются деньгами", chip: "Деньги", test: (u) => u.transactions > 0 },
+  tasks: {
+    label: "Задачами пользуются",
+    title: "Пользуются задачами",
+    chip: "Задачи",
+    test: (u) => u.tasks_open + u.tasks_done > 0,
+  },
+} satisfies Record<string, { label: string; title: string; chip: string; test: (u: AdminUser, now: number) => boolean }>;
+
+export type ViewId = keyof typeof VIEWS;
+
+export function isView(value: unknown): value is ViewId {
+  return typeof value === "string" && Object.hasOwn(VIEWS, value);
+}
+
+export function countView(data: AdminOverview, id: ViewId): number {
+  const now = new Date(data.generated_at).getTime();
+  return data.users.filter((u) => VIEWS[id].test(u, now)).length;
+}

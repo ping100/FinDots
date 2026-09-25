@@ -41,6 +41,8 @@ body {
   /* Экран целиком «схвачен» drag-and-drop: страница не должна уезжать
      вместе с перетаскиваемой иконкой. */
   overscroll-behavior-y: none;
+  /* Свайп вбок от края не листает историю (Android; для iOS см. NoEdgeSwipe). */
+  overscroll-behavior-x: none;
   -webkit-tap-highlight-color: transparent;
   /* Долгое нажатие у нас — жест перетаскивания. Без этих двух правил
      система принимает его за выделение: iOS показывает меню «Копировать»,

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Onest } from "next/font/google";
 import { RegisterSW } from "@/components/RegisterSW";
+import { NoEdgeSwipe } from "@/components/NoEdgeSwipe";
 import { LOOK_SCRIPT } from "@/lib/look";
 import "./globals.css";
 
@@ -70,6 +71,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         {children}
         <RegisterSW />
+        <NoEdgeSwipe />
       </body>
     </html>
   );

@@ -1,20 +1,29 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { Icon } from "@/lib/icons";
 import {
   WEEKDAY_HEADS,
+  addDays,
   addMonths,
-  addWeeks,
   dayNumber,
   isSameMonth,
   monthGrid,
   monthTitle,
   today,
-  weekDays,
 } from "@/lib/tasks/dates";
 import type { DropTarget } from "@/lib/tasks/types";
+
+/** Сколько дней в ленте в каждую сторону от выбранного. Дальше — через месяц. */
+const SPAN = 183;
+/** Дней на экране одновременно. */
+const VISIBLE = 7;
+
+function weekdayHead(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return WEEKDAY_HEADS[(new Date(y, m - 1, d).getDay() + 6) % 7];
+}
 
 function DayCell({
   date,
@@ -22,6 +31,7 @@ function DayCell({
   isToday,
   loaded,
   faded,
+  withHead,
   onSelect,
 }: {
   date: string;
@@ -31,6 +41,8 @@ function DayCell({
   loaded: boolean;
   /** День соседнего месяца в сетке — он есть, но приглушён. */
   faded?: boolean;
+  /** Подпись дня недели над числом: в ленте дни не стоят под общей шапкой. */
+  withHead?: boolean;
   onSelect: (date: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({
@@ -44,8 +56,13 @@ function DayCell({
       onClick={() => onSelect(date)}
       aria-label={date}
       aria-current={selected ? "date" : undefined}
-      className="flex flex-col items-center gap-1 py-1"
+      className="flex snap-start flex-col items-center gap-1 py-1"
     >
+      {withHead ? (
+        <span className="text-[0.625rem]" style={{ color: "var(--muted)" }}>
+          {weekdayHead(date)}
+        </span>
+      ) : null}
       <span
         className="flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold transition"
         style={{
@@ -76,27 +93,51 @@ export function Calendar({
   loadedDates: Set<string>;
 }) {
   const [expanded, setExpanded] = useState(false);
-  // Какой отрезок показан. Листание недель и месяцев не меняет выбранный день:
-  // человек может посмотреть вперёд и вернуться, ничего не перевыбрав.
-  const [anchor, setAnchor] = useState(selected);
-
+  // Месяц в раскрытом виде и месяц в заголовке ленты: листание не меняет
+  // выбранный день — можно посмотреть вперёд и вернуться, ничего не
+  // перевыбрав.
+  const [month, setMonth] = useState(selected);
+  const [stripTitle, setStripTitle] = useState(selected);
   const t = today();
-  const days = expanded ? monthGrid(anchor) : weekDays(anchor);
-  const shift = (n: number) =>
-    setAnchor((current) => (expanded ? addMonths(current, n) : addWeeks(current, n)));
 
-  const swipe = useSwipe(shift);
+  const strip = useStrip(selected, setStripTitle);
+
+  const goToday = () => {
+    onSelect(t);
+    setMonth(t);
+    strip.scrollTo(t, true);
+  };
+
+  const pick = (date: string) => {
+    onSelect(date);
+    // Выбрали день в раскрытом месяце — сворачиваем к ленте на этом дне.
+    if (expanded) setExpanded(false);
+  };
+
+  // Лента появляется заново после раскрытого месяца — ставим её на
+  // выбранный день, иначе она открылась бы с самого начала, полгода назад.
+  const { scrollTo } = strip;
+  useLayoutEffect(() => {
+    if (!expanded) scrollTo(selected, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- только при сворачивании
+  }, [expanded]);
+
+  const title = expanded ? month : stripTitle;
+  const nearToday = expanded ? isSameMonth(month, t) : strip.showsToday;
 
   return (
     <div className="select-none">
       <div className="flex items-center justify-between pb-1">
         <button
-          onClick={() => setExpanded((v) => !v)}
+          onClick={() => {
+            if (!expanded) setMonth(stripTitle);
+            setExpanded((v) => !v);
+          }}
           className="flex items-center gap-1 rounded-xl py-1 text-sm font-medium"
           aria-expanded={expanded}
           aria-label={expanded ? "Свернуть до недели" : "Раскрыть месяц"}
         >
-          {monthTitle(anchor)}
+          {monthTitle(title)}
           <Icon
             name="chevron-down"
             size={16}
@@ -106,20 +147,17 @@ export function Calendar({
 
         <div className="flex items-center gap-1">
           <button
-            onClick={() => shift(-1)}
-            aria-label={expanded ? "Предыдущий месяц" : "Предыдущая неделя"}
+            onClick={() => (expanded ? setMonth(addMonths(month, -1)) : strip.page(-1))}
+            aria-label={expanded ? "Предыдущий месяц" : "Неделя назад"}
             className="rounded-full p-1.5"
             style={{ color: "var(--muted)" }}
           >
             <Icon name="chevron-left" size={18} />
           </button>
           {/* Кнопка «сегодня» нужна только когда ушли от него далеко. */}
-          {anchor !== t ? (
+          {!nearToday || selected !== t ? (
             <button
-              onClick={() => {
-                setAnchor(t);
-                onSelect(t);
-              }}
+              onClick={goToday}
               className="rounded-full px-2 py-1 text-xs font-medium"
               style={{ color: "var(--accent)" }}
             >
@@ -127,8 +165,8 @@ export function Calendar({
             </button>
           ) : null}
           <button
-            onClick={() => shift(1)}
-            aria-label={expanded ? "Следующий месяц" : "Следующая неделя"}
+            onClick={() => (expanded ? setMonth(addMonths(month, 1)) : strip.page(1))}
+            aria-label={expanded ? "Следующий месяц" : "Неделя вперёд"}
             className="rounded-full p-1.5"
             style={{ color: "var(--muted)" }}
           >
@@ -137,127 +175,163 @@ export function Calendar({
         </div>
       </div>
 
-      <div className="grid grid-cols-7">
-        {WEEKDAY_HEADS.map((head) => (
-          <span
-            key={head}
-            className="pb-0.5 text-center text-[0.625rem]"
-            style={{ color: "var(--muted)" }}
-          >
-            {head}
-          </span>
-        ))}
-      </div>
-
-      {/* Дни листаются пальцем: неделя или месяц едут за ним, как в
-          календаре телефона. Вертикальный жест отдаём странице — по нему
-          прокручивается список задач. */}
-      <div ref={swipe.box} className="overflow-hidden" style={{ touchAction: "pan-y" }} {...swipe.handlers}>
+      {expanded ? (
+        <MonthGrid
+          month={month}
+          selected={selected}
+          today={t}
+          loadedDates={loadedDates}
+          onSelect={pick}
+          onFlip={(n) => setMonth((m) => addMonths(m, n))}
+        />
+      ) : (
+        // Лента дней листается пальцем по одному дню, с разгоном — обычная
+        // прокрутка телефона, привязанная к границам дней. Своей анимации
+        // нет: её не заклинит посередине.
         <div
-          className="grid grid-cols-7"
-          style={{
-            transform: `translateX(${swipe.dx}px)`,
-            transition: swipe.sliding ? `transform ${SLIDE_MS}ms ease-out` : undefined,
-          }}
+          ref={strip.box}
+          onScroll={strip.onScroll}
+          className="grid snap-x snap-mandatory auto-cols-[calc(100%/7)] grid-flow-col overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
-          {days.map((date) => (
+          {strip.days.map((date) => (
             <DayCell
               key={date}
               date={date}
               selected={date === selected}
               isToday={date === t}
               loaded={loadedDates.has(date)}
-              faded={expanded && !isSameMonth(date, anchor)}
-              onSelect={onSelect}
+              withHead
+              onSelect={pick}
             />
           ))}
         </div>
-      </div>
+      )}
     </div>
   );
 }
 
-const SLIDE_MS = 180;
-
 /**
- * Листание свайпом. Пока палец не сдвинулся заметно, жест ничей: так
- * касание по дню остаётся нажатием, а вертикальный жест — прокруткой.
- * Сдвинулся вбок — ряд едет за пальцем; отпустили дальше четверти ширины
- * или резким движением — уезжает, и с другой стороны въезжает соседний.
+ * Лента дней: полгода назад и вперёд от выбранного. Дальше человек почти
+ * не листает, а если нужно — есть раскрытый месяц; когда выбранный день
+ * уходит за край, лента перестраивается вокруг него.
  */
-function useSwipe(shift: (n: number) => void) {
+function useStrip(selected: string, onTitle: (date: string) => void) {
   const box = useRef<HTMLDivElement>(null);
-  const start = useRef<{ x: number; y: number; at: number; id: number; horizontal: boolean | null } | null>(null);
-  const swiped = useRef(false);
-  const [dx, setDx] = useState(0);
-  const [sliding, setSliding] = useState(false);
+  const [center, setCenter] = useState(selected);
+  const [showsToday, setShowsToday] = useState(true);
+  const t = today();
 
-  const settle = () => {
-    setSliding(true);
-    setDx(0);
+  const days = useMemo(
+    () => Array.from({ length: SPAN * 2 + 1 }, (_, i) => addDays(center, i - SPAN)),
+    [center],
+  );
+
+  // Выбранный день вне ленты (выбрали в месяце далеко) — перестраиваем её.
+  const outside = !days.includes(selected);
+  useEffect(() => {
+    if (outside) setCenter(selected);
+  }, [outside, selected]);
+
+  const cell = () => (box.current?.clientWidth ?? 0) / VISIBLE;
+
+  const scrollTo = useCallback(
+    (date: string, smooth: boolean) => {
+      const index = days.indexOf(date);
+      if (index < 0 || !box.current) return;
+      // Нужный день — посередине экрана.
+      box.current.scrollTo({ left: (index - 3) * cell(), behavior: smooth ? "smooth" : "auto" });
+    },
+    [days],
+  );
+
+  // Первый показ и перестройка ленты — сразу на выбранном дне, до отрисовки.
+  useLayoutEffect(() => {
+    scrollTo(selected, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- только при смене ленты
+  }, [center]);
+
+  const frame = useRef(0);
+  const onScroll = () => {
+    cancelAnimationFrame(frame.current);
+    frame.current = requestAnimationFrame(() => {
+      const el = box.current;
+      if (!el) return;
+      const first = Math.round(el.scrollLeft / cell());
+      const middle = days[Math.min(days.length - 1, first + 3)];
+      onTitle(middle);
+      const todayIndex = days.indexOf(t);
+      setShowsToday(todayIndex >= first && todayIndex < first + VISIBLE);
+    });
   };
 
-  const handlers = {
-    onPointerDown: (e: React.PointerEvent) => {
-      if (e.pointerType === "mouse" && e.button !== 0) return;
-      start.current = { x: e.clientX, y: e.clientY, at: performance.now(), id: e.pointerId, horizontal: null };
-      swiped.current = false;
-    },
-    onPointerMove: (e: React.PointerEvent) => {
-      const s = start.current;
-      if (!s || s.id !== e.pointerId) return;
-      const mx = e.clientX - s.x;
-      const my = e.clientY - s.y;
-      if (s.horizontal === null) {
-        if (Math.abs(mx) < 8 && Math.abs(my) < 8) return;
-        s.horizontal = Math.abs(mx) > Math.abs(my);
-        // Захватываем указатель только когда жест точно наш: захват с
-        // первого касания увёл бы нажатие с кнопки дня на весь ряд.
-        if (s.horizontal) {
-          box.current?.setPointerCapture(e.pointerId);
-          setSliding(false);
+  const page = (n: number) => box.current?.scrollBy({ left: n * VISIBLE * cell(), behavior: "smooth" });
+
+  return { box, days, onScroll, scrollTo, page, showsToday };
+}
+
+function MonthGrid({
+  month,
+  selected,
+  today: t,
+  loadedDates,
+  onSelect,
+  onFlip,
+}: {
+  month: string;
+  selected: string;
+  today: string;
+  loadedDates: Set<string>;
+  onSelect: (date: string) => void;
+  onFlip: (n: number) => void;
+}) {
+  // Месяц перелистывается свайпом: без анимации «за пальцем» — просто
+  // смахнули, и открылся соседний. Касание по дню остаётся выбором.
+  const start = useRef<{ x: number; y: number } | null>(null);
+  const flipped = useRef(false);
+
+  return (
+    <div
+      className="grid grid-cols-7"
+      style={{ touchAction: "pan-y" }}
+      onPointerDown={(e) => {
+        start.current = { x: e.clientX, y: e.clientY };
+        flipped.current = false;
+      }}
+      onPointerUp={(e) => {
+        const s = start.current;
+        start.current = null;
+        if (!s) return;
+        const dx = e.clientX - s.x;
+        if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(e.clientY - s.y) * 1.5) {
+          flipped.current = true;
+          onFlip(dx < 0 ? 1 : -1);
         }
-      }
-      if (s.horizontal) {
-        swiped.current = true;
-        setDx(mx);
-      }
-    },
-    onPointerUp: (e: React.PointerEvent) => {
-      const s = start.current;
-      start.current = null;
-      if (!s?.horizontal) return;
-      const mx = e.clientX - s.x;
-      const width = box.current?.offsetWidth ?? 320;
-      const fast = Math.abs(mx) / Math.max(1, performance.now() - s.at) > 0.5;
-      if (Math.abs(mx) < width / 4 && !(fast && Math.abs(mx) > 30)) {
-        settle();
-        return;
-      }
-      const dir = mx < 0 ? 1 : -1;
-      setSliding(true);
-      setDx(-dir * width);
-      setTimeout(() => {
-        // Соседний отрезок ставим за краем с другой стороны без анимации
-        // и уже оттуда въезжаем — так видно, откуда он пришёл.
-        setSliding(false);
-        shift(dir);
-        setDx(dir * width);
-        requestAnimationFrame(() => requestAnimationFrame(settle));
-      }, SLIDE_MS);
-    },
-    onPointerCancel: () => {
-      start.current = null;
-      settle();
-    },
-    // После свайпа палец отпускают над каким-то днём — это не выбор дня.
-    onClickCapture: (e: React.MouseEvent) => {
-      if (!swiped.current) return;
-      swiped.current = false;
-      e.preventDefault();
-      e.stopPropagation();
-    },
-  };
-
-  return { box, dx, sliding, handlers };
+      }}
+      onPointerCancel={() => (start.current = null)}
+      // Смахнули месяц — палец отпустили над каким-то днём, но это не выбор.
+      onClickCapture={(e) => {
+        if (!flipped.current) return;
+        flipped.current = false;
+        e.preventDefault();
+        e.stopPropagation();
+      }}
+    >
+      {WEEKDAY_HEADS.map((head) => (
+        <span key={head} className="pb-0.5 text-center text-[0.625rem]" style={{ color: "var(--muted)" }}>
+          {head}
+        </span>
+      ))}
+      {monthGrid(month).map((date) => (
+        <DayCell
+          key={date}
+          date={date}
+          selected={date === selected}
+          isToday={date === t}
+          loaded={loadedDates.has(date)}
+          faded={!isSameMonth(date, month)}
+          onSelect={onSelect}
+        />
+      ))}
+    </div>
+  );
 }

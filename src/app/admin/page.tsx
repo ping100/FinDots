@@ -52,8 +52,10 @@ export default function AdminPage() {
 
       {data ? (
         <>
-          <SupportCard />
+          <Heading first>Пользователи</Heading>
           <Totals data={data} />
+          <Heading>Обращения</Heading>
+          <SupportCard />
           <SupabaseLimits data={data} />
           <VercelBlock built={built} />
           <GeneratedAt iso={data.generated_at} />
@@ -63,8 +65,8 @@ export default function AdminPage() {
   );
 }
 
-function Heading({ children }: { children: React.ReactNode }) {
-  return <h2 className="mb-2 mt-6 px-1 text-[0.9375rem] font-semibold">{children}</h2>;
+function Heading({ children, first }: { children: React.ReactNode; first?: boolean }) {
+  return <h2 className={`mb-2 px-1 text-[0.9375rem] font-semibold ${first ? "mt-1" : "mt-6"}`}>{children}</h2>;
 }
 
 function Card({ children }: { children: React.ReactNode }) {

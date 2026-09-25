@@ -16,6 +16,7 @@ import { Guide } from "@/components/Guide";
 import { SignInMethods } from "@/components/SignInMethods";
 import { UserNumber } from "@/components/UserNumber";
 import { SupportRow } from "@/components/SupportRow";
+import { SettingsHeading } from "@/components/SettingsHeading";
 import { disablePush } from "@/lib/pushClient";
 import { AccountCard } from "@/components/AccountCard";
 import { AppSwitch } from "@/components/AppSwitch";
@@ -98,17 +99,7 @@ export default function SettingsPage() {
     <div className="mx-auto w-full max-w-md px-4 pb-32">
       <h1 className="py-2 text-[1.625rem] font-semibold">Настройки</h1>
 
-      <AppSwitch from="money" />
-      <AdminLink />
-
-      <Group>
-        <Row
-          label="Как пользоваться"
-          hint="Та же инструкция, что после регистрации — можно открыть в любой момент"
-          onClick={() => setGuide(true)}
-        />
-      </Group>
-
+      <SettingsHeading>Профиль</SettingsHeading>
       <Group>
         <AccountCard
           name={profile?.display_name}
@@ -117,6 +108,10 @@ export default function SettingsPage() {
         />
         <UserNumber />
         <SignInMethods />
+      </Group>
+
+      <SettingsHeading>Деньги</SettingsHeading>
+      <Group>
         <Row
           label="Основная валюта"
           value={`${symbolOf(base)} ${base}`}
@@ -127,6 +122,10 @@ export default function SettingsPage() {
           hint="Задаются вручную — автоподгрузки курсов нет"
           onClick={() => setSheet("rates")}
         />
+      </Group>
+
+      <SettingsHeading>Оформление</SettingsHeading>
+      <Group>
         <Row
           label="Тема"
           value={THEMES.find((item) => item.id === profile?.theme)?.label ?? "Светлая"}
@@ -140,6 +139,7 @@ export default function SettingsPage() {
         />
       </Group>
 
+      <SettingsHeading>Разбор бюджета</SettingsHeading>
       <Group>
         <Row
           label="Ключ OpenRouter"
@@ -159,13 +159,38 @@ export default function SettingsPage() {
         />
       </Group>
 
-      <h2 className="mb-1.5 mt-5 px-1 text-[0.9375rem] font-semibold">Данные</h2>
-      <p className="mb-2 px-1 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-        Выписка из банка, перенос из другой программы и резервная копия.
-        Выписка читается на устройстве и никуда не отправляется.
-      </p>
+      <SettingsHeading hint="Выписка из банка, перенос из другой программы и резервная копия. Выписка читается на устройстве и никуда не отправляется.">
+        Данные
+      </SettingsHeading>
       <StatementImport />
       <DataTransfer />
+
+      <SettingsHeading>Помощь</SettingsHeading>
+      <Group>
+        <Row
+          label="Как пользоваться"
+          hint="Та же инструкция, что после регистрации — можно открыть в любой момент"
+          onClick={() => setGuide(true)}
+        />
+      </Group>
+      <button
+        onClick={() => setGuide(true)}
+        className="-mt-2 mb-4 w-full px-1 text-left text-[0.6875rem] leading-snug underline"
+        style={{ color: "var(--muted)" }}
+      >
+        Кошельки и категории правятся на «Панели»: тап по кошельку, долгое
+        нажатие на категории расхода, «Настроить категорию» в окне дохода.
+        Подробнее — в инструкции.
+      </button>
+      <SupportRow />
+
+      <SettingsHeading>Приложения</SettingsHeading>
+      <AppSwitch from="money" />
+      <AdminLink />
+
+      <Group>
+        <Row label="Выйти" danger onClick={signOut} />
+      </Group>
 
       <Group>
         <Row
@@ -177,21 +202,6 @@ export default function SettingsPage() {
         />
       </Group>
 
-      <SupportRow />
-
-      <Group>
-        <Row label="Выйти" danger onClick={signOut} />
-      </Group>
-
-      <button
-        onClick={() => setGuide(true)}
-        className="mt-5 w-full text-center text-[0.6875rem] underline"
-        style={{ color: "var(--muted)" }}
-      >
-        Кошельки и категории правятся на «Панели»: тап по кошельку, долгое
-        нажатие на категории расхода, «Настроить категорию» в окне дохода.
-        Подробнее — в инструкции.
-      </button>
 
       <Guide open={guide} onClose={() => setGuide(false)} />
 

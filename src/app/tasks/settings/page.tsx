@@ -9,6 +9,8 @@ import { useStore } from "@/components/tasks/DataProvider";
 import { SignInMethods } from "@/components/SignInMethods";
 import { UserNumber } from "@/components/UserNumber";
 import { SupportRow } from "@/components/SupportRow";
+import { SettingsHeading } from "@/components/SettingsHeading";
+import { TEXT_SCALES } from "@/lib/textScale";
 import { PushSettings } from "@/components/tasks/PushSettings";
 import { disablePush } from "@/lib/pushClient";
 import { AccountCard } from "@/components/AccountCard";
@@ -42,46 +44,10 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-md px-4 pb-32 pt-3">
-      <h1 className="mb-4 text-xl font-semibold">Настройки</h1>
+    <div className="mx-auto w-full max-w-md px-4 pb-32">
+      <h1 className="py-2 text-[1.625rem] font-semibold">Настройки</h1>
 
-      <AppSwitch from="tasks" />
-      <AdminLink />
-
-      <section className="mb-6">
-        <h2 className="mb-2 text-sm" style={{ color: "var(--muted)" }}>
-          Тема
-        </h2>
-        <div className="flex gap-2">
-          {THEMES.map(({ id, label }) => (
-            <button
-              key={id}
-              onClick={() => void saveProfile({ theme: id })}
-              className="flex-1 rounded-2xl border px-3 py-2.5 text-sm font-medium"
-              style={{
-                borderColor: profile?.theme === id ? "var(--accent)" : "var(--border)",
-                background: profile?.theme === id ? "var(--surface-2)" : "transparent",
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <p className="mt-2 text-[0.75rem] leading-snug" style={{ color: "var(--muted)" }}>
-          {THEME_AUTO_HINT}
-        </p>
-      </section>
-
-      <Group>
-        <Row
-          label={checking ? "Проверяю…" : "Обновить приложение"}
-          value={updatedAt ?? undefined}
-          valueLabel="Последнее обновление"
-          hint={updateNote ?? "Приложение следит за обновлениями само. Если обещанного не видно — нажмите здесь"}
-          onClick={() => void checkUpdate()}
-        />
-      </Group>
-
+      <SettingsHeading>Профиль</SettingsHeading>
       <Group>
         <AccountCard
           name={profile?.display_name}
@@ -92,9 +58,63 @@ export default function SettingsPage() {
         <SignInMethods />
       </Group>
 
+      <SettingsHeading>Напоминания</SettingsHeading>
       <PushSettings />
 
-      <SupportRow />
+      <SettingsHeading hint={THEME_AUTO_HINT}>Оформление</SettingsHeading>
+      <div className="mb-4 space-y-3 rounded-2xl p-4" style={{ background: "var(--surface)" }}>
+        <div>
+          <p className="mb-2 text-[0.8125rem]" style={{ color: "var(--muted)" }}>
+            Тема
+          </p>
+          <div className="flex gap-2">
+            {THEMES.map(({ id, label }) => (
+              <button
+                key={id}
+                onClick={() => void saveProfile({ theme: id })}
+                className="flex-1 rounded-2xl border px-3 py-2.5 text-sm font-medium"
+                style={{
+                  borderColor: profile?.theme === id ? "var(--accent)" : "var(--border)",
+                  background: profile?.theme === id ? "var(--surface-2)" : "transparent",
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <p className="mb-2 text-[0.8125rem]" style={{ color: "var(--muted)" }}>
+            Размер шрифта — общий с деньгами
+          </p>
+          <div className="flex gap-2">
+            {TEXT_SCALES.map((item) => {
+              const on = (profile?.text_scale ?? "medium") === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => void saveProfile({ text_scale: item.id })}
+                  className="flex-1 rounded-2xl border px-3 py-2.5 font-medium"
+                  style={{
+                    // Размер надписи и есть предпросмотр выбора.
+                    fontSize: `${0.875 * item.factor}rem`,
+                    borderColor: on ? "var(--accent)" : "var(--border)",
+                    background: on ? "var(--surface-2)" : "transparent",
+                  }}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      <SupportRow heading="Помощь" />
+
+      <SettingsHeading>Приложения</SettingsHeading>
+      <AppSwitch from="tasks" />
+      <AdminLink />
 
       <Group>
         <Row
@@ -109,6 +129,15 @@ export default function SettingsPage() {
         />
       </Group>
 
+      <Group>
+        <Row
+          label={checking ? "Проверяю…" : "Обновить приложение"}
+          value={updatedAt ?? undefined}
+          valueLabel="Последнее обновление"
+          hint={updateNote ?? "Приложение следит за обновлениями само. Если обещанного не видно — нажмите здесь"}
+          onClick={() => void checkUpdate()}
+        />
+      </Group>
     </div>
   );
 }

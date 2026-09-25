@@ -5,6 +5,7 @@ import { Icon } from "@/lib/icons";
 import { useIsAdmin } from "@/lib/useIsAdmin";
 import { SUPPORT_POLL, loadThread, markRead, sendMessage, type SupportMessage } from "@/lib/support";
 import { Sheet } from "./ui";
+import { SettingsHeading } from "./SettingsHeading";
 import { SupportComposer, SupportThread } from "./SupportThread";
 
 /**
@@ -14,7 +15,7 @@ import { SupportComposer, SupportThread } from "./SupportThread";
  * Ответ приходит сюда же, и на строке появляется отметка о нём. Админу
  * строка не нужна — у него переписки в админке.
  */
-export function SupportRow() {
+export function SupportRow({ heading }: { heading?: string }) {
   const admin = useIsAdmin();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<SupportMessage[]>([]);
@@ -40,6 +41,10 @@ export function SupportRow() {
   const unread = messages.filter((m) => m.from_admin && !m.read_at).length;
 
   return (
+    <>
+    {/* Подпись раздела — здесь, а не на странице: админу строка не
+        показывается, и заголовок остался бы висеть над пустотой. */}
+    {heading ? <SettingsHeading>{heading}</SettingsHeading> : null}
     <div className="mb-4 overflow-hidden rounded-2xl" style={{ background: "var(--surface)" }}>
       <button onClick={() => setOpen(true)} className="flex w-full items-center gap-3 px-4 py-3.5 text-left">
         <span className="flex-1">
@@ -81,5 +86,6 @@ export function SupportRow() {
         />
       </Sheet>
     </div>
+    </>
   );
 }

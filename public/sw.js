@@ -49,3 +49,37 @@ self.addEventListener("fetch", (event) => {
     ),
   );
 });
+
+// Пуш: сервер прислал напоминание — показываем уведомление. Текст пришёл
+// зашифрованным для этого телефона, расшифровал его уже браузер.
+self.addEventListener("push", (event) => {
+  let message = { title: "Dots", body: "", url: "/", tag: undefined };
+  try {
+    message = { ...message, ...event.data.json() };
+  } catch {
+    // Пустой или битый пуш — покажем хотя бы название приложения.
+  }
+  event.waitUntil(
+    self.registration.showNotification(message.title, {
+      body: message.body,
+      tag: message.tag,
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+      data: { url: message.url },
+    }),
+  );
+});
+
+// Нажали на уведомление — открываем приложение на нужном экране; если оно
+// уже открыто, переводим туда, а не плодим вторую копию.
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = new URL(event.notification.data?.url || "/", self.location.origin).href;
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
+      const open = windows.find((w) => w.url.startsWith(self.location.origin));
+      if (open) return open.focus().then(() => open.navigate(url));
+      return self.clients.openWindow(url);
+    }),
+  );
+});

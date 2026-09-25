@@ -16,6 +16,7 @@ import { Guide } from "@/components/Guide";
 import { SignInMethods } from "@/components/SignInMethods";
 import { UserNumber } from "@/components/UserNumber";
 import { SupportRow } from "@/components/SupportRow";
+import { disablePush } from "@/lib/pushClient";
 import { AccountCard } from "@/components/AccountCard";
 import { AppSwitch } from "@/components/AppSwitch";
 import { AdminLink } from "@/components/AdminLink";
@@ -86,6 +87,8 @@ export default function SettingsPage() {
   const modelLabel = models.find((m) => m.id === profile?.ai_model)?.label ?? profile?.ai_model;
 
   const signOut = async () => {
+    // Вышел — напоминания этого человека сюда больше не идут.
+    await disablePush().catch(() => undefined);
     await createClient().auth.signOut();
     router.replace("/login");
     router.refresh();

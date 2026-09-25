@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Icon } from "@/lib/icons";
 import { addDays, today } from "@/lib/tasks/dates";
 import type { Priority, Task } from "@/lib/tasks/types";
+import { PushNudge } from "./PushSettings";
 import { Button, FieldGroup, Sheet, inputClass, inputStyle } from "@/components/ui";
 
 const PRIORITIES: { value: Priority; color: string; label: string }[] = [
@@ -207,6 +208,7 @@ export function QuickAdd({
                 </span>
               ) : null}
             </button>
+            {remind ? <PushNudge /> : null}
           </>
         ) : null}
       </FieldGroup>

@@ -18,7 +18,11 @@ export function Presence() {
 
     const touch = async () => {
       const { data } = await supabase.auth.getSession();
-      if (data.session) await supabase.rpc("touch_presence");
+      // Заодно — часовой пояс телефона: по нему база понимает, когда у
+      // человека «12:00» и пора напоминать о задаче.
+      if (data.session) {
+        await supabase.rpc("touch_presence", { p_tz: Intl.DateTimeFormat().resolvedOptions().timeZone });
+      }
     };
 
     const sync = () => {

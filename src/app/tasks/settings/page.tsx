@@ -9,6 +9,8 @@ import { useStore } from "@/components/tasks/DataProvider";
 import { SignInMethods } from "@/components/SignInMethods";
 import { UserNumber } from "@/components/UserNumber";
 import { SupportRow } from "@/components/SupportRow";
+import { PushSettings } from "@/components/tasks/PushSettings";
+import { disablePush } from "@/lib/pushClient";
 import { AccountCard } from "@/components/AccountCard";
 import { AppSwitch } from "@/components/AppSwitch";
 import { AdminLink } from "@/components/AdminLink";
@@ -90,6 +92,8 @@ export default function SettingsPage() {
         <SignInMethods />
       </Group>
 
+      <PushSettings />
+
       <SupportRow />
 
       <Group>
@@ -97,6 +101,8 @@ export default function SettingsPage() {
           label="Выйти"
           danger
           onClick={async () => {
+            // Вышел — напоминания этого человека сюда больше не идут.
+            await disablePush().catch(() => undefined);
             await createClient().auth.signOut();
             router.replace("/login");
           }}

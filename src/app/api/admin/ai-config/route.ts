@@ -36,7 +36,18 @@ export async function POST(request: Request) {
   if (!model) return NextResponse.json({ error: "Не указана модель" }, { status: 400 });
 
   const apiKey = body.apiKey?.trim();
-  const apiKeyEnc = apiKey ? encryptApiKey(apiKey) : null;
+  let apiKeyEnc: string | null = null;
+  try {
+    apiKeyEnc = apiKey ? encryptApiKey(apiKey) : null;
+  } catch (e) {
+    // Чаще всего — AI_CONFIG_SECRET ещё не задан в переменных окружения
+    // Vercel. Без этого catch падение было необработанным, и клиент видел
+    // только общее «Не получилось сохранить», без единой зацепки почему.
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : "Не получилось зашифровать ключ" },
+      { status: 500 },
+    );
+  }
   const hint = apiKey ? apiKey.slice(-4) : null;
 
   const { error } = await supabase.rpc("admin_set_ai_config", {

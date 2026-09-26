@@ -46,7 +46,13 @@ export async function sendPush(target: PushTarget, message: PushMessage): Promis
     return "ok";
   } catch (error) {
     const status = (error as { statusCode?: number }).statusCode;
+    const body = (error as { body?: string }).body;
     // 404 и 410 — подписка умерла: приложение удалили или отозвали разрешение.
-    return status === 404 || status === 410 ? "dead" : "failed";
+    if (status === 404 || status === 410) return "dead";
+    // Остальное — реальная причина отказа (не тот VAPID-ключ, квота и
+    // т.п.). Раньше терялась совсем: «Отправили» показывалось, даже если
+    // до телефона ничего не доходило.
+    console.error("sendPush failed", status, body);
+    return "failed";
   }
 }

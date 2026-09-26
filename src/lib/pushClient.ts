@@ -72,12 +72,24 @@ export async function disablePush(): Promise<PushState> {
   return "off";
 }
 
-/** Пробное уведомление на свои устройства. Возвращает текст ошибки или null. */
+/**
+ * Пробное уведомление на свои устройства. Возвращает текст ошибки или null.
+ *
+ * Роут раньше отвечал 200 даже когда push не дошёл ни до одного
+ * устройства (send failed, а не HTTP-отказ) — человек видел «Отправили»,
+ * хотя на телефон ничего не пришло. Теперь смотрим на sent/total из тела.
+ */
 export async function testPush(): Promise<string | null> {
   const response = await fetch("/api/push/test", { method: "POST" });
-  if (response.ok) return null;
-  const body = (await response.json().catch(() => ({}))) as { error?: string };
-  return body.error ?? "Не получилось отправить";
+  const body = (await response.json().catch(() => ({}))) as { error?: string; sent?: number; total?: number };
+  if (!response.ok) return body.error ?? "Не получилось отправить";
+  if (body.sent === 0) {
+    return "Не дошло ни на одно устройство — проверьте, разрешены ли уведомления для Dots в настройках телефона";
+  }
+  if (body.total !== undefined && body.sent !== undefined && body.sent < body.total) {
+    return `Дошло не на все устройства (${body.sent} из ${body.total})`;
+  }
+  return null;
 }
 
 function fromBase64Url(value: string): Uint8Array<ArrayBuffer> {

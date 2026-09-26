@@ -33,9 +33,16 @@ export async function pushState(): Promise<PushState> {
   if (!capable) return isIos() && !standalone() ? "install" : "unsupported";
   if (!KEY) return "unsupported";
   if (Notification.permission === "denied") return "denied";
-  const registration = await navigator.serviceWorker.getRegistration();
-  const subscription = await registration?.pushManager.getSubscription();
-  return subscription && Notification.permission === "granted" ? "on" : "off";
+  try {
+    const registration = await navigator.serviceWorker.getRegistration();
+    const subscription = await registration?.pushManager.getSubscription();
+    return subscription && Notification.permission === "granted" ? "on" : "off";
+  } catch {
+    // Мобильный WebKit иногда роняет getRegistration()/getSubscription() —
+    // без catch промис зависал без ответа, и usePushState() так и держал
+    // null: весь блок «Уведомления» молча исчезал, будто его и не было.
+    return "off";
+  }
 }
 
 /** Включить. Звать только по нажатию: иначе iPhone не покажет запрос. */

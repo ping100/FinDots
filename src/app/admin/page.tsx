@@ -55,10 +55,12 @@ export default function AdminPage() {
         <>
           <Heading first>Пользователи</Heading>
           <Totals data={data} />
-          <Heading>Обращения</Heading>
-          <SupportCard />
-          <Heading>Отзывы</Heading>
-          <ReviewsCard />
+          <div className="mt-6">
+            <SupportCard />
+          </div>
+          <div className="mt-3">
+            <ReviewsCard />
+          </div>
           <SupabaseLimits data={data} />
           <VercelBlock built={built} />
           <GeneratedAt iso={data.generated_at} />

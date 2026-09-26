@@ -1,9 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Avatar } from "@/components/Avatar";
+import { Icon } from "@/lib/icons";
 import { Button, Sheet, inputClass, inputStyle } from "@/components/ui";
+import { SupportComposer, SupportThread } from "@/components/SupportThread";
+import { loadThread, sendMessage, type SupportMessage } from "@/lib/support";
 import type { AdminUser } from "@/lib/admin";
 
 const WIPE_PHRASE = "ОЧИСТИТЬ";
@@ -11,7 +14,8 @@ const DELETE_PHRASE = "УДАЛИТЬ";
 
 /**
  * Действия с одним человеком: доступ по приложениям, блокировка входа,
- * сброс пароля, очистка данных, удаление аккаунта.
+ * пароль (письмом или напрямую), сообщение от администрации, очистка
+ * данных, удаление аккаунта.
  *
  * Опасные действия (очистка, удаление) прячутся за отдельным экраном
  * внутри того же листа — нужно набрать слово своими руками, а не просто
@@ -28,11 +32,12 @@ export function UserActionsSheet({
   onClose: () => void;
   onChanged: () => void;
 }) {
-  const [stage, setStage] = useState<"main" | "wipe" | "delete">("main");
+  const [stage, setStage] = useState<"main" | "wipe" | "delete" | "password" | "message">("main");
   const [phrase, setPhrase] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [messages, setMessages] = useState<SupportMessage[] | null>(null);
 
   const close = () => {
     onClose();
@@ -58,6 +63,21 @@ export function UserActionsSheet({
   };
 
   const supabase = createClient();
+  const userId = user?.id;
+
+  // Переписка грузится только когда лист открыт на этом экране — не на
+  // каждый чих, и заново при переключении на другого человека.
+  useEffect(() => {
+    if (stage !== "message" || !userId) return;
+    let alive = true;
+    setMessages(null);
+    void loadThread(userId).then((list) => {
+      if (alive) setMessages(list);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [stage, userId]);
 
   // Действия вызываются только по клику внутри листа, а лист виден только
   // пока user не null, — но для TS это не очевидно, поэтому каждая ловит
@@ -84,7 +104,7 @@ export function UserActionsSheet({
     });
   };
 
-  const resetPassword = () => {
+  const sendResetEmail = () => {
     if (!user) return;
     const email = user.email;
     return run("reset", async () => {
@@ -94,6 +114,20 @@ export function UserActionsSheet({
       });
       if (error) throw new Error(error.message);
       setNote("Письмо со ссылкой для смены пароля отправлено");
+    });
+  };
+
+  const setPassword = (newPassword: string) => {
+    if (!user) return;
+    const id = user.id;
+    return run("password", async () => {
+      const { error } = await supabase.rpc("admin_set_password", {
+        p_user_id: id,
+        p_password: newPassword,
+      });
+      if (error) throw new Error(error.message);
+      setStage("main");
+      setNote("Пароль сохранён — сообщите его человеку");
     });
   };
 
@@ -119,10 +153,37 @@ export function UserActionsSheet({
   };
 
   const title = user?.display_name || user?.email || "Без имени";
-  const canResetPassword = !!user?.providers.includes("email") && !!user?.email;
+  const canManagePassword = !!user?.providers.includes("email") && !!user?.email;
+
+  const stageTitle =
+    stage === "main"
+      ? title
+      : stage === "wipe"
+        ? "Очистить базу"
+        : stage === "delete"
+          ? "Удалить аккаунт"
+          : stage === "password"
+            ? "Задать пароль"
+            : "Сообщение от администрации";
 
   return (
-    <Sheet open={!!user} title={stage === "main" ? title : stage === "wipe" ? "Очистить базу" : "Удалить аккаунт"} onClose={close}>
+    <Sheet
+      open={!!user}
+      title={stageTitle}
+      onClose={close}
+      footer={
+        stage === "message" && user ? (
+          <SupportComposer
+            placeholder="Сообщение от администрации"
+            onSend={async (body) => {
+              const error = await sendMessage(body, user.id);
+              if (!error) setMessages(await loadThread(user.id));
+              return error;
+            }}
+          />
+        ) : undefined
+      }
+    >
       {stage === "main" && user ? (
         <div className="space-y-4 pb-2">
           <div className="flex items-center gap-3">
@@ -183,15 +244,30 @@ export function UserActionsSheet({
               busy={busy === "banned"}
               onClick={() => setBanned(!user.banned)}
             />
-            {canResetPassword ? (
-              <ActionRow
-                label="Сбросить пароль"
-                hint="Отправить письмо со ссылкой для смены пароля"
-                busy={busy === "reset"}
-                onClick={resetPassword}
-                first={false}
-              />
+            {canManagePassword ? (
+              <>
+                <ActionRow
+                  label="Сбросить пароль"
+                  hint="Отправить письмо со ссылкой для смены пароля"
+                  busy={busy === "reset"}
+                  onClick={sendResetEmail}
+                  first={false}
+                />
+                <ActionRow
+                  label="Задать пароль"
+                  hint="Придумать пароль самому и сообщить человеку — письмо не отправляется"
+                  busy={busy === "password"}
+                  onClick={() => setStage("password")}
+                  first={false}
+                />
+              </>
             ) : null}
+            <ActionRow
+              label="Написать сообщение"
+              hint="Придёт как сообщение от администрации, с уведомлением"
+              onClick={() => setStage("message")}
+              first={false}
+            />
           </div>
 
           <div>
@@ -214,7 +290,7 @@ export function UserActionsSheet({
             </div>
           </div>
         </div>
-      ) : stage !== "main" ? (
+      ) : stage === "wipe" || stage === "delete" ? (
         <ConfirmStage
           phraseNeeded={stage === "wipe" ? WIPE_PHRASE : DELETE_PHRASE}
           description={
@@ -234,6 +310,34 @@ export function UserActionsSheet({
           }}
           onSubmit={stage === "wipe" ? wipeData : deleteUser}
         />
+      ) : stage === "password" ? (
+        <PasswordStage
+          busy={busy === "password"}
+          problem={problem}
+          onBack={() => {
+            setStage("main");
+            setProblem(null);
+          }}
+          onSubmit={setPassword}
+        />
+      ) : stage === "message" && user ? (
+        <div>
+          <button
+            onClick={() => setStage("main")}
+            className="mb-2 flex items-center gap-1 text-sm"
+            style={{ color: "var(--muted)" }}
+          >
+            <Icon name="chevron-left" size={16} />
+            Назад
+          </button>
+          {messages === null ? (
+            <p className="py-6 text-center text-sm" style={{ color: "var(--muted)" }}>
+              Загружаю…
+            </p>
+          ) : (
+            <SupportThread messages={messages} mineIsAdmin empty="Сообщений ещё не было." />
+          )}
+        </div>
       ) : null}
     </Sheet>
   );
@@ -354,6 +458,72 @@ function ConfirmStage({
         disabled={busy || phrase.trim().toUpperCase() !== phraseNeeded}
       >
         {busy ? "Выполняю…" : submitLabel}
+      </Button>
+      <Button variant="ghost" onClick={onBack} disabled={busy}>
+        Назад
+      </Button>
+    </div>
+  );
+}
+
+/** Пароль вводит сам админ — письмо никуда не уходит, человеку говорят лично. */
+function PasswordStage({
+  busy,
+  problem,
+  onBack,
+  onSubmit,
+}: {
+  busy: boolean;
+  problem: string | null;
+  onBack: () => void;
+  onSubmit: (password: string) => void;
+}) {
+  const [value, setValue] = useState("");
+  const [shown, setShown] = useState(false);
+  const valid = value.length >= 6;
+
+  return (
+    <div className="space-y-3 pb-2">
+      <p className="text-sm leading-snug" style={{ color: "var(--muted)" }}>
+        Человек сможет войти этим паролем сразу же — письмо не отправляется,
+        сообщите пароль лично.
+      </p>
+
+      <div>
+        <label className="mb-1.5 block text-sm" style={{ color: "var(--muted)" }}>
+          Новый пароль
+        </label>
+        <div className="relative">
+          <input
+            type={shown ? "text" : "password"}
+            className={`${inputClass} pr-12`}
+            style={inputStyle}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder="Минимум 6 символов"
+            autoCapitalize="off"
+            autoCorrect="off"
+            autoComplete="off"
+          />
+          <button
+            type="button"
+            onClick={() => setShown((v) => !v)}
+            aria-label={shown ? "Скрыть пароль" : "Показать пароль"}
+            className="absolute inset-y-0 right-0 flex w-12 items-center justify-center opacity-55 transition active:scale-90 active:opacity-100"
+          >
+            <Icon name={shown ? "eye-off" : "eye"} size={18} />
+          </button>
+        </div>
+      </div>
+
+      {problem ? (
+        <p className="text-sm" style={{ color: "var(--danger)" }}>
+          {problem}
+        </p>
+      ) : null}
+
+      <Button onClick={() => onSubmit(value)} disabled={busy || !valid}>
+        {busy ? "Сохраняю…" : "Сохранить пароль"}
       </Button>
       <Button variant="ghost" onClick={onBack} disabled={busy}>
         Назад

@@ -29,6 +29,9 @@ export default function DebtsPage() {
   const [paying, setPaying] = useState<Wallet | null>(null);
   // Возврат долга мне: деньги идут из долга в выбранный кошелёк.
   const [returning, setReturning] = useState<Wallet | null>(null);
+  // Дал в долг: деньги идут из выбранного кошелька в долг — иначе баланс
+  // «Мне должны» так и остаётся нулевым и вернуть потом нечего.
+  const [lending, setLending] = useState<Wallet | null>(null);
   const [editor, setEditor] =
     useState<{ wallet?: Wallet | null; kind: WalletKind; credit?: boolean } | null>(null);
 
@@ -83,6 +86,9 @@ export default function DebtsPage() {
             amount={balanceOf(w.id)}
             actionLabel="Мне вернули"
             onPay={() => setReturning(w)}
+            payDisabled={balanceOf(w.id) <= 0}
+            secondaryLabel="Дал в долг"
+            onSecondary={() => setLending(w)}
             onEdit={() => setEditor({ wallet: w, kind: "debt_in" })}
           />
         ))}
@@ -160,6 +166,34 @@ export default function DebtsPage() {
         }}
       />
 
+      <AmountSheet
+        open={!!lending}
+        title={lending ? `Дал в долг: ${lending.name}` : ""}
+        subtitle="Деньги спишутся с выбранного кошелька"
+        currency={lending?.currency ?? "KZT"}
+        options={moneyWallets.map((w) => ({
+          id: w.id,
+          name: w.name,
+          caption: formatMoney(balanceOf(w.id), w.currency),
+        }))}
+        optionLabel="Из какого кошелька"
+        submitLabel="Записать"
+        onClose={() => setLending(null)}
+        onSubmit={async ({ amount, note, occurredAt, optionId }) => {
+          if (!lending || !optionId) throw new Error("Выбери кошелёк");
+          const from = wallets.find((w) => w.id === optionId);
+          if (!from) throw new Error("Кошелёк не найден");
+          await addTransfer({
+            fromWalletId: from.id,
+            toWalletId: lending.id,
+            amount,
+            currency: from.currency,
+            note: note || "Дал в долг",
+            occurredAt,
+          });
+        }}
+      />
+
       {/* Тип задан кнопкой, которой сюда пришли: выбирать «наличные» на
           странице долгов незачем. */}
       <WalletEditor
@@ -204,12 +238,18 @@ function DebtCard({
   amount,
   onPay,
   actionLabel = "Внести платёж",
+  payDisabled,
+  onSecondary,
+  secondaryLabel,
   onEdit,
 }: {
   wallet: Wallet;
   amount: number;
   onPay?: () => void;
   actionLabel?: string;
+  payDisabled?: boolean;
+  onSecondary?: () => void;
+  secondaryLabel?: string;
   onEdit: () => void;
 }) {
   // У кредита обычно платёж каждый месяц, а «Дата погашения» — это конец
@@ -268,13 +308,25 @@ function DebtCard({
         </span>
       </div>
       {onPay ? (
-        <button
-          onClick={onPay}
-          className="mt-3 w-full rounded-xl py-2 text-sm font-semibold"
-          style={{ background: "var(--surface-2)" }}
-        >
-          {actionLabel}
-        </button>
+        <div className="mt-3 flex gap-2">
+          {onSecondary ? (
+            <button
+              onClick={onSecondary}
+              className="flex-1 rounded-xl py-2 text-sm font-semibold"
+              style={{ background: "var(--surface-2)" }}
+            >
+              {secondaryLabel}
+            </button>
+          ) : null}
+          <button
+            onClick={onPay}
+            disabled={payDisabled}
+            className="flex-1 rounded-xl py-2 text-sm font-semibold disabled:opacity-40"
+            style={{ background: "var(--surface-2)" }}
+          >
+            {actionLabel}
+          </button>
+        </div>
       ) : null}
     </div>
   );

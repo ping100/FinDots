@@ -9,6 +9,7 @@ import { useStore } from "@/components/tasks/DataProvider";
 import { SignInMethods } from "@/components/SignInMethods";
 import { UserNumber } from "@/components/UserNumber";
 import { SupportRow } from "@/components/SupportRow";
+import { ReviewRow } from "@/components/ReviewRow";
 import { SettingsHeading } from "@/components/SettingsHeading";
 import { PrivacyLink } from "@/components/PrivacyLink";
 import { TEXT_SCALES } from "@/lib/textScale";
@@ -157,6 +158,7 @@ export default function SettingsPage() {
         <PrivacyLink from="/tasks/settings" />
       </Group>
       <SupportRow />
+      <ReviewRow />
 
       <SettingsHeading>Приложения</SettingsHeading>
       <AppSwitch from="tasks" />

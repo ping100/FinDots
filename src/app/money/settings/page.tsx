@@ -17,6 +17,7 @@ import { Guide } from "@/components/Guide";
 import { SignInMethods } from "@/components/SignInMethods";
 import { UserNumber } from "@/components/UserNumber";
 import { SupportRow } from "@/components/SupportRow";
+import { ReviewRow } from "@/components/ReviewRow";
 import { SettingsHeading } from "@/components/SettingsHeading";
 import { PrivacyLink } from "@/components/PrivacyLink";
 import { disablePush } from "@/lib/pushClient";
@@ -190,6 +191,7 @@ export default function SettingsPage() {
         Подробнее — в инструкции.
       </button>
       <SupportRow />
+      <ReviewRow />
 
       <SettingsHeading>Приложения</SettingsHeading>
       <AppSwitch from="money" />

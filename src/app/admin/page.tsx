@@ -6,6 +6,7 @@ import { Icon } from "@/lib/icons";
 import { Loader } from "@/components/Loader";
 import { buildMoment } from "@/lib/update";
 import { SupportCard } from "@/components/admin/SupportCard";
+import { ReviewsCard } from "@/components/admin/ReviewsCard";
 import { Denied, GeneratedAt, OnlineDot, Problem, RefreshButton, useOverview } from "@/components/admin/shared";
 import {
   LINKS,
@@ -56,6 +57,8 @@ export default function AdminPage() {
           <Totals data={data} />
           <Heading>Обращения</Heading>
           <SupportCard />
+          <Heading>Отзывы</Heading>
+          <ReviewsCard />
           <SupabaseLimits data={data} />
           <VercelBlock built={built} />
           <GeneratedAt iso={data.generated_at} />

@@ -14,7 +14,7 @@ import { DeleteAccount } from "@/components/DeleteAccount";
 import { SettingsHeading } from "@/components/SettingsHeading";
 import { PrivacyLink } from "@/components/PrivacyLink";
 import { TEXT_SCALES } from "@/lib/textScale";
-import { PushSettings } from "@/components/tasks/PushSettings";
+import { PushSettings } from "@/components/PushSettings";
 import { disablePush } from "@/lib/pushClient";
 import { AccountCard } from "@/components/AccountCard";
 import { AppSwitch } from "@/components/AppSwitch";

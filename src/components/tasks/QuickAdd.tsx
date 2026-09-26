@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Icon } from "@/lib/icons";
 import { addDays, today } from "@/lib/tasks/dates";
 import type { Priority, Task, TaskCategory } from "@/lib/tasks/types";
-import { PushNudge } from "./PushSettings";
+import { PushNudge } from "@/components/PushSettings";
 import { Button, FieldGroup, Sheet, inputClass, inputStyle } from "@/components/ui";
 
 const PRIORITIES: { value: Priority; color: string; label: string }[] = [

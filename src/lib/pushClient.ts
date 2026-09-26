@@ -50,7 +50,15 @@ export async function enablePush(): Promise<PushState> {
   const permission = await Notification.requestPermission();
   if (permission !== "granted") return permission === "denied" ? "denied" : "off";
 
-  const registration = await navigator.serviceWorker.ready;
+  // Если регистрация service worker не удалась (заблокировал расширение,
+  // сорвалась загрузка /sw.js и т.п.), .ready зависает навсегда — кнопка
+  // крутилась бы «Минуту…» бесконечно, без единой ошибки на экране.
+  const registration = await Promise.race([
+    navigator.serviceWorker.ready,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Не получилось подготовить уведомления — обновите страницу и попробуйте снова")), 8_000),
+    ),
+  ]);
   const subscription =
     (await registration.pushManager.getSubscription()) ??
     (await registration.pushManager.subscribe({

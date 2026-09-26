@@ -25,8 +25,11 @@ export function RegisterSW() {
 
     if ("serviceWorker" in navigator) {
       // Версия в адресе — у каждой выкладки свой worker и свой кэш.
-      navigator.serviceWorker.register(`/sw.js?v=${CURRENT_BUILD}`).catch(() => {
-        // Без service worker приложение работает как обычный сайт.
+      navigator.serviceWorker.register(`/sw.js?v=${CURRENT_BUILD}`).catch((error) => {
+        // Без service worker приложение работает как обычный сайт, но без
+        // уведомлений — след в консоли остаётся, чтобы это можно было
+        // отличить от «просто не нажал» при разборе жалобы.
+        console.error("Service worker registration failed", error);
       });
     }
 

@@ -22,7 +22,7 @@ function ruError(message: string): string {
   if (text.includes("invalid login credentials")) return "Неверная почта или пароль";
   if (text.includes("already registered")) return "Эта почта уже зарегистрирована — войдите";
   if (text.includes("email not confirmed")) return "Почта не подтверждена — проверьте письмо";
-  if (text.includes("banned") || text.includes("user_banned")) return "Этот аккаунт заблокирован администратором";
+  if (text.includes("banned") || text.includes("user_banned")) return "Этот аккаунт заблокирован";
   // Длину задаёт сервер, а не мы: подставляем то число, которое он назвал,
   // иначе после смены настройки подсказка начнёт врать.
   const short = message.match(/at least (\d+) characters/i);

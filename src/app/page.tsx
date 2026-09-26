@@ -65,7 +65,7 @@ export default async function Home({
           className="mb-4 rounded-2xl px-4 py-3 text-center text-sm leading-snug"
           style={{ background: "var(--surface)", color: "var(--danger)" }}
         >
-          Доступ к разделу «{deniedName}» закрыт администратором
+          Доступ к разделу «{deniedName}» закрыт
         </p>
       ) : null}
 

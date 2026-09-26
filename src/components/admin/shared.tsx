@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { GoogleMark } from "@/components/GoogleButton";
 import { Avatar } from "@/components/Avatar";
+import { Icon } from "@/lib/icons";
 import { REFRESH, isOnline, plural, sinceLabel, type AdminOverview, type AdminUser } from "@/lib/admin";
 
 /**
@@ -107,7 +108,13 @@ export function OnlineDot() {
   return <span aria-hidden className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ background: "var(--ok)" }} />;
 }
 
-/** Карточка человека: только счётчики — ни сумм, ни названий, ни текстов. */
+/**
+ * Карточка человека: только счётчики — ни сумм, ни названий, ни текстов.
+ *
+ * Свёрнута по умолчанию — виден только заголовок, подробности прячутся за
+ * шевроном справа: со списком в полсотни человек разворачивать каждого
+ * заметно компактнее, чем видеть все счётчики у всех сразу.
+ */
 export function UserCard({
   user,
   now,
@@ -117,15 +124,15 @@ export function UserCard({
   now: number;
   onClick?: () => void;
 }) {
-  const Root = onClick ? "button" : "div";
+  const [expanded, setExpanded] = useState(false);
   return (
-    <Root
-      onClick={onClick}
-      className="w-full rounded-2xl p-3.5 text-left"
-      style={{ background: "var(--surface)" }}
-    >
+    <div className="w-full rounded-2xl p-3.5" style={{ background: "var(--surface)" }}>
       <div className="flex items-baseline justify-between gap-3">
-        <p className="flex min-w-0 items-center gap-2 truncate text-[0.9375rem] font-medium">
+        <button
+          onClick={onClick}
+          disabled={!onClick}
+          className="flex min-w-0 items-center gap-2 truncate text-left text-[0.9375rem] font-medium"
+        >
           <Avatar url={user.avatar_url} name={user.display_name || user.email} size={28} />
           {user.number !== null ? (
             <span className="mr-1.5 font-normal tabular-nums" style={{ color: "var(--muted)" }}>
@@ -141,65 +148,81 @@ export function UserCard({
               заблокирован
             </span>
           ) : null}
-        </p>
-        {isOnline(user, now) ? (
-          <p className="flex shrink-0 items-center gap-1.5 text-[0.6875rem] font-medium">
-            <OnlineDot />
-            онлайн
-          </p>
-        ) : (
-          <p className="shrink-0 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-            был {sinceLabel(user.last_seen)}
-          </p>
-        )}
-      </div>
-      {user.display_name && user.email ? (
-        <p className="truncate text-[0.75rem]" style={{ color: "var(--muted)" }}>
-          {user.email}
-        </p>
-      ) : null}
-
-      <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[0.75rem]">
-        <span>
-          <span style={{ color: "var(--muted)" }}>Деньги: </span>
-          {user.transactions} {plural(user.transactions, "операция", "операции", "операций")}
-        </span>
-        <span>
-          <span style={{ color: "var(--muted)" }}>Задачи: </span>
-          {user.tasks_open} в работе, {user.tasks_done} сделано
-        </span>
-        <span>
-          <span style={{ color: "var(--muted)" }}>Кошельков: </span>
-          {user.wallets}
-        </span>
-        <span>
-          <span style={{ color: "var(--muted)" }}>ИИ-разбор: </span>
-          {user.has_ai_key ? `${user.ai_calls} ${plural(user.ai_calls, "раз", "раза", "раз")}` : "нет ключа"}
-        </span>
-        <span className="col-span-2 flex min-w-0 items-center gap-1.5">
-          <span className="shrink-0" style={{ color: "var(--muted)" }}>Google:</span>
-          {user.google_email ? (
-            <>
-              <GoogleMark size={12} />
-              <span className="truncate">{user.google_email}</span>
-            </>
+        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          {isOnline(user, now) ? (
+            <p className="flex items-center gap-1.5 text-[0.6875rem] font-medium">
+              <OnlineDot />
+              онлайн
+            </p>
           ) : (
-            <span style={{ color: "var(--muted)" }}>не привязан</span>
+            <p className="text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+              был {sinceLabel(user.last_seen)}
+            </p>
           )}
-        </span>
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            aria-expanded={expanded}
+            aria-label={expanded ? "Свернуть" : "Развернуть"}
+            className="-m-1 p-1"
+            style={{ color: "var(--muted)" }}
+          >
+            <Icon name="chevron-down" size={16} style={{ transform: expanded ? "rotate(180deg)" : undefined }} />
+          </button>
+        </div>
       </div>
 
-      <p className="mt-2 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-        появился {sinceLabel(user.created_at)}
-        {user.providers.includes("email") ? "" : " · без пароля, только через Google"}
-        {user.access_money && user.access_tasks
-          ? ""
-          : user.access_money
-            ? " · доступ только к деньгам"
-            : user.access_tasks
-              ? " · доступ только к задачам"
-              : " · доступ закрыт полностью"}
-      </p>
-    </Root>
+      {expanded ? (
+        <>
+          {user.display_name && user.email ? (
+            <p className="truncate text-[0.75rem]" style={{ color: "var(--muted)" }}>
+              {user.email}
+            </p>
+          ) : null}
+
+          <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[0.75rem]">
+            <span>
+              <span style={{ color: "var(--muted)" }}>Деньги: </span>
+              {user.transactions} {plural(user.transactions, "операция", "операции", "операций")}
+            </span>
+            <span>
+              <span style={{ color: "var(--muted)" }}>Задачи: </span>
+              {user.tasks_open} в работе, {user.tasks_done} сделано
+            </span>
+            <span>
+              <span style={{ color: "var(--muted)" }}>Кошельков: </span>
+              {user.wallets}
+            </span>
+            <span>
+              <span style={{ color: "var(--muted)" }}>ИИ-разбор: </span>
+              {user.has_ai_key ? `${user.ai_calls} ${plural(user.ai_calls, "раз", "раза", "раз")}` : "нет ключа"}
+            </span>
+            <span className="col-span-2 flex min-w-0 items-center gap-1.5">
+              <span className="shrink-0" style={{ color: "var(--muted)" }}>Google:</span>
+              {user.google_email ? (
+                <>
+                  <GoogleMark size={12} />
+                  <span className="truncate">{user.google_email}</span>
+                </>
+              ) : (
+                <span style={{ color: "var(--muted)" }}>не привязан</span>
+              )}
+            </span>
+          </div>
+
+          <p className="mt-2 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+            появился {sinceLabel(user.created_at)}
+            {user.providers.includes("email") ? "" : " · без пароля, только через Google"}
+            {user.access_money && user.access_tasks
+              ? ""
+              : user.access_money
+                ? " · доступ только к деньгам"
+                : user.access_tasks
+                  ? " · доступ только к задачам"
+                  : " · доступ закрыт полностью"}
+          </p>
+        </>
+      ) : null}
+    </div>
   );
 }

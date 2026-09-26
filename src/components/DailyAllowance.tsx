@@ -127,13 +127,13 @@ export function DailyAllowance() {
         style={{ background: "var(--surface)" }}
       >
         <p className="text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-          Всего денег
+          Свободно
         </p>
-        <p className="text-[1.25rem] font-bold leading-tight tabular-nums">
-          {formatMoney(data.total, base)}
+        <p className="text-[1.625rem] font-bold leading-tight tabular-nums">
+          {formatMoney(data.money, base)}
         </p>
         <p className="mt-0.5 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-          свободно {formatMoney(data.money, base)}
+          всего {formatMoney(data.total, base)}
           {data.saved > 0 ? ` · отложено ${formatMoney(data.saved, base)}` : ""}
         </p>
         {/* Долги отдельной строкой: вместе с остальным они не помещаются, а

@@ -127,7 +127,7 @@ export function UserActionsSheet({
       });
       if (error) throw new Error(error.message);
       setStage("main");
-      setNote("Пароль сохранён — сообщите его человеку");
+      setNote("Пароль сохранён — сообщите его пользователю");
     });
   };
 
@@ -255,7 +255,7 @@ export function UserActionsSheet({
                 />
                 <ActionRow
                   label="Задать пароль"
-                  hint="Придумать пароль самому и сообщить человеку — письмо не отправляется"
+                  hint="Придумать пароль самому и сообщить пользователю — письмо не отправляется"
                   busy={busy === "password"}
                   onClick={() => setStage("password")}
                   first={false}
@@ -485,8 +485,8 @@ function PasswordStage({
   return (
     <div className="space-y-3 pb-2">
       <p className="text-sm leading-snug" style={{ color: "var(--muted)" }}>
-        Человек сможет войти этим паролем сразу же — письмо не отправляется,
-        сообщите пароль лично.
+        Пользователь сможет войти этим паролем сразу же — письмо не
+        отправляется, сообщите пароль лично.
       </p>
 
       <div>

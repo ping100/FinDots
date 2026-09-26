@@ -139,6 +139,7 @@ export function UserActionsSheet({
       if (error) throw new Error(error.message);
       setStage("main");
       setPhrase("");
+      setNote("База очищена");
     });
   };
 

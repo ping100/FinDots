@@ -160,7 +160,65 @@ const STEPS: Step[] = [
       </Scene>
     ),
   },
+  {
+    title: "Установите как приложение",
+    text: "Тогда Dots открывается сразу с экрана «Домой», без адресной строки браузера — быстрее и больше похоже на обычное приложение.",
+    art: <InstallGuide />,
+  },
 ];
+
+const INSTALL_STEPS: Record<"ios" | "android", string[]> = {
+  ios: [
+    "Откройте dotsapp.vercel.app в Safari — в Chrome на iPhone этой кнопки нет",
+    "Нажмите «Поделиться» (квадрат со стрелкой вверх) внизу экрана",
+    "Выберите «На экран «Домой»»",
+    "Нажмите «Добавить» в правом верхнем углу",
+  ],
+  android: [
+    "Откройте dotsapp.vercel.app в Chrome",
+    "Нажмите ⋮ в правом верхнем углу — или дождитесь баннера снизу экрана",
+    "Выберите «Установить приложение» (или «Добавить на главный экран»)",
+    "Подтвердите — значок появится на рабочем столе",
+  ],
+};
+
+/** Переключатель iPhone/Android — шаги на разных телефонах разные. */
+function InstallGuide() {
+  const [platform, setPlatform] = useState<"ios" | "android">(() =>
+    typeof navigator !== "undefined" && /android/i.test(navigator.userAgent) ? "android" : "ios",
+  );
+
+  return (
+    <div className="mb-4 rounded-2xl p-4" style={{ background: "var(--surface-2)" }}>
+      <div className="mb-3 grid grid-cols-2 gap-1 rounded-xl p-1" style={{ background: "var(--surface)" }}>
+        {(["ios", "android"] as const).map((id) => (
+          <button
+            key={id}
+            onClick={() => setPlatform(id)}
+            aria-pressed={platform === id}
+            className="rounded-lg py-2 text-sm font-medium transition"
+            style={{
+              background: platform === id ? "var(--accent)" : "transparent",
+              color: platform === id ? "#fff" : "var(--muted)",
+            }}
+          >
+            {id === "ios" ? "iPhone" : "Android"}
+          </button>
+        ))}
+      </div>
+      <ol className="space-y-1.5 text-left text-sm leading-snug">
+        {INSTALL_STEPS[platform].map((text, i) => (
+          <li key={i} className="flex gap-2">
+            <span className="shrink-0 font-semibold" style={{ color: "var(--muted)" }}>
+              {i + 1}.
+            </span>
+            <span>{text}</span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
 
 export function Guide({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [step, setStep] = useState(0);

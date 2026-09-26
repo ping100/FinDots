@@ -6,8 +6,9 @@ import { Icon } from "@/lib/icons";
 import { Loader } from "@/components/Loader";
 import { Avatar } from "@/components/Avatar";
 import { Denied, useOverview } from "@/components/admin/shared";
+import { Button, Sheet } from "@/components/ui";
 import { messageTime } from "@/lib/support";
-import { loadReviews, type Review } from "@/lib/reviews";
+import { deleteReview, loadReviews, type Review } from "@/lib/reviews";
 import type { AdminUser } from "@/lib/admin";
 
 const STAR_COLOR = "#f59e0b";
@@ -29,10 +30,23 @@ function Stars({ rating }: { rating: number }) {
 export default function ReviewsPage() {
   const { data, denied } = useOverview();
   const [reviews, setReviews] = useState<Review[] | null>(null);
+  const [toDelete, setToDelete] = useState<Review | null>(null);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     void loadReviews().then(setReviews);
   }, []);
+
+  const confirmDelete = async () => {
+    if (!toDelete || busy) return;
+    setBusy(true);
+    const error = await deleteReview(toDelete.id);
+    setBusy(false);
+    if (!error) {
+      setReviews((prev) => prev?.filter((r) => r.id !== toDelete.id) ?? null);
+      setToDelete(null);
+    }
+  };
 
   if (denied) return <Denied />;
   if (reviews === null) return <Loader />;
@@ -86,8 +100,17 @@ export default function ReviewsPage() {
                     ) : null}
                     {name(user)}
                   </span>
-                  <span className="shrink-0 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-                    {messageTime(review.created_at)}
+                  <span className="flex shrink-0 items-center gap-2">
+                    <span className="text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+                      {messageTime(review.created_at)}
+                    </span>
+                    <button
+                      onClick={() => setToDelete(review)}
+                      aria-label="Удалить отзыв"
+                      className="-m-1 p-1 opacity-40 transition active:scale-90 active:opacity-100"
+                    >
+                      <Icon name="trash" size={15} />
+                    </button>
                   </span>
                 </div>
                 <div className="mt-1.5">
@@ -103,6 +126,18 @@ export default function ReviewsPage() {
           })}
         </div>
       )}
+
+      <Sheet open={toDelete !== null} title="Удалить отзыв" onClose={() => setToDelete(null)}>
+        <div className="space-y-3 pb-2">
+          <p className="text-sm leading-snug">Отзыв удалится насовсем. Отменить нельзя.</p>
+          <Button variant="danger" onClick={() => void confirmDelete()} disabled={busy}>
+            {busy ? "Удаляю…" : "Удалить"}
+          </Button>
+          <Button variant="ghost" onClick={() => setToDelete(null)} disabled={busy}>
+            Отмена
+          </Button>
+        </div>
+      </Sheet>
     </div>
   );
 }

@@ -28,3 +28,9 @@ export async function loadReviews(): Promise<Review[]> {
     .order("created_at", { ascending: false });
   return (data ?? []) as Review[];
 }
+
+/** Удалить отзыв. reviews неизменяема для всех — только через админскую функцию. */
+export async function deleteReview(id: number): Promise<string | null> {
+  const { error } = await createClient().rpc("admin_delete_review", { p_review_id: id });
+  return error ? error.message : null;
+}

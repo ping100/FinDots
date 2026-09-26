@@ -50,7 +50,7 @@ export function ReviewRow({ heading }: { heading?: string }) {
       <div className="mb-4 overflow-hidden rounded-2xl" style={{ background: "var(--surface)" }}>
         <button onClick={() => setOpen(true)} className="flex w-full items-center gap-3 px-4 py-3.5 text-left">
           <span className="flex-1">
-            <span className="block text-[0.9375rem]">Оставить отзыв</span>
+            <span className="block text-[0.9375rem]">Оценить приложение</span>
             <span className="mt-0.5 block text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
               Оценка и пара слов — сразу администратору
             </span>
@@ -58,7 +58,7 @@ export function ReviewRow({ heading }: { heading?: string }) {
           <Icon name="chevron-right" size={16} className="opacity-30" />
         </button>
 
-        <Sheet open={open} title="Оставить отзыв" onClose={close}>
+        <Sheet open={open} title="Оценить приложение" onClose={close}>
           {sent ? (
             <div className="space-y-3 py-4 text-center">
               <div className="flex justify-center">

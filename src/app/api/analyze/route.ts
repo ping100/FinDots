@@ -194,9 +194,18 @@ export async function POST(request: Request) {
 
   const model = configuredModel || DEFAULT_MODEL;
 
+  // Таймаут только на ожидание первого байта ответа: OpenRouter иногда
+  // принимает запрос и потом долго молчит перед тем, как вообще начать
+  // отвечать. Как только заголовки пришли — снимаем, чтобы не оборвать
+  // сам поток, который может честно идти дольше (см. отдельную защиту
+  // от зависания в relay() ниже).
+  const connectController = new AbortController();
+  const connectTimeout = setTimeout(() => connectController.abort(), 15_000);
+
   const ask = () =>
     fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
+      signal: connectController.signal,
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
@@ -232,8 +241,14 @@ export async function POST(request: Request) {
   let response: Response;
   try {
     response = await ask();
-  } catch {
-    return NextResponse.json({ error: "OpenRouter недоступен" }, { status: 502 });
+  } catch (error) {
+    const timedOut = error instanceof Error && error.name === "AbortError";
+    return NextResponse.json(
+      { error: timedOut ? "OpenRouter не ответил вовремя — попробуйте другую модель" : "OpenRouter недоступен" },
+      { status: 502 },
+    );
+  } finally {
+    clearTimeout(connectTimeout);
   }
 
   if (!response.ok) {
@@ -330,7 +345,16 @@ function relay(upstream: Response, model: string, callsLeft: number): ReadableSt
         if (!reader) throw new Error("нет потока");
 
         for (;;) {
-          const { done, value } = await reader.read();
+          // OpenRouter иногда принимает запрос (response.ok) и потом молчит
+          // на середине потока — без этой подстраховки чтение просто
+          // зависало до убийства функции по maxDuration, и человек видел
+          // вечное «Думает…» без единой ошибки на экране.
+          const { done, value } = await Promise.race([
+            reader.read(),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error("stall")), 20_000),
+            ),
+          ]);
           if (done) break;
           rest += decoder.decode(value, { stream: true });
 

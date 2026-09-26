@@ -322,9 +322,7 @@ export function HomeScreen() {
             <IncomeBubble
               key={category.id}
               category={category}
-              amount={month.income.get(category.id) ?? 0}
               pool={poolOf(category.id)}
-              base={base}
               size={bubble}
               onTap={() => setDialog({ kind: "income", category })}
             />
@@ -779,16 +777,12 @@ function useLongPress(onHold: () => void) {
 
 function IncomeBubble({
   category,
-  amount,
   pool,
-  base,
   size,
   onTap,
 }: {
   category: Category;
-  amount: number;
   pool: { amount: number; currency: string };
-  base: string;
   size: number;
   onTap: () => void;
 }) {
@@ -817,7 +811,10 @@ function IncomeBubble({
         icon={category.icon}
         color={category.color}
         label={category.name}
-        amount={formatMoney(amount, base)}
+        // Не сумма за месяц (та уже в заголовке «Доходы») — а то, что ещё
+        // ждёт разноса по кошелькам. Разнесли — под кружком «0», а не
+        // цифра, которая никак не обновится до следующего месяца.
+        amount={formatMoney(pool.amount, pool.currency)}
         size={size}
         badge={draggable}
         dimmed={isDragging}

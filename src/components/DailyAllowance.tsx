@@ -129,7 +129,7 @@ export function DailyAllowance() {
         <p className="text-[0.6875rem]" style={{ color: "var(--muted)" }}>
           Всего денег
         </p>
-        <p className="text-[1.625rem] font-bold leading-tight tabular-nums">
+        <p className="text-[1.25rem] font-bold leading-tight tabular-nums">
           {formatMoney(data.total, base)}
         </p>
         <p className="mt-0.5 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
@@ -150,7 +150,7 @@ export function DailyAllowance() {
           {data.short ? "Не хватает на обязательные платежи" : "Можно тратить сегодня"}
         </p>
         <p
-          className="text-[1.25rem] font-bold leading-tight tabular-nums"
+          className="text-[1.625rem] font-bold leading-tight tabular-nums"
           style={{ color: data.short ? "var(--danger)" : "var(--text)" }}
         >
           {formatMoney(data.short ? data.obligations - data.money : data.perDay, base)}

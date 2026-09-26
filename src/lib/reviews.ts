@@ -47,8 +47,14 @@ export async function loadReviews(): Promise<Review[]> {
   return (data ?? []) as Review[];
 }
 
-/** Удалить отзыв. reviews неизменяема для всех — только через админскую функцию. */
+/** Удалить отзыв (в админке). reviews неизменяема для всех — только через SECURITY DEFINER функцию. */
 export async function deleteReview(id: number): Promise<string | null> {
   const { error } = await createClient().rpc("admin_delete_review", { p_review_id: id });
+  return error ? error.message : null;
+}
+
+/** Удалить свой отзыв — сам человек, из настроек. */
+export async function deleteOwnReview(): Promise<string | null> {
+  const { error } = await createClient().rpc("delete_own_review");
   return error ? error.message : null;
 }

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Icon } from "@/lib/icons";
 import { useIsAdmin } from "@/lib/useIsAdmin";
-import { REVIEW_MAX, loadOwnReview, submitReview, type Review } from "@/lib/reviews";
+import { REVIEW_MAX, deleteOwnReview, loadOwnReview, submitReview, type Review } from "@/lib/reviews";
 import { Button, Sheet } from "./ui";
 import { SettingsHeading } from "./SettingsHeading";
 
@@ -37,6 +37,7 @@ export function ReviewRow({ heading }: { heading?: string }) {
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
     if (admin !== false) return;
@@ -56,6 +57,7 @@ export function ReviewRow({ heading }: { heading?: string }) {
     setRating(0);
     setBody("");
     setProblem(null);
+    setConfirmDelete(false);
   };
 
   const submit = async () => {
@@ -66,6 +68,19 @@ export function ReviewRow({ heading }: { heading?: string }) {
     setBusy(false);
     if (error) setProblem(error);
     else setExisting(await loadOwnReview());
+  };
+
+  const removeOwn = async () => {
+    if (busy) return;
+    setBusy(true);
+    setProblem(null);
+    const error = await deleteOwnReview();
+    setBusy(false);
+    if (error) setProblem(error);
+    else {
+      setExisting(null);
+      setConfirmDelete(false);
+    }
   };
 
   return (
@@ -83,7 +98,22 @@ export function ReviewRow({ heading }: { heading?: string }) {
         </button>
 
         <Sheet open={open} title="Оценить приложение" onClose={close}>
-          {existing ? (
+          {existing && confirmDelete ? (
+            <div className="space-y-3 pb-2">
+              <p className="text-sm leading-snug">Отзыв удалится насовсем. Отменить нельзя.</p>
+              {problem ? (
+                <p className="text-sm" style={{ color: "var(--danger)" }}>
+                  {problem}
+                </p>
+              ) : null}
+              <Button variant="danger" onClick={() => void removeOwn()} disabled={busy}>
+                {busy ? "Удаляю…" : "Удалить отзыв"}
+              </Button>
+              <Button variant="ghost" onClick={() => setConfirmDelete(false)} disabled={busy}>
+                Отмена
+              </Button>
+            </div>
+          ) : existing ? (
             <div className="space-y-3 py-2 text-center">
               <Stars rating={existing.rating} />
               {existing.body ? (
@@ -95,6 +125,13 @@ export function ReviewRow({ heading }: { heading?: string }) {
               <Button variant="ghost" onClick={close}>
                 Закрыть
               </Button>
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="block w-full text-center text-[0.8125rem]"
+                style={{ color: "var(--danger)" }}
+              >
+                Удалить отзыв
+              </button>
             </div>
           ) : (
             <div className="space-y-4 pb-2">

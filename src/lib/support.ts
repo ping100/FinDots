@@ -41,6 +41,33 @@ export async function markRead(userId?: string): Promise<void> {
   await createClient().rpc("support_mark_read", userId ? { p_user: userId } : {});
 }
 
+/**
+ * Скрытые переписки: userId → когда скрыли. Если после этой отметки
+ * пришло новое сообщение, переписка сама возвращается в список —
+ * решает вызывающий код, здесь только сырые отметки.
+ */
+export async function loadHiddenThreads(): Promise<Map<string, string>> {
+  const { data } = await createClient().from("support_thread_state").select("user_id, hidden_at");
+  return new Map((data ?? []).map((row) => [row.user_id as string, row.hidden_at as string]));
+}
+
+export async function setThreadHidden(userId: string, hidden: boolean): Promise<string | null> {
+  const { error } = await createClient().rpc("admin_set_thread_hidden", {
+    p_user_id: userId,
+    p_hidden: hidden,
+  });
+  return error ? error.message : null;
+}
+
+/** Удалить переписку целиком. notify — оставить одно сообщение о закрытии (и разбудить пуш). */
+export async function closeThread(userId: string, notify: boolean): Promise<string | null> {
+  const { error } = await createClient().rpc("admin_close_thread", {
+    p_user_id: userId,
+    p_notify: notify,
+  });
+  return error ? error.message : null;
+}
+
 /** Последний непрочитанный ответ администратора — для баннера при входе. */
 export interface UnreadReply {
   id: number;

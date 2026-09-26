@@ -31,7 +31,14 @@ const APPS = [
   },
 ];
 
-export default function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ denied?: string }>;
+}) {
+  const { denied } = await searchParams;
+  const deniedName = denied === "money" ? "Деньги" : denied === "tasks" ? "Задачи" : null;
+
   return (
     <div className="auth-glow mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center px-6 py-8">
       {/* Поля сверху и над ссылкой внизу делят свободное место поровну:
@@ -52,6 +59,15 @@ export default function Home() {
           Куда пойдём?
         </p>
       </div>
+
+      {deniedName ? (
+        <p
+          className="mb-4 rounded-2xl px-4 py-3 text-center text-sm leading-snug"
+          style={{ background: "var(--surface)", color: "var(--danger)" }}
+        >
+          Доступ к разделу «{deniedName}» закрыт администратором
+        </p>
+      ) : null}
 
       <div className="space-y-3">
         {APPS.map((app, index) => (

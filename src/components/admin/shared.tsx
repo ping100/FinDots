@@ -108,9 +108,22 @@ export function OnlineDot() {
 }
 
 /** Карточка человека: только счётчики — ни сумм, ни названий, ни текстов. */
-export function UserCard({ user, now }: { user: AdminUser; now: number }) {
+export function UserCard({
+  user,
+  now,
+  onClick,
+}: {
+  user: AdminUser;
+  now: number;
+  onClick?: () => void;
+}) {
+  const Root = onClick ? "button" : "div";
   return (
-    <div className="rounded-2xl p-3.5" style={{ background: "var(--surface)" }}>
+    <Root
+      onClick={onClick}
+      className="w-full rounded-2xl p-3.5 text-left"
+      style={{ background: "var(--surface)" }}
+    >
       <div className="flex items-baseline justify-between gap-3">
         <p className="flex min-w-0 items-center gap-2 truncate text-[0.9375rem] font-medium">
           <Avatar url={user.avatar_url} name={user.display_name || user.email} size={28} />
@@ -120,6 +133,14 @@ export function UserCard({ user, now }: { user: AdminUser; now: number }) {
             </span>
           ) : null}
           {user.display_name || user.email || "без имени"}
+          {user.banned ? (
+            <span
+              className="shrink-0 rounded-full px-1.5 py-0.5 text-[0.625rem] font-medium text-white"
+              style={{ background: "var(--danger)" }}
+            >
+              заблокирован
+            </span>
+          ) : null}
         </p>
         {isOnline(user, now) ? (
           <p className="flex shrink-0 items-center gap-1.5 text-[0.6875rem] font-medium">
@@ -171,7 +192,14 @@ export function UserCard({ user, now }: { user: AdminUser; now: number }) {
       <p className="mt-2 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
         появился {sinceLabel(user.created_at)}
         {user.providers.includes("email") ? "" : " · без пароля, только через Google"}
+        {user.access_money && user.access_tasks
+          ? ""
+          : user.access_money
+            ? " · доступ только к деньгам"
+            : user.access_tasks
+              ? " · доступ только к задачам"
+              : " · доступ закрыт полностью"}
       </p>
-    </div>
+    </Root>
   );
 }

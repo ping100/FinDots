@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Icon } from "@/lib/icons";
 import { Loader } from "@/components/Loader";
 import { Denied, GeneratedAt, Problem, RefreshButton, UserCard, useOverview } from "@/components/admin/shared";
+import { UserActionsSheet } from "@/components/admin/UserActionsSheet";
 import { VIEWS, countView, type ViewId } from "@/lib/admin";
 
 /**
@@ -18,7 +19,12 @@ import { VIEWS, countView, type ViewId } from "@/lib/admin";
  */
 export function ViewScreen({ initial }: { initial: ViewId }) {
   const [view, setView] = useState<ViewId>(initial);
+  // Id, а не сам объект: после действия в листе данные обновляются
+  // (reload), и лист должен показать уже новое состояние, а не снимок
+  // на момент открытия.
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const { data, denied, problem, busy, reload } = useOverview();
+  const selected = selectedId ? (data?.users.find((u) => u.id === selectedId) ?? null) : null;
 
   if (denied) return <Denied />;
   if (!data && !problem) return <Loader />;
@@ -85,7 +91,7 @@ export function ViewScreen({ initial }: { initial: ViewId }) {
 
       <div className="space-y-2">
         {users.map((user) => (
-          <UserCard key={user.id} user={user} now={now} />
+          <UserCard key={user.id} user={user} now={now} onClick={() => setSelectedId(user.id)} />
         ))}
         {data && users.length === 0 ? (
           <p className="rounded-2xl p-3.5 text-[0.8125rem]" style={{ background: "var(--surface)", color: "var(--muted)" }}>
@@ -95,6 +101,8 @@ export function ViewScreen({ initial }: { initial: ViewId }) {
       </div>
 
       {data ? <GeneratedAt iso={data.generated_at} /> : null}
+
+      <UserActionsSheet user={selected} onClose={() => setSelectedId(null)} onChanged={reload} />
     </div>
   );
 }

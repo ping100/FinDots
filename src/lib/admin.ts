@@ -26,6 +26,10 @@ export interface AdminUser {
   tasks_done: number;
   has_ai_key: boolean;
   ai_calls: number;
+  /** Вход запрещён администратором. */
+  banned: boolean;
+  access_money: boolean;
+  access_tasks: boolean;
 }
 
 export interface AdminOverview {

@@ -11,9 +11,10 @@ export interface Profile {
   base_currency: CurrencyCode;
   theme: ThemeChoice;
   text_scale: "small" | "medium" | "large";
-  ai_model: string;
   /** Приветствие после регистрации уже показывали. */
   onboarding_seen: boolean;
+  /** Разрешён ли ИИ-разбор бюджета — переключает администратор. */
+  access_ai: boolean;
 }
 
 export interface ExchangeRate {

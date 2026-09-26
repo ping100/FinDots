@@ -24,12 +24,13 @@ export interface AdminUser {
   transactions: number;
   tasks_open: number;
   tasks_done: number;
-  has_ai_key: boolean;
   ai_calls: number;
   /** Вход запрещён администратором. */
   banned: boolean;
   access_money: boolean;
   access_tasks: boolean;
+  /** Разрешён ли ИИ-разбор — ключ теперь общий, это просто переключатель. */
+  access_ai: boolean;
 }
 
 export interface AdminOverview {

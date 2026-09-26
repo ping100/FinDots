@@ -195,7 +195,9 @@ export function UserCard({
             </span>
             <span>
               <span style={{ color: "var(--muted)" }}>ИИ-разбор: </span>
-              {user.has_ai_key ? `${user.ai_calls} ${plural(user.ai_calls, "раз", "раза", "раз")}` : "нет ключа"}
+              {user.access_ai
+                ? `${user.ai_calls} ${plural(user.ai_calls, "раз", "раза", "раз")}`
+                : "доступ закрыт"}
             </span>
             <span className="col-span-2 flex min-w-0 items-center gap-1.5">
               <span className="shrink-0" style={{ color: "var(--muted)" }}>Google:</span>

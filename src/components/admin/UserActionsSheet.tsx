@@ -82,7 +82,7 @@ export function UserActionsSheet({
   // Действия вызываются только по клику внутри листа, а лист виден только
   // пока user не null, — но для TS это не очевидно, поэтому каждая ловит
   // отсутствие пользователя явным ранним выходом.
-  const setAccess = (money: boolean, tasks: boolean) => {
+  const setAccess = (money: boolean, tasks: boolean, ai: boolean) => {
     if (!user) return;
     const id = user.id;
     return run("access", async () => {
@@ -90,6 +90,7 @@ export function UserActionsSheet({
         p_user_id: id,
         p_money: money,
         p_tasks: tasks,
+        p_ai: ai,
       });
       if (error) throw new Error(error.message);
     });
@@ -223,13 +224,19 @@ export function UserActionsSheet({
                 label="Findots"
                 on={user.access_money}
                 disabled={busy === "access"}
-                onClick={() => setAccess(!user.access_money, user.access_tasks)}
+                onClick={() => setAccess(!user.access_money, user.access_tasks, user.access_ai)}
               />
               <AccessChip
                 label="Todots"
                 on={user.access_tasks}
                 disabled={busy === "access"}
-                onClick={() => setAccess(user.access_money, !user.access_tasks)}
+                onClick={() => setAccess(user.access_money, !user.access_tasks, user.access_ai)}
+              />
+              <AccessChip
+                label="ИИ"
+                on={user.access_ai}
+                disabled={busy === "access"}
+                onClick={() => setAccess(user.access_money, user.access_tasks, !user.access_ai)}
               />
             </div>
           </div>

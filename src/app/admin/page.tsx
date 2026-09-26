@@ -7,6 +7,7 @@ import { Loader } from "@/components/Loader";
 import { buildMoment } from "@/lib/update";
 import { SupportCard } from "@/components/admin/SupportCard";
 import { ReviewsCard } from "@/components/admin/ReviewsCard";
+import { AiCard } from "@/components/admin/AiCard";
 import { Denied, GeneratedAt, OnlineDot, Problem, RefreshButton, useOverview } from "@/components/admin/shared";
 import {
   LINKS,
@@ -60,6 +61,9 @@ export default function AdminPage() {
           </div>
           <div className="mt-3">
             <ReviewsCard />
+          </div>
+          <div className="mt-3">
+            <AiCard />
           </div>
           <SupabaseLimits data={data} />
           <VercelBlock built={built} />

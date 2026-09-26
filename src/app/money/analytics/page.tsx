@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import { Icon } from "@/lib/icons";
 import { formatMoney, monthLabel, monthRange } from "@/lib/money";
 import { maskDigits } from "@/lib/privacy";
@@ -43,7 +42,7 @@ const GROUPINGS: { id: Grouping; label: string }[] = [
 ];
 
 export default function AnalyticsPage() {
-  const { transactions, categories, profile, aiKeyHint, toBase, moneyHidden } = useStore();
+  const { transactions, categories, profile, toBase, moneyHidden } = useStore();
   const [mode, setMode] = useState<Mode>("spent");
   const [grouping, setGrouping] = useState<Grouping>("day");
   const [offset, setOffset] = useState(0);
@@ -469,7 +468,11 @@ export default function AnalyticsPage() {
         Модель получает только суммы по категориям, балансы и долги — без
         комментариев к операциям.
       </p>
-      {aiKeyHint ? (
+      {profile?.access_ai === false ? (
+        <p className="text-sm" style={{ color: "var(--muted)" }}>
+          ИИ-разбор отключён администратором.
+        </p>
+      ) : (
         <Button onClick={() => runAnalysis()} disabled={aiBusy}>
           {aiBusy
             ? // Пока ответ не пошёл — показываем, сколько уже ждём: молчащая
@@ -481,11 +484,6 @@ export default function AnalyticsPage() {
               ? "Пересчитать"
               : "Разобрать мой бюджет"}
         </Button>
-      ) : (
-        // Без ключа кнопка только выдала бы ошибку — ведём сразу туда, где его заводят.
-        <Link href="/money/settings">
-          <Button variant="ghost">Добавить ключ OpenRouter в настройках</Button>
-        </Link>
       )}
 
       {aiError ? (

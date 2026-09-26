@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { decryptApiKey } from "@/lib/aiConfig";
 
 export const runtime = "nodejs";
 
-// Лимит защищает не кошелёк владельца, а самого пользователя: ключ теперь
-// личный, и зациклившийся запрос жёг бы его собственные деньги.
+// Ключ теперь общий (админский) — лимит защищает его счёт от того, чтобы
+// один зациклившийся человек не сжёг весь дневной бюджет на всех.
 const DAILY_LIMIT = Number(process.env.AI_DAILY_LIMIT ?? 20);
 const DEFAULT_MODEL = "google/gemma-4-31b-it:free";
 
@@ -50,20 +51,31 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Нужна авторизация" }, { status: 401 });
 
-  // Ключ у каждого свой. В браузер он не уходит — читаем его только здесь.
-  const { data: keyRow } = await supabase
-    .from("ai_keys")
-    .select("api_key")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  const apiKey = keyRow?.api_key;
-  if (!apiKey) {
+  // Ключ общий на всё приложение — задаёт его администратор. Доступ
+  // конкретного человека проверяет сама функция (access_ai), а ключ
+  // приходит зашифрованным: расшифровать может только этот сервер.
+  const { data: config, error: configError } = (await supabase
+    .rpc("ai_config_for_analysis")
+    .maybeSingle()) as { data: { api_key_enc: string | null; model: string } | null; error: { code?: string; message: string } | null };
+  if (configError) {
     return NextResponse.json(
-      { error: "Добавьте свой ключ OpenRouter в настройках — разбор идёт от вашего аккаунта" },
+      {
+        error:
+          configError.code === "42501"
+            ? "ИИ-разбор отключён администратором"
+            : configError.message,
+      },
+      { status: configError.code === "42501" ? 403 : 500 },
+    );
+  }
+  if (!config?.api_key_enc) {
+    return NextResponse.json(
+      { error: "Администратор ещё не подключил ИИ-разбор" },
       { status: 400 },
     );
   }
+  const apiKey = decryptApiKey(config.api_key_enc);
+  const configuredModel = config.model;
 
   // Дневной лимит обращений, чтобы один пользователь не выжег общий ключ.
   const today = new Date().toISOString().slice(0, 10);
@@ -85,7 +97,7 @@ export async function POST(request: Request) {
   // Данные собираем на сервере под RLS — клиент не может подменить чужие цифры.
   const [profileRes, ratesRes, walletsRes, categoriesRes, balancesRes, txRes] =
     await Promise.all([
-      supabase.from("profiles").select("base_currency, ai_model").eq("id", user.id).single(),
+      supabase.from("profiles").select("base_currency").eq("id", user.id).single(),
       supabase.from("exchange_rates").select("code, rate_to_base"),
       supabase
         .from("wallets")
@@ -176,7 +188,7 @@ export async function POST(request: Request) {
     кошельки_и_долги: wallets,
   };
 
-  const model = profileRes.data?.ai_model || DEFAULT_MODEL;
+  const model = configuredModel || DEFAULT_MODEL;
 
   const ask = () =>
     fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -223,7 +235,7 @@ export async function POST(request: Request) {
   if (!response.ok) {
     if (response.status === 401 || response.status === 403) {
       return NextResponse.json(
-        { error: "OpenRouter не принял ключ — проверьте его в настройках" },
+        { error: "OpenRouter не принял ключ — сообщите администратору" },
         { status: 400 },
       );
     }
@@ -237,7 +249,7 @@ export async function POST(request: Request) {
     // идентификаторы меняются, и выбранная когда-то модель может исчезнуть.
     if (response.status === 404) {
       return NextResponse.json(
-        { error: `Модели «${model}» больше нет у OpenRouter — выберите другую в настройках` },
+        { error: `Модели «${model}» больше нет у OpenRouter — администратору нужно выбрать другую` },
         { status: 400 },
       );
     }

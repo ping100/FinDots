@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AI_MODELS, type AiModel } from "@/lib/aiModels";
 import { TEXT_SCALES } from "@/lib/textScale";
 import { THEMES, THEME_AUTO_HINT } from "@/lib/look";
 import { CURRENT_BUILD, applyUpdate, buildMoment, serverBuild } from "@/lib/update";
@@ -24,42 +23,13 @@ import { disablePush } from "@/lib/pushClient";
 import { AccountCard } from "@/components/AccountCard";
 import { AppSwitch } from "@/components/AppSwitch";
 import { AdminLink } from "@/components/AdminLink";
-import { Button, Field, Sheet, inputClass, inputStyle } from "@/components/ui";
+import { Field, Sheet, inputClass, inputStyle } from "@/components/ui";
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { profile, rates, aiKeyHint, saveProfile, saveRate, saveAiKey, deleteAiKey } = useStore();
-  const [sheet, setSheet] =
-    useState<"currency" | "rates" | "theme" | "size" | "model" | "key" | null>(null);
-  const [model, setModel] = useState(profile?.ai_model ?? AI_MODELS[0].id);
-  const [keyDraft, setKeyDraft] = useState("");
-  const [keyBusy, setKeyBusy] = useState(false);
-  const [keyProblem, setKeyProblem] = useState<string | null>(null);
+  const { profile, rates, saveProfile, saveRate } = useStore();
+  const [sheet, setSheet] = useState<"currency" | "rates" | "theme" | "size" | null>(null);
   const [guide, setGuide] = useState(false);
-  // Список моделей берём у OpenRouter живьём: зашитый в код протухает, и
-  // выбранная когда-то модель однажды просто исчезает.
-  const [models, setModels] = useState<AiModel[]>(AI_MODELS);
-  const [modelsNote, setModelsNote] = useState<string | null>(null);
-  const [modelQuery, setModelQuery] = useState("");
-
-  useEffect(() => {
-    if (sheet !== "model" || models !== AI_MODELS) return;
-    let alive = true;
-    void (async () => {
-      try {
-        const res = await fetch("/api/models");
-        const data = (await res.json()) as { models?: AiModel[] };
-        if (!alive) return;
-        if (data.models?.length) setModels(data.models);
-        else setModelsNote("Список не загрузился — показан запасной");
-      } catch {
-        if (alive) setModelsNote("Список не загрузился — показан запасной");
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [sheet, models]);
   const [checking, setChecking] = useState(false);
   const [updateNote, setUpdateNote] = useState<string | null>(null);
   // Считаем после отрисовки: строка зависит от часового пояса телефона, а
@@ -83,12 +53,6 @@ export default function SettingsPage() {
   };
 
   const base = profile?.base_currency ?? "KZT";
-  // Бесплатные вперёд: ради них человек и заводит свой ключ.
-  const needle = modelQuery.trim().toLowerCase();
-  const shown = models
-    .filter((m) => !needle || m.id.toLowerCase().includes(needle) || m.label.toLowerCase().includes(needle))
-    .slice(0, 60);
-  const modelLabel = models.find((m) => m.id === profile?.ai_model)?.label ?? profile?.ai_model;
 
   const signOut = async () => {
     // Вышел — напоминания этого человека сюда больше не идут.
@@ -139,26 +103,6 @@ export default function SettingsPage() {
           value={TEXT_SCALES.find((item) => item.id === profile?.text_scale)?.label ?? "Средний"}
           hint="Если цифры трудно разглядеть"
           onClick={() => setSheet("size")}
-        />
-      </Group>
-
-      <SettingsHeading>Разбор бюджета</SettingsHeading>
-      <Group>
-        <Row
-          label="Ключ OpenRouter"
-          value={aiKeyHint ? `···${aiKeyHint}` : "не задан"}
-          hint="Разбор бюджета идёт от вашего аккаунта — ключ у каждого свой"
-          onClick={() => {
-            setKeyDraft("");
-            setKeyProblem(null);
-            setSheet("key");
-          }}
-        />
-        <Row
-          label="Модель для разбора бюджета"
-          value={modelLabel}
-          hint="Через OpenRouter, есть бесплатные"
-          onClick={() => setSheet("model")}
         />
       </Group>
 
@@ -307,174 +251,6 @@ export default function SettingsPage() {
         </p>
       </Sheet>
 
-      <Sheet
-        open={sheet === "key"}
-        title="Ключ OpenRouter"
-        onClose={() => setSheet(null)}
-        footer={
-          <div className="space-y-2">
-            <Button
-              disabled={keyBusy || keyDraft.trim().length < 8}
-              onClick={async () => {
-                setKeyBusy(true);
-                setKeyProblem(null);
-                try {
-                  await saveAiKey(keyDraft);
-                  setSheet(null);
-                } catch (e) {
-                  setKeyProblem(e instanceof Error ? e.message : "Не получилось сохранить");
-                } finally {
-                  setKeyBusy(false);
-                }
-              }}
-            >
-              {keyBusy ? "Сохраняю…" : "Сохранить ключ"}
-            </Button>
-            {aiKeyHint ? (
-              <Button
-                variant="ghost"
-                disabled={keyBusy}
-                onClick={async () => {
-                  setKeyBusy(true);
-                  try {
-                    await deleteAiKey();
-                    setSheet(null);
-                  } finally {
-                    setKeyBusy(false);
-                  }
-                }}
-              >
-                Удалить ключ
-              </Button>
-            ) : null}
-          </div>
-        }
-      >
-        <p className="mb-3 text-sm" style={{ color: "var(--muted)" }}>
-          Разбор бюджета выполняется вашим ключом, поэтому и расходы ваши.
-          Бесплатных моделей в списке хватает — на них счёт не растёт.
-        </p>
-        <ol className="mb-4 space-y-1.5 text-sm" style={{ color: "var(--muted)" }}>
-          <li>
-            1. Заведите ключ на{" "}
-            <a
-              href="https://openrouter.ai/keys"
-              target="_blank"
-              rel="noreferrer noopener"
-              className="underline"
-              style={{ color: "var(--accent)" }}
-            >
-              openrouter.ai/keys
-            </a>
-          </li>
-          <li>2. Вставьте его сюда — он начинается с sk-or-</li>
-        </ol>
-
-        <Field
-          label={aiKeyHint ? `Новый ключ (сейчас задан ···${aiKeyHint})` : "Ключ"}
-          hint="Хранится в вашей строке базы, другим пользователям он недоступен. В браузер обратно не отдаётся — показываются только последние 4 символа."
-        >
-          <input
-            type="password"
-            autoComplete="off"
-            className={inputClass}
-            style={inputStyle}
-            value={keyDraft}
-            onChange={(e) => setKeyDraft(e.target.value)}
-            placeholder="sk-or-..."
-          />
-        </Field>
-
-        {keyProblem ? (
-          <p className="pb-2 text-sm" style={{ color: "var(--danger)" }}>
-            {keyProblem}
-          </p>
-        ) : null}
-      </Sheet>
-
-      <Sheet
-        open={sheet === "model"}
-        title="Модель"
-        onClose={() => setSheet(null)}
-        footer={
-          <Button
-            onClick={() => {
-              void saveProfile({ ai_model: model });
-              setSheet(null);
-            }}
-          >
-            Сохранить
-          </Button>
-        }
-      >
-        {modelsNote ? (
-          <p className="mb-2 text-xs" style={{ color: "var(--muted)" }}>
-            {modelsNote}
-          </p>
-        ) : null}
-
-        <input
-          className={`${inputClass} mb-2`}
-          style={inputStyle}
-          value={modelQuery}
-          onChange={(e) => setModelQuery(e.target.value)}
-          placeholder="Поиск: gemma, claude, qwen…"
-        />
-
-        <p className="mb-2 px-1 text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
-          Модели с меткой «думает» сначала пишут черновик и только потом ответ —
-          разбор у них выходит вдумчивее, но ждать дольше.
-        </p>
-
-        <div className="mb-3 max-h-[46vh] space-y-2 overflow-y-auto">
-          {shown.map((m) => (
-            <button
-              key={m.id}
-              onClick={() => setModel(m.id)}
-              className="flex w-full items-center gap-2 rounded-2xl px-4 py-3 text-left text-sm"
-              style={{
-                background: model === m.id ? "var(--accent)" : "var(--surface-2)",
-                color: model === m.id ? "#fff" : "inherit",
-              }}
-            >
-              <span className="flex-1">{m.label}</span>
-              {m.thinks ? (
-                <span
-                  className="rounded-full px-2 py-0.5 text-[0.625rem] font-semibold"
-                  style={{
-                    background: model === m.id ? "rgba(255,255,255,0.25)" : "var(--surface)",
-                    color: model === m.id ? "#fff" : "var(--muted)",
-                  }}
-                >
-                  думает
-                </span>
-              ) : null}
-              {m.free ? (
-                <span
-                  className="rounded-full px-2 py-0.5 text-[0.625rem] font-semibold"
-                  style={{
-                    background: model === m.id ? "rgba(255,255,255,0.25)" : "var(--ok)",
-                    color: "#fff",
-                  }}
-                >
-                  free
-                </span>
-              ) : null}
-            </button>
-          ))}
-        </div>
-        <Field
-          label="Или вписать идентификатор вручную"
-          hint="Список берётся у OpenRouter — если нужной модели в нём нет, впишите её сюда"
-        >
-          <input
-            className={inputClass}
-            style={inputStyle}
-            value={model}
-            onChange={(e) => setModel(e.target.value)}
-          />
-        </Field>
-      </Sheet>
     </div>
   );
 }

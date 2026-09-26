@@ -68,6 +68,22 @@ export async function closeThread(userId: string, notify: boolean): Promise<stri
   return error ? error.message : null;
 }
 
+/**
+ * Удалить переписку и прислать push «Обращение закрыто» напрямую, минуя
+ * support_messages, — в базе после этого не остаётся ни одной строки.
+ * Дойдёт, только если у человека включены уведомления.
+ */
+export async function closeThreadWithPush(userId: string): Promise<string | null> {
+  const res = await fetch("/api/admin/close-thread", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ user_id: userId }),
+  });
+  if (res.ok) return null;
+  const data = await res.json().catch(() => ({}) as { error?: string });
+  return data.error ?? "Не получилось";
+}
+
 /** Последний непрочитанный ответ администратора — для баннера при входе. */
 export interface UnreadReply {
   id: number;

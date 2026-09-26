@@ -11,6 +11,7 @@ import { Button, Sheet } from "@/components/ui";
 import {
   SUPPORT_POLL,
   closeThread,
+  closeThreadWithPush,
   loadHiddenThreads,
   loadThread,
   markRead,
@@ -107,7 +108,9 @@ export default function SupportPage() {
   const doClose = async (notify: boolean) => {
     if (!open || busy) return;
     setBusy(true);
-    const error = await closeThread(open, notify);
+    // С уведомлением — пуш напрямую, в базе после этого не остаётся ни
+    // одной строки (в отличие от обычного ответа, который хранится).
+    const error = notify ? await closeThreadWithPush(open) : await closeThread(open, false);
     setBusy(false);
     if (!error) {
       await reload();
@@ -226,7 +229,8 @@ export default function SupportPage() {
                         Удалить с уведомлением
                       </span>
                       <span className="mt-0.5 block text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
-                        Старые сообщения исчезнут, придёт одно: «Обращение закрыто»
+                        Всё исчезнет насовсем, в базе ничего не останется — придёт
+                        только push «Обращение закрыто» (если уведомления включены)
                       </span>
                     </span>
                   </button>
@@ -237,7 +241,7 @@ export default function SupportPage() {
             <div className="space-y-3 pb-2">
               <p className="text-sm leading-snug">
                 {menuStage === "confirm-notify"
-                  ? `Переписка с «${name(person)}» удалится, и следом придёт одно сообщение: «Обращение закрыто». Отменить нельзя.`
+                  ? `Переписка с «${name(person)}» удалится насовсем, без следа в базе. Придёт push-уведомление «Обращение закрыто» — если у человека включены уведомления, иначе он ничего не увидит. Отменить нельзя.`
                   : `Переписка с «${name(person)}» удалится насовсем, без следа. Отменить нельзя.`}
               </p>
               <Button variant="danger" onClick={() => void doClose(menuStage === "confirm-notify")} disabled={busy}>

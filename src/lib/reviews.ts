@@ -20,6 +20,24 @@ export async function submitReview(rating: number, body: string): Promise<string
   return error ? error.message : null;
 }
 
+/**
+ * Свой отзыв, если уже оставлен. Один на человека (unique по user_id) и
+ * общий для money и tasks — оба приложения читают одну и ту же строку,
+ * так что отзыв не «пропадает» при переходе между настройками.
+ */
+export async function loadOwnReview(): Promise<Review | null> {
+  const {
+    data: { user },
+  } = await createClient().auth.getUser();
+  if (!user) return null;
+  const { data } = await createClient()
+    .from("reviews")
+    .select("id, user_id, rating, body, created_at")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  return (data as Review | null) ?? null;
+}
+
 /** Все отзывы — RLS отдаёт их целиком только администратору. */
 export async function loadReviews(): Promise<Review[]> {
   const { data } = await createClient()

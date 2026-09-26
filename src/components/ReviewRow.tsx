@@ -1,28 +1,53 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Icon } from "@/lib/icons";
 import { useIsAdmin } from "@/lib/useIsAdmin";
-import { REVIEW_MAX, submitReview } from "@/lib/reviews";
+import { REVIEW_MAX, loadOwnReview, submitReview, type Review } from "@/lib/reviews";
 import { Button, Sheet } from "./ui";
 import { SettingsHeading } from "./SettingsHeading";
 
 const STAR_COLOR = "#f59e0b";
 
+function Stars({ rating, size = 32 }: { rating: number; size?: number }) {
+  return (
+    <span className="flex justify-center gap-1.5">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <Icon key={n} name="star" size={size} style={{ color: n <= rating ? STAR_COLOR : "var(--border)" }} />
+      ))}
+    </span>
+  );
+}
+
 /**
- * «Оставить отзыв» в настройках: оценка 1–5 и необязательный текст.
+ * «Оценить приложение» в настройках: оценка 1–5 и необязательный текст.
  * Уходит прямо администратору — он видит его в админке, в «Отзывах».
+ *
+ * Один отзыв на человека (unique по user_id в базе), и строка рендерится
+ * в обоих приложениях — если отзыв уже оставлен (хоть из money, хоть из
+ * tasks), здесь сразу видно, что он есть, а не пустая форма заново.
  *
  * Админу строка не показывается: отзыв о приложении сам себе не пишут.
  */
 export function ReviewRow({ heading }: { heading?: string }) {
   const admin = useIsAdmin();
   const [open, setOpen] = useState(false);
+  const [existing, setExisting] = useState<Review | null | undefined>(undefined);
   const [rating, setRating] = useState(0);
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
-  const [sent, setSent] = useState(false);
+
+  useEffect(() => {
+    if (admin !== false) return;
+    let alive = true;
+    void loadOwnReview().then((review) => {
+      if (alive) setExisting(review);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [admin]);
 
   if (admin !== false) return null;
 
@@ -31,7 +56,6 @@ export function ReviewRow({ heading }: { heading?: string }) {
     setRating(0);
     setBody("");
     setProblem(null);
-    setSent(false);
   };
 
   const submit = async () => {
@@ -41,7 +65,7 @@ export function ReviewRow({ heading }: { heading?: string }) {
     const error = await submitReview(rating, body);
     setBusy(false);
     if (error) setProblem(error);
-    else setSent(true);
+    else setExisting(await loadOwnReview());
   };
 
   return (
@@ -52,19 +76,22 @@ export function ReviewRow({ heading }: { heading?: string }) {
           <span className="flex-1">
             <span className="block text-[0.9375rem]">Оценить приложение</span>
             <span className="mt-0.5 block text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
-              Оценка и пара слов — сразу администратору
+              {existing ? `Вы поставили ${existing.rating} из 5` : "Оценка и пара слов — сразу администратору"}
             </span>
           </span>
           <Icon name="chevron-right" size={16} className="opacity-30" />
         </button>
 
         <Sheet open={open} title="Оценить приложение" onClose={close}>
-          {sent ? (
-            <div className="space-y-3 py-4 text-center">
-              <div className="flex justify-center">
-                <Icon name="star" size={32} style={{ color: STAR_COLOR }} />
-              </div>
-              <p className="text-sm">Спасибо! Отзыв отправлен.</p>
+          {existing ? (
+            <div className="space-y-3 py-2 text-center">
+              <Stars rating={existing.rating} />
+              {existing.body ? (
+                <p className="whitespace-pre-wrap break-words text-left text-sm" style={{ color: "var(--muted)" }}>
+                  {existing.body}
+                </p>
+              ) : null}
+              <p className="text-sm">Спасибо, вы уже оценили приложение.</p>
               <Button variant="ghost" onClick={close}>
                 Закрыть
               </Button>

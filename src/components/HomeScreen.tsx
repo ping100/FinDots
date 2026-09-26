@@ -660,7 +660,9 @@ export function HomeScreen() {
         <div className="space-y-2 pb-2">
           <Button
             variant="ghost"
-            onClick={() => setCollapsed({ income: true, wallets: true, expenses: true })}
+            onClick={() =>
+              setCollapsed({ savings: true, income: true, wallets: true, expenses: true, bills: true })
+            }
           >
             Свернуть все блоки
           </Button>

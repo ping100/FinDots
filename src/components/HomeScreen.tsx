@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   DndContext,
   DragOverlay,
@@ -19,6 +20,8 @@ import { convert, formatMoney, monthLabel, monthRange } from "@/lib/money";
 import { pendingAccrual } from "@/lib/savings";
 import { gridColumns, scaleFactor } from "@/lib/textScale";
 import type { Category, DragPayload, Wallet, WalletKind } from "@/lib/types";
+import { createClient } from "@/lib/supabase/client";
+import { disablePush } from "@/lib/pushClient";
 import { useStore } from "./DataProvider";
 import { AmountSheet } from "./AmountSheet";
 import { AppSwitchPill } from "./AppSwitch";
@@ -45,6 +48,7 @@ const DEBT_GROUP: Record<DebtGroup, { label: string; icon: string; color: string
 };
 
 export function HomeScreen() {
+  const router = useRouter();
   const {
     profile, wallets, categories, transactions, rates,
     balanceOf, poolOf, toBase,
@@ -75,6 +79,14 @@ export function HomeScreen() {
     const timer = setTimeout(() => setToast(null), 3500);
     return () => clearTimeout(timer);
   }, [toast]);
+
+  const signOut = async () => {
+    // Вышел — напоминания этого человека сюда больше не идут.
+    await disablePush().catch(() => undefined);
+    await createClient().auth.signOut();
+    router.replace("/login");
+    router.refresh();
+  };
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -655,6 +667,9 @@ export function HomeScreen() {
           <Link href="/money/settings" className="block">
             <Button variant="ghost">Настройки</Button>
           </Link>
+          <Button variant="danger" onClick={() => void signOut()}>
+            Выйти
+          </Button>
         </div>
       </Sheet>
 

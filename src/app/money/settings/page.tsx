@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useStore } from "@/components/DataProvider";
 import { DataTransfer } from "@/components/DataTransfer";
 import { ResetMoneyData } from "@/components/ResetMoneyData";
+import { DeleteAccount } from "@/components/DeleteAccount";
 import { StatementImport } from "@/components/StatementImport";
 import { Guide } from "@/components/Guide";
 import { SignInMethods } from "@/components/SignInMethods";
@@ -143,6 +144,7 @@ export default function SettingsPage() {
 
       <Group>
         <Row label="Выйти" danger onClick={signOut} />
+        <DeleteAccount />
       </Group>
 
       <Group>

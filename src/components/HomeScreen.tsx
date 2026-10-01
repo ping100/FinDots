@@ -26,6 +26,7 @@ import { useStore } from "./DataProvider";
 import { AmountSheet } from "./AmountSheet";
 import { AppSwitchPill } from "./AppSwitch";
 import { DailyAllowance } from "./DailyAllowance";
+import { TodayExpenses } from "./TodayExpenses";
 import { CategoryEditor } from "./CategoryEditor";
 import { WalletEditor } from "./WalletEditor";
 import { WalletSheet } from "./WalletSheet";
@@ -285,7 +286,12 @@ export function HomeScreen() {
 
         {/* Только для текущего месяца: для прошедших «сколько можно сегодня»
             смысла не имеет. */}
-        {offset === 0 && moneyWallets.length > 0 ? <DailyAllowance /> : null}
+        {offset === 0 && moneyWallets.length > 0 ? (
+          <>
+            <DailyAllowance />
+            <TodayExpenses />
+          </>
+        ) : null}
 
         <Section
           columns={columns}

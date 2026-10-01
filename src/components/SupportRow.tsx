@@ -71,8 +71,8 @@ export function SupportRow({ heading }: { heading?: string }) {
         footer={
           <SupportComposer
             placeholder="Сообщение"
-            onSend={async (body) => {
-              const error = await sendMessage(body);
+            onSend={async (body, attachmentPath) => {
+              const error = await sendMessage(body, undefined, attachmentPath);
               if (!error) await reload();
               return error;
             }}

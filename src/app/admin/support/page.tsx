@@ -164,8 +164,9 @@ export default function SupportPage() {
         <div className="pb-safe sticky bottom-0 -mx-4 px-4 pt-2" style={{ background: "var(--bg)" }}>
           <SupportComposer
             placeholder="Ответ"
-            onSend={async (body) => {
-              const error = await sendMessage(body, open);
+            threadUserId={open}
+            onSend={async (body, attachmentPath) => {
+              const error = await sendMessage(body, open, attachmentPath);
               if (!error) await reload();
               return error;
             }}

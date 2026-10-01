@@ -1,11 +1,15 @@
 import { createClient } from "@/lib/supabase/client";
 
+const BUCKET = "support-attachments";
+
 /** Одно сообщение переписки с администратором. */
 export interface SupportMessage {
   id: number;
   user_id: string;
   from_admin: boolean;
-  body: string;
+  /** Пусто, если сообщение — только фото. */
+  body: string | null;
+  attachment_path: string | null;
   created_at: string;
   read_at: string | null;
 }
@@ -19,21 +23,54 @@ export const SUPPORT_POLL = 20_000;
 export async function loadThread(userId?: string): Promise<SupportMessage[]> {
   let query = createClient()
     .from("support_messages")
-    .select("id, user_id, from_admin, body, created_at, read_at")
+    .select("id, user_id, from_admin, body, attachment_path, created_at, read_at")
     .order("created_at");
   if (userId) query = query.eq("user_id", userId);
   const { data } = await query;
   return (data ?? []) as SupportMessage[];
 }
 
-/** Отправить. Возвращает текст ошибки или null. */
-export async function sendMessage(body: string, asAdminTo?: string): Promise<string | null> {
+/**
+ * Отправить — текст, фото или оба сразу. Возвращает текст ошибки или null.
+ *
+ * Фото заранее лежит в бакете (см. uploadAttachment); сюда передаётся уже
+ * готовый путь, не сам файл — запись в support_messages лишь ссылается
+ * на него.
+ */
+export async function sendMessage(
+  body: string,
+  asAdminTo?: string,
+  attachmentPath?: string | null,
+): Promise<string | null> {
   const text = body.trim();
-  if (!text) return null;
-  const { error } = await createClient()
-    .from("support_messages")
-    .insert(asAdminTo ? { body: text, user_id: asAdminTo, from_admin: true } : { body: text });
+  if (!text && !attachmentPath) return null;
+  const { error } = await createClient().from("support_messages").insert(
+    asAdminTo
+      ? { body: text || null, attachment_path: attachmentPath ?? null, user_id: asAdminTo, from_admin: true }
+      : { body: text || null, attachment_path: attachmentPath ?? null },
+  );
   return error ? error.message : null;
+}
+
+/**
+ * Загрузить фото в переписку. Путь — "{user_id переписки}/{имя}": у
+ * своей переписки это свой же uid, у админа, отвечающего в чужую, —
+ * uid адресата (threadUserId), иначе одно обращение разбилось бы на
+ * файлы в разных папках и админ не смог бы их прочитать.
+ */
+export async function uploadAttachment(file: File, threadUserId: string): Promise<{ path: string | null; error: string | null }> {
+  const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+  const path = `${threadUserId}/${crypto.randomUUID()}.${ext}`;
+  const { error } = await createClient().storage.from(BUCKET).upload(path, file, {
+    contentType: file.type || "image/jpeg",
+  });
+  return error ? { path: null, error: error.message } : { path, error: null };
+}
+
+/** Временная ссылка на фото — бакет приватный, постоянных ссылок нет. */
+export async function attachmentUrl(path: string): Promise<string | null> {
+  const { data } = await createClient().storage.from(BUCKET).createSignedUrl(path, 3600);
+  return data?.signedUrl ?? null;
 }
 
 /** Отметить входящие прочитанными: человеку — ответы, админу — сообщения человека. */
@@ -95,13 +132,14 @@ export interface UnreadReply {
 export async function latestUnreadReply(): Promise<UnreadReply | null> {
   const { data, count } = await createClient()
     .from("support_messages")
-    .select("id, body", { count: "exact" })
+    .select("id, body, attachment_path", { count: "exact" })
     .eq("from_admin", true)
     .is("read_at", null)
     .order("created_at", { ascending: false })
     .limit(1);
   const row = data?.[0];
-  return row ? { id: row.id, body: row.body, count: count ?? 1 } : null;
+  if (!row) return null;
+  return { id: row.id, body: row.body ?? (row.attachment_path ? "📷 Фото" : ""), count: count ?? 1 };
 }
 
 export function messageTime(iso: string): string {

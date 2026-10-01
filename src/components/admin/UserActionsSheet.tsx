@@ -177,8 +177,9 @@ export function UserActionsSheet({
         stage === "message" && user ? (
           <SupportComposer
             placeholder="Сообщение от администрации"
-            onSend={async (body) => {
-              const error = await sendMessage(body, user.id);
+            threadUserId={user.id}
+            onSend={async (body, attachmentPath) => {
+              const error = await sendMessage(body, user.id, attachmentPath);
               if (!error) setMessages(await loadThread(user.id));
               return error;
             }}

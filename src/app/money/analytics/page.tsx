@@ -464,9 +464,12 @@ export default function AnalyticsPage() {
       )}
 
       <h2 className="mb-1 text-[0.9375rem] font-semibold">Разбор бюджета</h2>
-      <p className="mb-3 text-xs" style={{ color: "var(--muted)" }}>
+      <p className="mb-1 text-xs" style={{ color: "var(--muted)" }}>
         Модель получает только суммы по категориям, балансы и долги — без
         комментариев к операциям.
+      </p>
+      <p className="mb-3 text-xs" style={{ color: "var(--muted)" }}>
+        Лучше запускать ближе к концу месяца — пока трат мало, разбирать почти нечего.
       </p>
       {profile?.access_ai === false ? (
         <p className="text-sm" style={{ color: "var(--muted)" }}>

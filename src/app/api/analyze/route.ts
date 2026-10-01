@@ -19,9 +19,14 @@ const SYSTEM_PROMPT =
   "Структура ответа — ровно три части, каждая со своим заголовком с новой строки: " +
   "«Что бросается в глаза», «Где сократить» (2–4 пункта с примерными суммами в месяц), " +
   "«Долги» (в каком порядке гасить и почему). " +
-  "Кошельки типа savings — это вклады и копилки: эти деньги не свободны, " +
-  "к тратам их не приплюсовывай; если ставка по вкладу ниже, чем по долгу, " +
-  "скажи об этом. " +
+  "В переданных цифрах четыре РАЗНЫХ списка, не путай их между собой: " +
+  "«кошельки» — наличные и карты, это свободные деньги, ими можно тратить; " +
+  "«накопления» — вклады и копилки, эти деньги не свободны, к тратам их не " +
+  "приплюсовывай; если ставка по вкладу ниже, чем по долгу, скажи об этом; " +
+  "«я_должен» — чужие деньги, которые человек обязан вернуть (кредиты, займы), " +
+  "это не его актив и не доход, а обязательство; " +
+  "«мне_должны» — наоборот, деньги, которые должны вернуть человеку, пока их " +
+  "не вернули — рассчитывать на них как на свободные деньги нельзя. " +
   "Опирайся только на переданные цифры, не выдумывай данные. Без markdown-таблиц.";
 
 const ASK =
@@ -156,23 +161,14 @@ export async function POST(request: Request) {
   const nameOf = (id: string) => categories.find((c) => c.id === id)?.name ?? "прочее";
 
   const balances = balancesRes.data ?? [];
-  const wallets = (walletsRes.data ?? []).map((w) => ({
-    название: w.name,
-    тип: w.kind,
-    баланс: round(
-      toBase(
-        Number(balances.find((b) => b.wallet_id === w.id)?.balance ?? 0),
-        w.currency,
-      ),
-    ),
-    погасить_до: w.due_date,
-    платёж_в_месяц: w.monthly_payment,
-    ежемесячный: w.is_recurring,
-    ставка_годовых: w.rate,
-    цель: w.goal,
-    конец_срока: w.term_end,
-  }));
+  const balanceOf = (w: { id: string; currency: string }) =>
+    round(toBase(Number(balances.find((b) => b.wallet_id === w.id)?.balance ?? 0), w.currency));
+  const live = walletsRes.data ?? [];
 
+  // Четыре отдельных списка вместо одного общего с полем «тип»: раньше
+  // модель путала кошельки с долгами, разбирая английское значение kind
+  // внутри русскоязычного JSON. Явное разделение по ключу снимает любую
+  // неоднозначность — структура сама говорит, что есть что.
   const summary = {
     валюта: base,
     доход_текущий_месяц: round(now.income),
@@ -189,7 +185,31 @@ export async function POST(request: Request) {
         .filter((c) => c.parent_id === id && (now.perSub.get(c.id) ?? 0) > 0)
         .map((c) => ({ название: c.name, сумма: round(now.perSub.get(c.id) ?? 0) })),
     })),
-    кошельки_и_долги: wallets,
+    кошельки: live
+      .filter((w) => w.kind === "cash" || w.kind === "card")
+      .map((w) => ({ название: w.name, баланс: balanceOf(w) })),
+    накопления: live
+      .filter((w) => w.kind === "savings")
+      .map((w) => ({
+        название: w.name,
+        баланс: balanceOf(w),
+        ставка_годовых: w.rate,
+        цель: w.goal,
+        конец_срока: w.term_end,
+      })),
+    я_должен: live
+      .filter((w) => w.kind === "debt_out")
+      .map((w) => ({
+        название: w.name,
+        остаток_долга: balanceOf(w),
+        погасить_до: w.due_date,
+        платёж_в_месяц: w.monthly_payment,
+        ежемесячный: w.is_recurring,
+        ставка_годовых: w.rate,
+      })),
+    мне_должны: live
+      .filter((w) => w.kind === "debt_in")
+      .map((w) => ({ название: w.name, остаток_долга: balanceOf(w), погасить_до: w.due_date })),
   };
 
   const model = configuredModel || DEFAULT_MODEL;

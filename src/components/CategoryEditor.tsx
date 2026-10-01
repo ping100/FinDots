@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Icon, PALETTE } from "@/lib/icons";
 import { parseAmount } from "@/lib/money";
+import { toISODate } from "@/lib/savings";
 import type { Category, CategoryKind } from "@/lib/types";
 import { useStore } from "./DataProvider";
 import { Button, ColorPicker, Field, FieldGroup, IconPicker, Sheet, inputClass, inputStyle } from "./ui";
@@ -29,7 +30,13 @@ export function CategoryEditor({
   const [newSub, setNewSub] = useState("");
   const [planned, setPlanned] = useState("");
   const [dueDay, setDueDay] = useState("");
+  const [paid, setPaid] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  const monthStart = () => {
+    const now = new Date();
+    return toISODate(new Date(now.getFullYear(), now.getMonth(), 1));
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -40,15 +47,34 @@ export function CategoryEditor({
     setNewSub("");
     setPlanned(category?.planned_amount != null ? String(category.planned_amount) : "");
     setDueDay(category?.due_day != null ? String(category.due_day) : "");
+    setPaid(category?.paid_month === monthStart());
   }, [open, category, kind, recurring]);
 
   const subs = category ? categories.filter((c) => !c.archived && c.parent_id === category.id) : [];
+  // Регулярный платёж — это «Аренда» или «Интернет» целиком, уточнять
+  // внутри него нечего: сумма и так известна заранее, в отличие от
+  // обычной категории трат, где подкатегория разбивает общий лимит.
+  const isRecurring = recurring || category?.planned_amount != null;
 
   const addSub = async () => {
     const name = newSub.trim();
     if (!name || !category) return;
     await addSubcategory(category.id, name);
     setNewSub("");
+  };
+
+  // Отдельное, мгновенное действие — не часть формы: отметил и сразу видно,
+  // не дожидаясь «Сохранить» по остальным полям.
+  const togglePaid = async () => {
+    if (!category || busy) return;
+    const next = !paid;
+    setBusy(true);
+    try {
+      await saveCategory({ id: category.id, paid_month: next ? monthStart() : null });
+      setPaid(next);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const submit = async () => {
@@ -160,12 +186,42 @@ export function CategoryEditor({
               />
             </Field>
           ) : null}
+
+          {category && isRecurring ? (
+            <button
+              type="button"
+              onClick={() => void togglePaid()}
+              disabled={busy}
+              className="mb-4 flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left disabled:opacity-60"
+              style={{
+                background: paid ? "var(--ok)" : "var(--surface-2)",
+                color: paid ? "#fff" : undefined,
+              }}
+            >
+              <span
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2"
+                style={{ borderColor: paid ? "#fff" : "var(--border)" }}
+              >
+                {paid ? <Icon name="check" size={13} /> : null}
+              </span>
+              <span className="flex-1">
+                <span className="block text-[0.9375rem]">Уже оплачено в этом месяце</span>
+                <span
+                  className="mt-0.5 block text-[0.6875rem] leading-snug"
+                  style={{ color: paid ? "rgba(255,255,255,0.8)" : "var(--muted)" }}
+                >
+                  Заплатили, но занесли трату позже — чтобы сумма не висела
+                  в «можно тратить сегодня»
+                </span>
+              </span>
+            </button>
+          ) : null}
         </>
       ) : null}
 
       {/* Подкатегории заводятся и у существующей категории, и прямо в окне
           операции. Здесь их можно посмотреть целиком и лишние убрать. */}
-      {category ? (
+      {category && !isRecurring ? (
         <FieldGroup
           label="Подкатегории"
           hint="Уточнение внутри категории — «Продукты → магазин, базар». Выбирается при записи операции, на главной не показывается."

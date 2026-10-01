@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { formatMoney } from "@/lib/money";
+import { toISODate } from "@/lib/savings";
 import { useStore } from "./DataProvider";
 import { Sheet } from "./ui";
 
@@ -86,8 +87,12 @@ export function DailyAllowance() {
         (spentByCategory.get(t.category_id) ?? 0) + toBase(Number(t.amount), t.currency),
       );
     }
+    const thisMonth = toISODate(new Date(now.getFullYear(), now.getMonth(), 1));
     for (const category of categories) {
       if (category.archived || category.kind !== "expense" || !category.planned_amount) continue;
+      // Отметили «уже оплачено» вручную — например, занесли трату позже или
+      // заплатили вне приложения. Следующий месяц метка не действует.
+      if (category.paid_month === thisMonth) continue;
       const left = Number(category.planned_amount) - (spentByCategory.get(category.id) ?? 0);
       if (left > 0.5) upcoming.push({ name: category.name, amount: left });
     }

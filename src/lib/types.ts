@@ -60,6 +60,8 @@ export interface Category {
   /** Регулярный платёж: сколько ждём каждый месяц и какого числа. */
   planned_amount: number | null;
   due_day: number | null;
+  /** Первое число месяца, за который платёж отметили «уже оплачено» вручную. */
+  paid_month: string | null;
 }
 
 export interface Transaction {

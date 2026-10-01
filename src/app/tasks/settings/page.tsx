@@ -19,6 +19,7 @@ import { disablePush } from "@/lib/pushClient";
 import { AccountCard } from "@/components/AccountCard";
 import { AppSwitch } from "@/components/AppSwitch";
 import { AdminLink } from "@/components/AdminLink";
+import { HomeLink } from "@/components/HomeLink";
 import { CategoryEditor } from "@/components/tasks/CategoryEditor";
 import type { TaskCategory } from "@/lib/tasks/types";
 import { CURRENT_BUILD, applyUpdate, buildMoment, serverBuild } from "@/lib/update";
@@ -162,6 +163,7 @@ export default function SettingsPage() {
       <ReviewRow />
 
       <SettingsHeading>Приложения</SettingsHeading>
+      <HomeLink />
       <AppSwitch from="tasks" />
       <AdminLink />
 

@@ -25,6 +25,7 @@ import { disablePush } from "@/lib/pushClient";
 import { AccountCard } from "@/components/AccountCard";
 import { AppSwitch } from "@/components/AppSwitch";
 import { AdminLink } from "@/components/AdminLink";
+import { HomeLink } from "@/components/HomeLink";
 import { Field, Sheet, inputClass, inputStyle } from "@/components/ui";
 
 export default function SettingsPage() {
@@ -143,6 +144,7 @@ export default function SettingsPage() {
       <ReviewRow />
 
       <SettingsHeading>Приложения</SettingsHeading>
+      <HomeLink />
       <AppSwitch from="money" />
       <AdminLink />
 

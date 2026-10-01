@@ -11,8 +11,8 @@ import { useStore } from "./DataProvider";
  *
  * DailyAllowance уже показывает итог «сегодня X ₸» внутри дневного лимита,
  * но не разбивку: чтобы увидеть, что именно купили, раньше нужно было идти
- * в историю. Показываем только при наличии трат — пустая карточка тут
- * просто занимала бы место зря.
+ * в историю. Карточка видна всегда, даже без трат: пропадая после полуночи,
+ * она выглядела так, будто её убрали.
  */
 export function TodayExpenses() {
   const { transactions, categories, profile, toBase } = useStore();
@@ -34,8 +34,6 @@ export function TodayExpenses() {
       .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at));
   }, [transactions]);
 
-  if (items.length === 0) return null;
-
   const total = items.reduce((sum, t) => sum + toBase(Number(t.amount), t.currency), 0);
 
   return (
@@ -53,11 +51,19 @@ export function TodayExpenses() {
           />
           <span className="text-[0.8125rem] font-medium">Траты сегодня</span>
         </span>
-        <span className="text-[0.8125rem] font-semibold tabular-nums" style={{ color: "var(--danger)" }}>
-          −{formatMoney(total, base)}
+        <span
+          className="text-[0.8125rem] font-semibold tabular-nums"
+          style={{ color: total > 0 ? "var(--danger)" : "var(--muted)" }}
+        >
+          {total > 0 ? "−" : ""}
+          {formatMoney(total, base)}
         </span>
       </button>
-      {collapsed ? null : (
+      {collapsed ? null : items.length === 0 ? (
+        <p className="px-4 pb-3.5 text-[0.75rem]" style={{ color: "var(--muted)" }}>
+          Сегодня трат пока нет
+        </p>
+      ) : (
         <>
           <div className="mt-1">
             {items.slice(0, 5).map((t, index) => {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { sendPush } from "@/lib/push";
+import { removeThreadAttachments } from "@/lib/supportStorage";
 
 export const runtime = "nodejs";
 
@@ -42,6 +43,7 @@ export async function POST(request: Request) {
     ),
   );
 
+  await removeThreadAttachments(supabase, targetId).catch(() => undefined);
   const { error } = await supabase.rpc("admin_close_thread", { p_user_id: targetId, p_notify: false });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

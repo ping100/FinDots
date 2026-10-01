@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
+import { removeThreadAttachments } from "@/lib/supportStorage";
 
 const BUCKET = "support-attachments";
 
@@ -98,7 +99,11 @@ export async function setThreadHidden(userId: string, hidden: boolean): Promise<
 
 /** Удалить переписку целиком. notify — оставить одно сообщение о закрытии (и разбудить пуш). */
 export async function closeThread(userId: string, notify: boolean): Promise<string | null> {
-  const { error } = await createClient().rpc("admin_close_thread", {
+  const client = createClient();
+  // Не удалось стереть фото — переписку всё равно закрываем: лишний файл
+  // в бакете меньшее зло, чем обращение, которое не закрывается.
+  await removeThreadAttachments(client, userId).catch(() => undefined);
+  const { error } = await client.rpc("admin_close_thread", {
     p_user_id: userId,
     p_notify: notify,
   });

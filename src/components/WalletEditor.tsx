@@ -53,7 +53,7 @@ export function WalletEditor({
   credit?: boolean;
   onClose: () => void;
 }) {
-  const { saveWallet, deleteWallet, profile } = useStore();
+  const { saveWallet, deleteWallet, profile, wallets } = useStore();
   const [kind, setKind] = useState<WalletKind>(defaultKind);
   const [name, setName] = useState("");
   const [icon, setIcon] = useState("card");
@@ -69,6 +69,8 @@ export function WalletEditor({
   const [openedOn, setOpenedOn] = useState("");
   const [termEnd, setTermEnd] = useState("");
   const [goal, setGoal] = useState("");
+  const [amortMethod, setAmortMethod] = useState<"annuity" | "equal">("annuity");
+  const [payFromWalletId, setPayFromWalletId] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -89,10 +91,15 @@ export function WalletEditor({
     setOpenedOn(wallet?.opened_on ?? toISODate(new Date()));
     setTermEnd(wallet?.term_end ?? "");
     setGoal(wallet?.goal != null ? String(wallet.goal) : "");
+    setAmortMethod(wallet?.amortization_method ?? "annuity");
+    setPayFromWalletId(wallet?.pay_from_wallet_id ?? "");
   }, [open, wallet, defaultKind, profile, credit]);
 
   const isDebt = kind === "debt_out" || kind === "debt_in";
   const isSavings = kind === "savings";
+  const payFromOptions = wallets.filter(
+    (w) => !w.archived && (w.kind === "cash" || w.kind === "card"),
+  );
   // Тип существующего кошелька не меняем: у долга поток инвертирован, и
   // превращение карты в долг перевернуло бы всю его историю.
   const choices = wallet ? [] : (kinds ?? (Object.keys(KIND_LABEL) as WalletKind[]));
@@ -114,10 +121,12 @@ export function WalletEditor({
         monthly_payment: isDebt ? parseAmount(monthlyPayment) : null,
         is_recurring: isDebt ? isRecurring : false,
         recurring_day: isDebt && isRecurring && recurringDay ? Number(recurringDay) : null,
-        rate: isSavings ? parseAmount(rate) : null,
+        rate: isSavings || credit ? parseAmount(rate) : null,
         opened_on: isSavings ? openedOn || toISODate(new Date()) : null,
         term_end: isSavings && termEnd ? termEnd : null,
         goal: isSavings ? parseAmount(goal) : null,
+        amortization_method: credit ? amortMethod : null,
+        pay_from_wallet_id: credit && payFromWalletId ? payFromWalletId : null,
       });
       onClose();
     } finally {
@@ -280,7 +289,10 @@ export function WalletEditor({
 
       {isDebt ? (
         <>
-          <Field label="Дата погашения">
+          <Field
+            label={credit ? "Дата полного погашения" : "Дата погашения"}
+            hint={credit ? "Нужна для графика платежей ниже" : undefined}
+          >
             <input
               type="date"
               className={inputClass}
@@ -331,6 +343,64 @@ export function WalletEditor({
                 placeholder="10"
               />
             </Field>
+          ) : null}
+
+          {credit ? (
+            <>
+              <Field label="Ставка, % годовых" hint="Нужна для графика платежей — проценты/тело по месяцам">
+                <input
+                  className={inputClass}
+                  style={inputStyle}
+                  inputMode="decimal"
+                  value={rate}
+                  onChange={(e) => setRate(e.target.value)}
+                  placeholder="например, 18,5"
+                />
+              </Field>
+              <FieldGroup label="Тип графика">
+                <div className="grid grid-cols-2 gap-2">
+                  {(
+                    [
+                      ["annuity", "Аннуитет"],
+                      ["equal", "Равными долями"],
+                    ] as const
+                  ).map(([value, label]) => (
+                    <button
+                      key={value}
+                      onClick={() => setAmortMethod(value)}
+                      className="rounded-2xl border px-3 py-2.5 text-sm"
+                      style={{
+                        background: amortMethod === value ? "var(--accent)" : "var(--surface-2)",
+                        borderColor: amortMethod === value ? "var(--accent)" : "var(--border)",
+                        color: amortMethod === value ? "#fff" : "inherit",
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </FieldGroup>
+              {payFromOptions.length > 0 ? (
+                <FieldGroup label="Откуда обычно платить" hint="Подсказка — просто встанет первым при выборе">
+                  <div className="flex flex-wrap gap-2">
+                    {payFromOptions.map((w) => (
+                      <button
+                        key={w.id}
+                        onClick={() => setPayFromWalletId(payFromWalletId === w.id ? "" : w.id)}
+                        className="rounded-2xl border px-3 py-2 text-sm"
+                        style={{
+                          background: payFromWalletId === w.id ? "var(--accent)" : "var(--surface-2)",
+                          borderColor: payFromWalletId === w.id ? "var(--accent)" : "var(--border)",
+                          color: payFromWalletId === w.id ? "#fff" : "inherit",
+                        }}
+                      >
+                        {w.name}
+                      </button>
+                    ))}
+                  </div>
+                </FieldGroup>
+              ) : null}
+            </>
           ) : null}
         </>
       ) : null}

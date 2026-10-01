@@ -7,6 +7,7 @@ import type { Wallet, WalletKind } from "@/lib/types";
 import { useStore } from "@/components/DataProvider";
 import { AmountSheet } from "@/components/AmountSheet";
 import { toISODate } from "@/lib/savings";
+import { buildSchedule } from "@/lib/amortization";
 import { WalletEditor } from "@/components/WalletEditor";
 import { Button } from "@/components/ui";
 
@@ -60,6 +61,7 @@ export default function DebtsPage() {
             key={w.id}
             wallet={w}
             amount={balanceOf(w.id)}
+            credit
             onPay={() => setPaying(w)}
             onEdit={() => setEditor({ wallet: w, kind: "debt_out", credit: true })}
           />
@@ -116,11 +118,16 @@ export default function DebtsPage() {
         currency={paying?.currency ?? "KZT"}
         initial={paying?.monthly_payment ?? undefined}
         max={paying ? Math.max(balanceOf(paying.id), 0) : undefined}
-        options={moneyWallets.map((w) => ({
-          id: w.id,
-          name: w.name,
-          caption: formatMoney(balanceOf(w.id), w.currency),
-        }))}
+        options={moneyWallets
+          .slice()
+          .sort((a, b) =>
+            a.id === paying?.pay_from_wallet_id ? -1 : b.id === paying?.pay_from_wallet_id ? 1 : 0,
+          )
+          .map((w) => ({
+            id: w.id,
+            name: w.name,
+            caption: formatMoney(balanceOf(w.id), w.currency),
+          }))}
         optionLabel="Откуда списать"
         submitLabel="Погасить"
         onClose={() => setPaying(null)}
@@ -236,6 +243,7 @@ function Group({
 function DebtCard({
   wallet,
   amount,
+  credit,
   onPay,
   actionLabel = "Внести платёж",
   payDisabled,
@@ -245,6 +253,8 @@ function DebtCard({
 }: {
   wallet: Wallet;
   amount: number;
+  /** Кредит или рассрочка: показываем общую сумму/оплачено/ставку и график. */
+  credit?: boolean;
   onPay?: () => void;
   actionLabel?: string;
   payDisabled?: boolean;
@@ -252,6 +262,9 @@ function DebtCard({
   secondaryLabel?: string;
   onEdit: () => void;
 }) {
+  const [showSchedule, setShowSchedule] = useState(false);
+  const paid = Math.max(wallet.initial_balance - amount, 0);
+  const schedule = showSchedule ? buildSchedule(wallet, amount) : null;
   // У кредита обычно платёж каждый месяц, а «Дата погашения» — это конец
   // всего срока, часто через годы. Напоминать и подсвечивать красным нужно
   // перед ближайшим ежемесячным платежом, а не перед этой далёкой датой.
@@ -307,6 +320,21 @@ function DebtCard({
           ) : null}
         </span>
       </div>
+
+      {credit ? (
+        <div className="mt-3 flex items-center gap-3 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+          <span>Всего {formatMoney(wallet.initial_balance, wallet.currency)}</span>
+          <span>·</span>
+          <span>Оплачено {formatMoney(paid, wallet.currency)}</span>
+          {wallet.rate != null ? (
+            <>
+              <span>·</span>
+              <span>{wallet.rate}% годовых</span>
+            </>
+          ) : null}
+        </div>
+      ) : null}
+
       {onPay ? (
         <div className="mt-3 flex gap-2">
           {onSecondary ? (
@@ -326,6 +354,58 @@ function DebtCard({
           >
             {actionLabel}
           </button>
+        </div>
+      ) : null}
+
+      {credit ? (
+        <div className="mt-3">
+          <button
+            onClick={() => setShowSchedule((v) => !v)}
+            className="text-[0.75rem] font-medium"
+            style={{ color: "var(--accent)" }}
+          >
+            {showSchedule ? "Скрыть график платежей" : "Показать график платежей"}
+          </button>
+          {showSchedule ? (
+            schedule ? (
+              <div className="mt-2 max-h-56 overflow-y-auto rounded-xl" style={{ background: "var(--surface-2)" }}>
+                <table className="w-full text-[0.6875rem]">
+                  <thead>
+                    <tr style={{ color: "var(--muted)" }}>
+                      <th className="px-2 py-1.5 text-left font-medium">Дата</th>
+                      <th className="px-2 py-1.5 text-right font-medium">Платёж</th>
+                      <th className="px-2 py-1.5 text-right font-medium">Проценты</th>
+                      <th className="px-2 py-1.5 text-right font-medium">Тело</th>
+                      <th className="px-2 py-1.5 text-right font-medium">Остаток</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {schedule.map((row) => (
+                      <tr key={row.n} style={{ borderTop: "1px solid var(--border)" }}>
+                        <td className="px-2 py-1.5">{new Date(row.date).toLocaleDateString("ru-RU")}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">
+                          {formatMoney(row.payment, wallet.currency)}
+                        </td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">
+                          {formatMoney(row.interest, wallet.currency)}
+                        </td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">
+                          {formatMoney(row.principal, wallet.currency)}
+                        </td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">
+                          {formatMoney(row.balance, wallet.currency)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="mt-1.5 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+                Укажи дату полного погашения в настройках кредита (и ставку, если она есть) — тогда график посчитается.
+              </p>
+            )
+          ) : null}
         </div>
       ) : null}
     </div>

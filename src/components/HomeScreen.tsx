@@ -124,12 +124,18 @@ export function HomeScreen() {
     }),
     [wallets],
   );
+  // Кредиты — долги с ежемесячным платежом: у них свой кружок, в остальном
+  // они часть той же группы «debt_out».
+  const credits = debts.debt_out.filter((w) => !!w.monthly_payment);
 
   /** Суммы выбранного месяца по категориям, в базовой валюте. */
   const month = useMemo(() => {
     const { from, to } = monthRange(offset);
     const income = new Map<string, number>();
     const expense = new Map<string, number>();
+    // Платежи по кредитам — переводы на кошелёк кредита, в его валюте: это
+    // не доход/расход, поэтому считаем отдельно и без конвертации в base.
+    const creditPaid = new Map<string, number>();
     for (const t of transactions) {
       const at = new Date(t.occurred_at);
       if (at < from || at >= to) continue;
@@ -140,9 +146,12 @@ export function HomeScreen() {
       if (t.type === "expense" && t.category_id) {
         expense.set(t.category_id, (expense.get(t.category_id) ?? 0) + value);
       }
+      if (t.type === "transfer" && t.to_wallet_id) {
+        creditPaid.set(t.to_wallet_id, (creditPaid.get(t.to_wallet_id) ?? 0) + Number(t.amount));
+      }
     }
     const sum = (map: Map<string, number>) => [...map.values()].reduce((a, b) => a + b, 0);
-    return { income, expense, incomeTotal: sum(income), expenseTotal: sum(expense) };
+    return { income, expense, creditPaid, incomeTotal: sum(income), expenseTotal: sum(expense) };
   }, [transactions, offset, toBase]);
 
   const expenseTotal = expenseCats.reduce((sum, c) => sum + (month.expense.get(c.id) ?? 0), 0);
@@ -153,6 +162,12 @@ export function HomeScreen() {
     0,
   );
 
+  const creditsLeft = credits.reduce(
+    (sum, w) =>
+      sum +
+      toBase(Math.max(Number(w.monthly_payment) - (month.creditPaid.get(w.id) ?? 0), 0), w.currency),
+    0,
+  );
   const walletsTotal = moneyWallets.reduce(
     (sum, w) => sum + toBase(balanceOf(w.id), w.currency),
     0,
@@ -442,6 +457,27 @@ export function HomeScreen() {
             <AddBubble size={bubble} />
           </button>
         </Section>
+
+        {credits.length > 0 ? (
+          <Section
+            columns={columns}
+            title="Кредиты"
+            total={formatMoney(creditsLeft, base)}
+            note={creditsLeft > 0 ? "ещё не оплачено в этом месяце" : undefined}
+            collapsed={!!collapsed.credits}
+            onToggle={() => setCollapsed((c) => ({ ...c, credits: !c.credits }))}
+          >
+            {credits.map((wallet) => (
+              <CreditBubble
+                key={wallet.id}
+                wallet={wallet}
+                paidThisMonth={month.creditPaid.get(wallet.id) ?? 0}
+                size={bubble}
+                onTap={() => router.push("/money/debts")}
+              />
+            ))}
+          </Section>
+        ) : null}
       </div>
 
       <DragOverlay dropAnimation={null}>
@@ -1110,6 +1146,48 @@ function BillBubble({
           }}
         />
       </span>
+    </button>
+  );
+}
+
+/** Кружок кредита: прогресс — сколько из платежа этого месяца уже ушло. */
+function CreditBubble({
+  wallet,
+  paidThisMonth,
+  size,
+  onTap,
+}: {
+  wallet: Wallet;
+  paidThisMonth: number;
+  size: number;
+  onTap: () => void;
+}) {
+  const planned = Number(wallet.monthly_payment ?? 0);
+  const left = Math.max(planned - paidThisMonth, 0);
+  const done = planned > 0 && left <= 0.5;
+
+  return (
+    <button onClick={onTap} className="transition-transform duration-100 active:scale-95">
+      <Bubble
+        icon={done ? "check" : wallet.icon}
+        color={wallet.color}
+        label={wallet.name}
+        amount={formatMoney(done ? 0 : left, wallet.currency)}
+        size={size}
+        muted={done}
+        dimmed={done}
+      />
+      {planned > 0 ? (
+        <span
+          className="mx-auto -mt-0.5 block h-1 w-10 overflow-hidden rounded-full"
+          style={{ background: "var(--surface-2)" }}
+        >
+          <span
+            className="block h-full rounded-full"
+            style={{ width: `${Math.min(paidThisMonth / planned, 1) * 100}%`, background: wallet.color }}
+          />
+        </span>
+      ) : null}
     </button>
   );
 }

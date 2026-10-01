@@ -44,6 +44,9 @@ export interface Wallet {
   goal: number | null;
   opened_on: string | null;
   interest_through: string | null;
+  // кредит: тип графика и предпочтительный кошелёк для оплаты
+  amortization_method: "annuity" | "equal" | null;
+  pay_from_wallet_id: string | null;
 }
 
 export interface Category {

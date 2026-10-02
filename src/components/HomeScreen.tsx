@@ -17,7 +17,7 @@ import {
 } from "@dnd-kit/core";
 import { Icon } from "@/lib/icons";
 import { convert, formatMoney, monthLabel, monthRange } from "@/lib/money";
-import { pendingAccrual } from "@/lib/savings";
+import { pendingAccrual, toISODate } from "@/lib/savings";
 import { gridColumns, scaleFactor } from "@/lib/textScale";
 import type { Category, DragPayload, Wallet, WalletKind } from "@/lib/types";
 import { createClient } from "@/lib/supabase/client";
@@ -53,7 +53,7 @@ export function HomeScreen() {
   const {
     profile, wallets, categories, transactions, rates,
     balanceOf, poolOf, toBase,
-    addIncome, allocate, addExpense, addTransfer, addSubcategory, moneyHidden,
+    addIncome, allocate, addExpense, addTransfer, addSubcategory, saveCategory, moneyHidden,
   } = useStore();
 
   const [offset, setOffset] = useState(0);
@@ -157,8 +157,13 @@ export function HomeScreen() {
   const expenseTotal = expenseCats.reduce((sum, c) => sum + (month.expense.get(c.id) ?? 0), 0);
   // В блоке платежей показываем не сколько их всего, а сколько ещё висит:
   // это то самое, что отложено от «можно тратить сегодня».
+  // «Уже оплачено» — отметка на месяц: заплатил мимо приложения или занёс
+  // трату позже, а платёж не должен висеть неоплаченным.
+  const paidKey = toISODate(monthRange(offset).from);
+  const isPaid = (c: Category) => c.paid_month === paidKey;
   const billsLeft = bills.reduce(
-    (sum, c) => sum + Math.max(Number(c.planned_amount) - (month.expense.get(c.id) ?? 0), 0),
+    (sum, c) =>
+      isPaid(c) ? sum : sum + Math.max(Number(c.planned_amount) - (month.expense.get(c.id) ?? 0), 0),
     0,
   );
 
@@ -443,6 +448,7 @@ export function HomeScreen() {
             <BillBubble
               key={category.id}
               category={category}
+              paid={isPaid(category)}
               spent={month.expense.get(category.id) ?? 0}
               base={base}
               size={bubble}
@@ -560,6 +566,19 @@ export function HomeScreen() {
         open={dialog?.kind === "expense"}
         title={dialog?.kind === "expense" ? `Трата: ${dialog.category.name}` : ""}
         currency={dialog?.kind === "expense" ? (dialog.wallet?.currency ?? base) : base}
+        extra={
+          // Только в текущем месяце: отметка хранится одна, на текущий месяц.
+          dialog?.kind === "expense" && dialog.category.planned_amount && offset === 0 ? (
+            <PaidToggle
+              paid={isPaid(dialog.category)}
+              onToggle={async () => {
+                const category = dialog.category;
+                await saveCategory({ id: category.id, paid_month: isPaid(category) ? null : paidKey });
+                setDialog(null);
+              }}
+            />
+          ) : null
+        }
         initial={
           dialog?.kind === "expense" && dialog.category.planned_amount
             ? Math.max(
@@ -584,9 +603,14 @@ export function HomeScreen() {
             : undefined
         }
         optionLabel="Откуда списать"
-        subcategories={dialog?.kind === "expense" ? subsOf(dialog.category.id) : undefined}
+        subcategories={
+          dialog?.kind === "expense" && !dialog.category.planned_amount
+            ? subsOf(dialog.category.id)
+            : undefined
+        }
         onAddSubcategory={
-          dialog?.kind === "expense"
+          // У регулярного платежа уточнений нет — как и в его настройках.
+          dialog?.kind === "expense" && !dialog.category.planned_amount
             ? (name) => addSubcategory(dialog.category.id, name)
             : undefined
         }
@@ -1097,6 +1121,7 @@ function ExpenseBubble({
  */
 function BillBubble({
   category,
+  paid,
   spent,
   base,
   size,
@@ -1104,6 +1129,7 @@ function BillBubble({
   onHold,
 }: {
   category: Category;
+  paid: boolean;
   spent: number;
   base: string;
   size: number;
@@ -1118,7 +1144,7 @@ function BillBubble({
 
   const planned = Number(category.planned_amount);
   const left = Math.max(planned - spent, 0);
-  const done = left <= 0.5;
+  const done = paid || left <= 0.5;
   const today = new Date().getDate();
   const late = !done && category.due_day != null && category.due_day < today;
 
@@ -1141,11 +1167,38 @@ function BillBubble({
         <span
           className="block h-full rounded-full"
           style={{
-            width: `${Math.min(spent / planned, 1) * 100}%`,
+            width: `${paid ? 100 : Math.min(spent / planned, 1) * 100}%`,
             background: late ? "var(--danger)" : category.color,
           }}
         />
       </span>
+    </button>
+  );
+}
+
+/** «Уже оплачено» в окне платежа: отметить без записи траты — или снять отметку. */
+function PaidToggle({ paid, onToggle }: { paid: boolean; onToggle: () => Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <button
+      onClick={async () => {
+        setBusy(true);
+        try {
+          await onToggle();
+        } finally {
+          setBusy(false);
+        }
+      }}
+      disabled={busy}
+      className="flex w-full items-center justify-center gap-2 rounded-2xl py-2.5 text-sm font-semibold disabled:opacity-50"
+      style={
+        paid
+          ? { background: "var(--surface-2)", color: "var(--muted)" }
+          : { background: "#22c55e26", color: "#16a34a" }
+      }
+    >
+      <Icon name={paid ? "close" : "check"} size={16} />
+      {busy ? "Сохраняю…" : paid ? "Снять отметку «оплачено»" : "Уже оплачено в этом месяце"}
     </button>
   );
 }

@@ -88,7 +88,8 @@ export interface Store {
   updateTransaction: (id: string, patch: Partial<Transaction>) => Promise<void>;
   deleteTransaction: (id: string) => Promise<void>;
 
-  saveWallet: (wallet: Partial<Wallet> & { id?: string }) => Promise<void>;
+  /** Возвращает id кошелька — нового или того же. */
+  saveWallet: (wallet: Partial<Wallet> & { id?: string }) => Promise<string>;
   deleteWallet: (id: string) => Promise<void>;
   saveCategory: (category: Partial<Category> & { id?: string }) => Promise<void>;
   /** Завести подкатегорию внутри категории; возвращает её id. */
@@ -479,13 +480,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
     async (wallet) => {
       const { id, ...fields } = wallet;
       const res = id
-        ? await supabase().from("wallets").update(fields).eq("id", id)
-        : await supabase().from("wallets").insert({ ...fields, user_id: userId });
+        ? await supabase().from("wallets").update(fields).eq("id", id).select("id").single()
+        : await supabase().from("wallets").insert({ ...fields, user_id: userId }).select("id").single();
       if (res.error) {
         setError(res.error.message);
         throw new Error(res.error.message);
       }
       await Promise.all([reloadDictionaries(), refresh()]);
+      return res.data.id as string;
     },
     [refresh, reloadDictionaries, supabase, userId],
   );

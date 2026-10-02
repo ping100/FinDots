@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Icon } from "@/lib/icons";
-import { formatMoney } from "@/lib/money";
+import { convert, formatMoney } from "@/lib/money";
 import type { Wallet, WalletKind } from "@/lib/types";
 import { useStore } from "@/components/DataProvider";
 import { AmountSheet } from "@/components/AmountSheet";
@@ -26,8 +26,10 @@ function nextRecurringDate(day: number, today = new Date()): Date {
 }
 
 export default function DebtsPage() {
-  const { wallets, balanceOf, addTransfer } = useStore();
+  const { wallets, transactions, rates, balanceOf, addTransfer } = useStore();
   const [paying, setPaying] = useState<Wallet | null>(null);
+  // Взял ещё в долг: деньги идут из долга в выбранный кошелёк.
+  const [borrowing, setBorrowing] = useState<Wallet | null>(null);
   // Возврат долга мне: деньги идут из долга в выбранный кошелёк.
   const [returning, setReturning] = useState<Wallet | null>(null);
   // Дал в долг: деньги идут из выбранного кошелька в долг — иначе баланс
@@ -43,6 +45,13 @@ export default function DebtsPage() {
   const owed = live.filter((w) => w.kind === "debt_out" && !w.monthly_payment);
   const due = live.filter((w) => w.kind === "debt_in");
   const moneyWallets = live.filter((w) => w.kind === "cash" || w.kind === "card");
+  // Сколько уже внесено в погашение — переводы на кошелёк долга. «Всего»
+  // считаем как остаток + внесённое: долг мог возникнуть стартовой суммой
+  // или переводом в кошелёк, и стартовая сумма тогда нулевая.
+  const paidInto = (debt: Wallet) =>
+    transactions
+      .filter((t) => t.type === "transfer" && t.to_wallet_id === debt.id)
+      .reduce((sum, t) => sum + convert(Number(t.amount), t.currency, debt.currency, rates), 0);
 
   return (
     <div className="mx-auto w-full max-w-md px-4 pb-28 pt-3">
@@ -62,6 +71,7 @@ export default function DebtsPage() {
             wallet={w}
             amount={balanceOf(w.id)}
             credit
+            paid={paidInto(w)}
             onPay={() => setPaying(w)}
             onEdit={() => setEditor({ wallet: w, kind: "debt_out", credit: true })}
           />
@@ -75,6 +85,9 @@ export default function DebtsPage() {
             wallet={w}
             amount={balanceOf(w.id)}
             onPay={() => setPaying(w)}
+            payDisabled={balanceOf(w.id) <= 0}
+            secondaryLabel="Взял ещё"
+            onSecondary={() => setBorrowing(w)}
             onEdit={() => setEditor({ wallet: w, kind: "debt_out" })}
           />
         ))}
@@ -201,6 +214,32 @@ export default function DebtsPage() {
         }}
       />
 
+      <AmountSheet
+        open={!!borrowing}
+        title={borrowing ? `Взял в долг: ${borrowing.name}` : ""}
+        subtitle="Деньги придут в выбранный кошелёк, долг вырастет на эту сумму"
+        currency={borrowing?.currency ?? "KZT"}
+        options={moneyWallets.map((w) => ({
+          id: w.id,
+          name: w.name,
+          caption: formatMoney(balanceOf(w.id), w.currency),
+        }))}
+        optionLabel="Куда пришли деньги"
+        submitLabel="Записать"
+        onClose={() => setBorrowing(null)}
+        onSubmit={async ({ amount, note, occurredAt, optionId }) => {
+          if (!borrowing || !optionId) throw new Error("Выбери кошелёк");
+          await addTransfer({
+            fromWalletId: borrowing.id,
+            toWalletId: optionId,
+            amount,
+            currency: borrowing.currency,
+            note: note || `Взял в долг: ${borrowing.name}`,
+            occurredAt,
+          });
+        }}
+      />
+
       {/* Тип задан кнопкой, которой сюда пришли: выбирать «наличные» на
           странице долгов незачем. */}
       <WalletEditor
@@ -244,6 +283,7 @@ function DebtCard({
   wallet,
   amount,
   credit,
+  paid = 0,
   onPay,
   actionLabel = "Внести платёж",
   payDisabled,
@@ -255,6 +295,8 @@ function DebtCard({
   amount: number;
   /** Кредит или рассрочка: показываем общую сумму/оплачено/ставку и график. */
   credit?: boolean;
+  /** Сколько уже внесено в погашение. */
+  paid?: number;
   onPay?: () => void;
   actionLabel?: string;
   payDisabled?: boolean;
@@ -263,7 +305,6 @@ function DebtCard({
   onEdit: () => void;
 }) {
   const [showSchedule, setShowSchedule] = useState(false);
-  const paid = Math.max(wallet.initial_balance - amount, 0);
   const schedule = showSchedule ? buildSchedule(wallet, amount) : null;
   // У кредита обычно платёж каждый месяц, а «Дата погашения» — это конец
   // всего срока, часто через годы. Напоминать и подсвечивать красным нужно
@@ -323,7 +364,7 @@ function DebtCard({
 
       {credit ? (
         <div className="mt-3 flex items-center gap-3 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-          <span>Всего {formatMoney(wallet.initial_balance, wallet.currency)}</span>
+          <span>Всего {formatMoney(Math.max(amount, 0) + paid, wallet.currency)}</span>
           <span>·</span>
           <span>Оплачено {formatMoney(paid, wallet.currency)}</span>
           {wallet.rate != null ? (

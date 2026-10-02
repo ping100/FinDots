@@ -53,7 +53,7 @@ export function WalletEditor({
   credit?: boolean;
   onClose: () => void;
 }) {
-  const { saveWallet, deleteWallet, profile, wallets } = useStore();
+  const { saveWallet, deleteWallet, addTransfer, profile, wallets } = useStore();
   const [kind, setKind] = useState<WalletKind>(defaultKind);
   const [name, setName] = useState("");
   const [icon, setIcon] = useState("card");
@@ -71,6 +71,9 @@ export function WalletEditor({
   const [goal, setGoal] = useState("");
   const [amortMethod, setAmortMethod] = useState<"annuity" | "equal">("annuity");
   const [payFromWalletId, setPayFromWalletId] = useState("");
+  // Новый долг: куда пришли (или откуда ушли) деньги. "" — ещё не выбрано,
+  // "none" — никуда, например старый долг, деньги давно потрачены.
+  const [moneyWalletId, setMoneyWalletId] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -93,6 +96,7 @@ export function WalletEditor({
     setGoal(wallet?.goal != null ? String(wallet.goal) : "");
     setAmortMethod(wallet?.amortization_method ?? "annuity");
     setPayFromWalletId(wallet?.pay_from_wallet_id ?? "");
+    setMoneyWalletId("");
   }, [open, wallet, defaultKind, profile, credit]);
 
   const isDebt = kind === "debt_out" || kind === "debt_in";
@@ -104,18 +108,28 @@ export function WalletEditor({
   // превращение карты в долг перевернуло бы всю его историю.
   const choices = wallet ? [] : (kinds ?? (Object.keys(KIND_LABEL) as WalletKind[]));
 
+  const amount = parseAmount(initial) ?? 0;
+  // Только для нового долга: у существующего сумма уже записана, и перевод
+  // задним числом удвоил бы её.
+  const askMoneyWallet = !wallet && isDebt && payFromOptions.length > 0;
+  const moneyWalletMissing = askMoneyWallet && amount > 0 && moneyWalletId === "";
+  const valid = !!name.trim() && !moneyWalletMissing;
+
   const submit = async () => {
-    if (!name.trim() || busy) return;
+    if (!valid || busy) return;
     setBusy(true);
     try {
-      await saveWallet({
+      // Деньги прошли через кошелёк — значит, долг возникает переводом, а
+      // не стартовым остатком: иначе кошелёк не пополнится (или не уменьшится).
+      const via = askMoneyWallet && amount > 0 && moneyWalletId !== "none" ? moneyWalletId : null;
+      const id = await saveWallet({
         id: wallet?.id,
         kind,
         name: name.trim(),
         icon,
         color,
         currency,
-        initial_balance: parseAmount(initial) ?? 0,
+        initial_balance: via ? 0 : amount,
         due_date: isDebt && dueDate ? dueDate : null,
         reminder_days: isDebt && reminderDays ? Number(reminderDays) : null,
         monthly_payment: isDebt ? parseAmount(monthlyPayment) : null,
@@ -128,6 +142,13 @@ export function WalletEditor({
         amortization_method: credit ? amortMethod : null,
         pay_from_wallet_id: credit && payFromWalletId ? payFromWalletId : null,
       });
+      if (via) {
+        await addTransfer(
+          kind === "debt_out"
+            ? { fromWalletId: id, toWalletId: via, amount, currency, note: `Взял в долг: ${name.trim()}` }
+            : { fromWalletId: via, toWalletId: id, amount, currency, note: `Дал в долг: ${name.trim()}` },
+        );
+      }
       onClose();
     } finally {
       setBusy(false);
@@ -141,7 +162,7 @@ export function WalletEditor({
       onClose={onClose}
       footer={
         <div className="space-y-2">
-          <Button onClick={submit} disabled={!name.trim() || busy}>
+          <Button onClick={submit} disabled={!valid || busy}>
             Сохранить
           </Button>
           {wallet ? (
@@ -240,6 +261,44 @@ export function WalletEditor({
           placeholder="0"
         />
       </Field>
+
+      {askMoneyWallet ? (
+        <FieldGroup
+          label={kind === "debt_out" ? "Куда пришли деньги" : "Откуда ушли деньги"}
+          hint={
+            moneyWalletMissing
+              ? "Выбери — без этого не сохранится"
+              : kind === "debt_out"
+                ? "Сумма долга сразу добавится в этот кошелёк"
+                : "Сумма сразу спишется с этого кошелька"
+          }
+        >
+          <div className="flex flex-wrap gap-2">
+            {[
+              ...payFromOptions.map((w) => ({ id: w.id, label: w.name })),
+              { id: "none", label: kind === "debt_out" ? "Никуда — уже потрачены" : "Ниоткуда — давно отдал" },
+            ].map((option) => (
+              <button
+                key={option.id}
+                onClick={() => setMoneyWalletId(option.id)}
+                className="rounded-2xl border px-3 py-2 text-sm"
+                style={{
+                  background: moneyWalletId === option.id ? "var(--accent)" : "var(--surface-2)",
+                  borderColor:
+                    moneyWalletId === option.id
+                      ? "var(--accent)"
+                      : moneyWalletMissing
+                        ? "var(--danger)"
+                        : "var(--border)",
+                  color: moneyWalletId === option.id ? "#fff" : "inherit",
+                }}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </FieldGroup>
+      ) : null}
 
       {isSavings ? (
         <>

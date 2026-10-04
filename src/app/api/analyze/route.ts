@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { decryptApiKey } from "@/lib/aiConfig";
+import {
+  buildAnalysisSummary,
+  type SummaryCategory,
+  type SummaryTx,
+  type SummaryWallet,
+} from "@/lib/analysisSummary";
 
 export const runtime = "nodejs";
 // «Думающие» модели пишут черновик рассуждений перед ответом и могут не
@@ -13,21 +19,39 @@ export const maxDuration = 60;
 const DAILY_LIMIT = Number(process.env.AI_DAILY_LIMIT ?? 20);
 const DEFAULT_MODEL = "google/gemma-4-31b-it:free";
 
-const SYSTEM_PROMPT =
-  "Ты финансовый помощник. Пиши только на русском языке, коротко и конкретно, без вступлений. " +
-  "Не показывай ход рассуждений и не пересказывай это задание — сразу давай готовый разбор. " +
-  "Структура ответа — ровно три части, каждая со своим заголовком с новой строки: " +
-  "«Что бросается в глаза», «Где сократить» (2–4 пункта с примерными суммами в месяц), " +
-  "«Долги» (в каком порядке гасить и почему). " +
-  "В переданных цифрах четыре РАЗНЫХ списка, не путай их между собой: " +
-  "«кошельки» — наличные и карты, это свободные деньги, ими можно тратить; " +
-  "«накопления» — вклады и копилки, эти деньги не свободны, к тратам их не " +
-  "приплюсовывай; если ставка по вкладу ниже, чем по долгу, скажи об этом; " +
-  "«я_должен» — чужие деньги, которые человек обязан вернуть (кредиты, займы), " +
-  "это не его актив и не доход, а обязательство; " +
-  "«мне_должны» — наоборот, деньги, которые должны вернуть человеку, пока их " +
-  "не вернули — рассчитывать на них как на свободные деньги нельзя. " +
-  "Опирайся только на переданные цифры, не выдумывай данные. Без markdown-таблиц.";
+const SYSTEM_PROMPT = [
+  "Ты финансовый помощник. Пиши только на русском языке, коротко и конкретно, без вступлений.",
+  "Не показывай ход рассуждений и не пересказывай это задание — сразу давай готовый разбор.",
+  "Структура ответа — ровно три части, каждая со своим заголовком с новой строки:",
+  "«Что бросается в глаза», «Где сократить» (2–4 пункта с примерными суммами в месяц),",
+  "«Долги» (в каком порядке гасить и почему).",
+  "",
+  "ВСЕ ЦИФРЫ УЖЕ ПОСЧИТАНЫ. Не складывай, не вычитай и не пересчитывай их сам —",
+  "бери готовые значения из полей. Если нужной цифры нет — не придумывай её.",
+  "",
+  "Как читать данные:",
+  "• «сегодня» — дата и сколько дней месяца прошло. Если месяц_только_начался —",
+  "  прямо скажи, что данных пока мало, и сравнивай только с полем",
+  "  «за_те_же_дни_прошлого_месяца», а не со всем прошлым месяцем.",
+  "• «до_конца_месяца» — то же, что человек видит на главном экране. В первой части",
+  "  обязательно назови «можно_тратить_в_день», а если хватает_на_обязательные = false —",
+  "  сумму «не_хватает» и какие платежи впереди.",
+  "• «каждый_месяц» — регулярные платежи. Если отмечено_оплаченным_вручную = true,",
+  "  платёж оплачен, даже если оплачено_тратами = 0. Не советуй его оплатить.",
+  "• «прогноз_переменных_трат_на_весь_месяц» — если тратить в том же темпе.",
+  "",
+  "Четыре РАЗНЫХ вида денег, не путай их:",
+  "• «кошельки» — наличные и карты, свободные деньги;",
+  "• «накопления» — вклады и копилки, к свободным деньгам их не приплюсовывай;",
+  "  если ставка вклада ниже ставки долга — скажи об этом;",
+  "• «я_должен» — обязательство, не актив и не доход;",
+  "• «мне_должны» — пока не вернули, на эти деньги рассчитывать нельзя.",
+  "",
+  "Долги: первым советуй гасить долг с самой высокой ставкой_годовых;",
+  "если есть «переплата_процентами_до_конца» — назови её. Без ставки не выдумывай её.",
+  "Если долгов нет — в части «Долги» одной фразой скажи, что их нет.",
+  "Без markdown-таблиц.",
+].join("\n");
 
 const ASK =
   "Разбери эти цифры. Ответ — на русском языке, начни сразу с заголовка «Что бросается в глаза».";
@@ -40,19 +64,15 @@ const INSIST =
   "без единого английского предложения, без описания своих рассуждений. " +
   "Начни с заголовка «Что бросается в глаза».";
 
-interface Row {
-  type: string;
-  amount: number;
-  currency: string;
-  category_id: string | null;
-  subcategory_id: string | null;
-  occurred_at: string;
-}
-
 export async function POST(request: Request) {
+  const params = new URL(request.url).searchParams;
   // Переспрос по-русски — та же ручка с флагом: человек жмёт кнопку сам,
   // вместо молчаливой второй попытки, которая удваивала ожидание.
-  const insist = new URL(request.url).searchParams.get("insist") === "1";
+  const insist = params.get("insist") === "1";
+  // Часовой пояс человека: сервер живёт в UTC, а «сегодня» и границы месяца
+  // должны быть его, иначе в Казахстане до 5 утра шёл бы ещё вчерашний день.
+  const tz = Number(params.get("tz"));
+  const tzOffset = Number.isFinite(tz) && Math.abs(tz) <= 14 * 60 ? tz : 0;
 
   const supabase = await createClient();
   const {
@@ -104,24 +124,38 @@ export async function POST(request: Request) {
   }
 
   // Данные собираем на сервере под RLS — клиент не может подменить чужие цифры.
+  // С запасом в пару дней: границы месяца считаются по часовому поясу человека.
+  const since = new Date(startOfMonth(-1).getTime() - 2 * 86_400_000).toISOString();
   const [profileRes, ratesRes, walletsRes, categoriesRes, balancesRes, txRes] =
     await Promise.all([
       supabase.from("profiles").select("base_currency").eq("id", user.id).single(),
       supabase.from("exchange_rates").select("code, rate_to_base"),
       supabase
         .from("wallets")
-        .select("id, kind, name, currency, due_date, monthly_payment, is_recurring, rate, goal, term_end")
+        .select(
+          "id, kind, name, currency, due_date, monthly_payment, is_recurring, recurring_day, rate, goal, term_end, amortization_method",
+        )
         .eq("archived", false),
       supabase
         .from("categories")
-        .select("id, kind, name, monthly_limit, parent_id, planned_amount, due_day")
+        .select("id, kind, name, monthly_limit, parent_id, planned_amount, due_day, paid_month")
         .eq("archived", false),
       supabase.from("wallet_balances").select("wallet_id, currency, balance"),
       supabase
         .from("transactions")
-        .select("type, amount, currency, category_id, subcategory_id, occurred_at")
-        .gte("occurred_at", startOfMonth(-2).toISOString()),
+        .select("type, amount, currency, category_id, subcategory_id, to_wallet_id, occurred_at")
+        .gte("occurred_at", since),
     ]);
+
+  const wallets = (walletsRes.data ?? []) as SummaryWallet[];
+  const debtIds = wallets.filter((w) => w.kind === "debt_out").map((w) => w.id);
+  const debtPaymentsRes = debtIds.length
+    ? await supabase
+        .from("transactions")
+        .select("type, amount, currency, category_id, subcategory_id, to_wallet_id, occurred_at")
+        .eq("type", "transfer")
+        .in("to_wallet_id", debtIds)
+    : { data: [] };
 
   const base = profileRes.data?.base_currency ?? "KZT";
   const rates = ratesRes.data ?? [];
@@ -131,86 +165,22 @@ export async function POST(request: Request) {
       Number(rates.find((r) => r.code === code)?.rate_to_base ?? 1);
     return (amount * rate(currency)) / (rate(base) || 1);
   };
-
-  const categories = categoriesRes.data ?? [];
-  const rows = (txRes.data ?? []) as Row[];
-
-  const bucket = (offset: number) => {
-    const from = startOfMonth(offset);
-    const to = startOfMonth(offset + 1);
-    const perCategory = new Map<string, number>();
-    const perSub = new Map<string, number>();
-    let income = 0;
-    for (const row of rows) {
-      const at = new Date(row.occurred_at);
-      if (at < from || at >= to) continue;
-      const value = toBase(Number(row.amount), row.currency);
-      if (row.type === "expense" && row.category_id) {
-        perCategory.set(row.category_id, (perCategory.get(row.category_id) ?? 0) + value);
-        if (row.subcategory_id) {
-          perSub.set(row.subcategory_id, (perSub.get(row.subcategory_id) ?? 0) + value);
-        }
-      }
-      if (row.type === "income") income += value;
-    }
-    return { perCategory, perSub, income };
-  };
-
-  const now = bucket(0);
-  const prev = bucket(-1);
-  const nameOf = (id: string) => categories.find((c) => c.id === id)?.name ?? "прочее";
-
   const balances = balancesRes.data ?? [];
-  const balanceOf = (w: { id: string; currency: string }) =>
-    round(toBase(Number(balances.find((b) => b.wallet_id === w.id)?.balance ?? 0), w.currency));
-  const live = walletsRes.data ?? [];
 
-  // Четыре отдельных списка вместо одного общего с полем «тип»: раньше
-  // модель путала кошельки с долгами, разбирая английское значение kind
-  // внутри русскоязычного JSON. Явное разделение по ключу снимает любую
-  // неоднозначность — структура сама говорит, что есть что.
-  const summary = {
-    валюта: base,
-    доход_текущий_месяц: round(now.income),
-    доход_прошлый_месяц: round(prev.income),
-    траты_текущий_месяц: [...now.perCategory.entries()].map(([id, value]) => ({
-      категория: nameOf(id),
-      сумма: round(value),
-      лимит: categories.find((c) => c.id === id)?.monthly_limit ?? null,
-      обязательный_платёж_в_месяц: categories.find((c) => c.id === id)?.planned_amount ?? null,
-      было_в_прошлом_месяце: round(prev.perCategory.get(id) ?? 0),
-      // Разрез внутри категории: на что именно ушло — виден только если
-      // человек отмечал уточнения.
-      уточнения: categories
-        .filter((c) => c.parent_id === id && (now.perSub.get(c.id) ?? 0) > 0)
-        .map((c) => ({ название: c.name, сумма: round(now.perSub.get(c.id) ?? 0) })),
-    })),
-    кошельки: live
-      .filter((w) => w.kind === "cash" || w.kind === "card")
-      .map((w) => ({ название: w.name, баланс: balanceOf(w) })),
-    накопления: live
-      .filter((w) => w.kind === "savings")
-      .map((w) => ({
-        название: w.name,
-        баланс: balanceOf(w),
-        ставка_годовых: w.rate,
-        цель: w.goal,
-        конец_срока: w.term_end,
-      })),
-    я_должен: live
-      .filter((w) => w.kind === "debt_out")
-      .map((w) => ({
-        название: w.name,
-        остаток_долга: balanceOf(w),
-        погасить_до: w.due_date,
-        платёж_в_месяц: w.monthly_payment,
-        ежемесячный: w.is_recurring,
-        ставка_годовых: w.rate,
-      })),
-    мне_должны: live
-      .filter((w) => w.kind === "debt_in")
-      .map((w) => ({ название: w.name, остаток_долга: balanceOf(w), погасить_до: w.due_date })),
-  };
+  // Четыре вида денег — отдельными списками, а все суммы и сравнения
+  // посчитаны заранее: модель путала кошельки с долгами и ошибалась в
+  // арифметике. Подробности — в buildAnalysisSummary.
+  const summary = buildAnalysisSummary({
+    now: new Date(),
+    tzOffset,
+    base,
+    toBase,
+    wallets,
+    categories: (categoriesRes.data ?? []) as SummaryCategory[],
+    balanceOf: (id) => Number(balances.find((b) => b.wallet_id === id)?.balance ?? 0),
+    transactions: (txRes.data ?? []) as SummaryTx[],
+    debtPayments: (debtPaymentsRes.data ?? []) as SummaryTx[],
+  });
 
   const model = configuredModel || DEFAULT_MODEL;
 
@@ -471,8 +441,4 @@ function russian(text: string): boolean {
 function startOfMonth(offset: number): Date {
   const now = new Date();
   return new Date(now.getFullYear(), now.getMonth() + offset, 1);
-}
-
-function round(value: number): number {
-  return Math.round(value * 100) / 100;
 }

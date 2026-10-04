@@ -137,7 +137,9 @@ export default function AnalyticsPage() {
     const since = Date.now();
     const tick = setInterval(() => setAiWait(Math.round((Date.now() - since) / 1000)), 1000);
     try {
-      const res = await fetch(`/api/analyze${insist ? "?insist=1" : ""}`, { method: "POST" });
+      // Часовой пояс — чтобы «сегодня» и границы месяца были как у человека.
+      const query = `tz=${new Date().getTimezoneOffset()}${insist ? "&insist=1" : ""}`;
+      const res = await fetch(`/api/analyze?${query}`, { method: "POST" });
       // Отказы приходят обычным JSON: до потока дело не дошло.
       if (!res.ok || !res.body) {
         const data = await res.json().catch(() => ({}));

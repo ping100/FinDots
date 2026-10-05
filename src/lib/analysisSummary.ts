@@ -124,6 +124,9 @@ export function buildAnalysisSummary(input: SummaryInput) {
   const prevSame = sumBy(prevStart, prevSameEnd);
   const prevFull = sumBy(prevStart, monthStart);
 
+  const shareOf = (amount: number) =>
+    cur.expense > 0 ? Math.round((amount / cur.expense) * 100) : null;
+
   const expenseCats = categories.filter((c) => c.kind === "expense" && !c.parent_id);
   const bills = expenseCats.filter((c) => c.planned_amount);
   const variable = expenseCats.filter((c) => !c.planned_amount);
@@ -138,6 +141,7 @@ export function buildAnalysisSummary(input: SummaryInput) {
       название: c.name,
       в_месяц: round(planned),
       оплачено_тратами: round(spent),
+      доля_от_всех_трат_процентов: shareOf(spent),
       отмечено_оплаченным_вручную: marked,
       осталось_оплатить: round(left),
       число_платежа: c.due_day,
@@ -211,6 +215,7 @@ export function buildAnalysisSummary(input: SummaryInput) {
       return {
         категория: c.name,
         потрачено: round(spent),
+        доля_от_всех_трат_процентов: shareOf(spent),
         за_те_же_дни_прошлого_месяца: round(sameBefore),
         изменение_процентов: sameBefore > 0 ? Math.round(((spent - sameBefore) / sameBefore) * 100) : null,
         за_весь_прошлый_месяц: round(fullBefore),
@@ -246,6 +251,7 @@ export function buildAnalysisSummary(input: SummaryInput) {
         уже_внесено_всего: round(paidIntoEver(w)),
         месяцев_до_погашения: schedule?.length ?? null,
         переплата_процентами_до_конца: overpay != null ? round(toBase(overpay, w.currency)) : null,
+        проценты_в_ближайшем_платеже: schedule?.[0] ? round(toBase(schedule[0].interest, w.currency)) : null,
       };
     })
     .filter((d) => d.остаток > 0.5);
@@ -262,6 +268,9 @@ export function buildAnalysisSummary(input: SummaryInput) {
     итоги_месяца: {
       доход: round(cur.income),
       траты_всего: round(cur.expense),
+      траты_за_те_же_дни_прошлого_месяца: round(prevSame.expense),
+      изменение_трат_к_тем_же_дням_процентов:
+        prevSame.expense > 0 ? Math.round(((cur.expense - prevSame.expense) / prevSame.expense) * 100) : null,
       // Входят в траты_всего, но ни в одну категорию — общей суммой.
       комиссии: round(cur.fees),
       комиссии_за_весь_прошлый_месяц: round(prevFull.fees),
@@ -301,6 +310,7 @@ export function buildAnalysisSummary(input: SummaryInput) {
         название: w.name,
         баланс: round(balance),
         ставка_годовых: w.rate,
+        примерно_приносит_в_месяц: w.rate ? round((balance * w.rate) / 100 / 12) : null,
         цель: w.goal,
         до_цели: w.goal ? round(Math.max(toBase(w.goal, w.currency) - balance, 0)) : null,
         конец_срока: w.term_end,

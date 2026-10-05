@@ -12,6 +12,13 @@ import {
 } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { FEE_LABEL } from "@/lib/fee";
+import {
+  isNetworkError,
+  loadPending,
+  savePending,
+  type PendingOp,
+  type PendingRow,
+} from "@/lib/offlineQueue";
 import { createClient } from "@/lib/supabase/client";
 import { PALETTE } from "@/lib/icons";
 import { convert } from "@/lib/money";
@@ -44,6 +51,8 @@ export interface Store {
   balances: WalletBalance[];
   pools: IncomePool[];
   transactions: Transaction[];
+  /** Траты, записанные без сети и ещё не ушедшие на сервер. */
+  pendingCount: number;
 
   balanceOf: (walletId: string) => number;
   poolOf: (categoryId: string) => { amount: number; currency: CurrencyCode };
@@ -120,7 +129,7 @@ export interface Store {
  * тут ни при чём, чинить нечего — надо просто повторить запрос.
  */
 function transient(message: string): boolean {
-  return /jwt|token is expired|failed to fetch|network|fetch failed/i.test(message);
+  return /jwt|token is expired|failed to fetch|load failed|network|fetch failed/i.test(message);
 }
 
 /** Техническую строку от сервера человеку показывать незачем. */
@@ -159,6 +168,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [balances, setBalances] = useState<WalletBalance[]>([]);
   const [pools, setPools] = useState<IncomePool[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [pending, setPending] = useState<PendingOp[]>([]);
 
   const load = useCallback(async (retry = true) => {
     // Кто вошёл — из сохранённой сессии, без запроса к серверу входа:
@@ -238,9 +248,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
         .order("occurred_at", { ascending: false })
         .limit(5000),
     ]);
-    setBalances((b.data ?? []) as WalletBalance[]);
-    setPools((ip.data ?? []) as IncomePool[]);
-    setTransactions((tx.data ?? []) as Transaction[]);
+    // Сорвался запрос — оставляем то, что уже на экране: пустой список
+    // посреди магазина без сети хуже, чем чуть устаревший.
+    if (!b.error) setBalances((b.data ?? []) as WalletBalance[]);
+    if (!ip.error) setPools((ip.data ?? []) as IncomePool[]);
+    if (!tx.error) setTransactions((tx.data ?? []) as Transaction[]);
   }, [supabase]);
 
   const guard = useCallback(
@@ -263,10 +275,25 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [refresh, supabase],
   );
 
+  // Траты без сети уже ушли из кошелька для человека, хотя сервер о них
+  // ещё не знает: вычитаем их сами, пока не отправятся.
+  const pendingByWallet = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const row of pending.flat()) {
+      const wallet = wallets.find((w) => w.id === row.wallet_id);
+      const value = wallet
+        ? convert(Number(row.amount), row.currency as CurrencyCode, wallet.currency, rates)
+        : Number(row.amount);
+      map.set(row.wallet_id, (map.get(row.wallet_id) ?? 0) + value);
+    }
+    return map;
+  }, [pending, wallets, rates]);
+
   const balanceOf = useCallback(
     (walletId: string) =>
-      Number(balances.find((b) => b.wallet_id === walletId)?.balance ?? 0),
-    [balances],
+      Number(balances.find((b) => b.wallet_id === walletId)?.balance ?? 0) -
+      (pendingByWallet.get(walletId) ?? 0),
+    [balances, pendingByWallet],
   );
 
   const poolOf = useCallback(
@@ -357,48 +384,116 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [guard, rates, supabase, transactions, userId],
   );
 
+  // Очередь трат без сети — у каждого вошедшего своя.
+  useEffect(() => {
+    if (userId) setPending(loadPending(userId));
+  }, [userId]);
+
+  const updatePending = useCallback(
+    (change: (ops: PendingOp[]) => PendingOp[]) =>
+      setPending((ops) => {
+        const next = change(ops);
+        if (userId) savePending(userId, next);
+        return next;
+      }),
+    [userId],
+  );
+
   const addExpense: Store["addExpense"] = useCallback(
     async ({ categoryId, subcategoryId, walletId, amount, currency, note, occurredAt, fee }) => {
-      const at = occurredAt ?? new Date().toISOString();
-      let expenseId: string | null = null;
-      await guard(async () => {
+      if (!userId) throw new Error("Нужно войти заново");
+      // id задаём здесь: по нему комиссия ссылается на трату, и по нему же
+      // повторная отправка из очереди не задвоит строку (lib/offlineQueue.ts).
+      const expense: PendingRow = {
+        id: crypto.randomUUID(),
+        user_id: userId,
+        type: "expense",
+        amount,
+        currency,
+        category_id: categoryId,
+        subcategory_id: subcategoryId || null,
+        wallet_id: walletId,
+        parent_id: null,
+        note: note || null,
+        occurred_at: occurredAt ?? new Date().toISOString(),
+      };
+      const op: PendingOp = [expense];
+      if (fee && fee > 0) {
+        // Отдельной строкой без категории — см. lib/fee.ts.
+        op.push({
+          ...expense,
+          id: crypto.randomUUID(),
+          amount: fee,
+          category_id: null,
+          subcategory_id: null,
+          parent_id: expense.id,
+          note: FEE_LABEL,
+        });
+      }
+
+      if (!navigator.onLine) {
+        updatePending((ops) => [...ops, op]);
+        return;
+      }
+      try {
+        // Одним запросом: трата и комиссия сохраняются вместе или никак.
+        // При слабом сигнале запрос может висеть минуту — после 8 секунд
+        // считаем, что связи нет, и кладём в очередь.
+        await guard(() =>
+          supabase().from("transactions").insert(op).abortSignal(AbortSignal.timeout(8000)),
+        );
+      } catch (e) {
+        const message = e instanceof Error ? e.message : "";
+        if (!navigator.onLine || isNetworkError(message)) {
+          setError(null);
+          updatePending((ops) => [...ops, op]);
+          return;
+        }
+        throw e;
+      }
+    },
+    [guard, supabase, updatePending, userId],
+  );
+
+  // Отправить очередь, как только есть связь.
+  const flushing = useRef(false);
+  const flushPending = useCallback(async () => {
+    if (flushing.current || pending.length === 0 || !navigator.onLine) return;
+    flushing.current = true;
+    const sent = new Set<string>();
+    try {
+      for (const op of pending) {
         const res = await supabase()
           .from("transactions")
-          .insert({
-            user_id: userId,
-            type: "expense",
-            amount,
-            currency,
-            category_id: categoryId,
-            subcategory_id: subcategoryId || null,
-            wallet_id: walletId,
-            note: note || null,
-            occurred_at: at,
-          })
-          .select("id")
-          .single();
-        expenseId = res.data?.id ?? null;
-        return res;
-      });
-      if (!fee || fee <= 0 || !expenseId) return;
-      // Отдельной строкой без категории — см. lib/fee.ts.
-      const parentId: string = expenseId;
-      await guard(() =>
-        supabase().from("transactions").insert({
-          user_id: userId,
-          type: "expense",
-          amount: fee,
-          currency,
-          category_id: null,
-          wallet_id: walletId,
-          parent_id: parentId,
-          note: FEE_LABEL,
-          occurred_at: at,
-        }),
-      );
-    },
-    [guard, supabase, userId],
-  );
+          .upsert(op, { onConflict: "id", ignoreDuplicates: true });
+        if (res.error) {
+          // Связь снова пропала — дождёмся следующей попытки.
+          if (transient(res.error.message)) break;
+          // Сервер отказал по существу: крутить вечно бессмысленно — говорим.
+          setError(`Трата, записанная без сети, не сохранилась: ${human(res.error.message)}`);
+        }
+        sent.add(op[0].id);
+      }
+    } finally {
+      flushing.current = false;
+    }
+    if (sent.size) {
+      updatePending((ops) => ops.filter((op) => !sent.has(op[0].id)));
+      await refresh();
+    }
+  }, [pending, refresh, supabase, updatePending]);
+
+  useEffect(() => {
+    if (pending.length === 0) return;
+    void flushPending();
+    const retry = () => void flushPending();
+    window.addEventListener("online", retry);
+    const timer = setInterval(retry, 30_000);
+    return () => {
+      window.removeEventListener("online", retry);
+      clearInterval(timer);
+    };
+  }, [pending.length, flushPending]);
 
   const addTransfer: Store["addTransfer"] = useCallback(
     async ({ fromWalletId, toWalletId, amount, currency, note, occurredAt }) =>
@@ -494,14 +589,39 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [rates, refresh, reloadDictionaries, supabase, transactions, userId, wallets],
   );
 
+  const isPending = useCallback(
+    (id: string) => pending.some((op) => op.some((row) => row.id === id)),
+    [pending],
+  );
+
+  // Трату из очереди правим и удаляем прямо в очереди: на сервере её ещё нет.
   const updateTransaction: Store["updateTransaction"] = useCallback(
-    async (id, patch) => guard(() => supabase().from("transactions").update(patch).eq("id", id)),
-    [guard, supabase],
+    async (id, patch) => {
+      if (isPending(id)) {
+        updatePending((ops) =>
+          ops.map((op) => op.map((row) => (row.id === id ? ({ ...row, ...patch } as PendingRow) : row))),
+        );
+        return;
+      }
+      return guard(() => supabase().from("transactions").update(patch).eq("id", id));
+    },
+    [guard, isPending, supabase, updatePending],
   );
 
   const deleteTransaction: Store["deleteTransaction"] = useCallback(
-    async (id) => guard(() => supabase().from("transactions").delete().eq("id", id)),
-    [guard, supabase],
+    async (id) => {
+      if (isPending(id)) {
+        // Как и на сервере, с тратой уходит её комиссия.
+        updatePending((ops) =>
+          ops
+            .map((op) => op.filter((row) => row.id !== id && row.parent_id !== id))
+            .filter((op) => op.length > 0),
+        );
+        return;
+      }
+      return guard(() => supabase().from("transactions").delete().eq("id", id));
+    },
+    [guard, isPending, supabase, updatePending],
   );
 
   // ───────────────────── справочники ─────────────────────
@@ -830,6 +950,18 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const moneyHidden = useMoneyHidden();
 
+  // Траты из очереди показываем вместе с остальными — человек их уже записал.
+  const visibleTransactions = useMemo(() => {
+    if (pending.length === 0) return transactions;
+    const known = new Set(transactions.map((t) => t.id));
+    const queued = pending
+      .flat()
+      .filter((row) => !known.has(row.id))
+      .map((row) => ({ ...row, from_wallet_id: null, to_wallet_id: null }) as Transaction);
+    return [...queued, ...transactions].sort((a, b) => b.occurred_at.localeCompare(a.occurred_at));
+  }, [pending, transactions]);
+  const pendingCount = pending.length;
+
   const value = useMemo<Store>(
     () => ({
       ready,
@@ -842,7 +974,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       categories,
       balances,
       pools,
-      transactions,
+      transactions: visibleTransactions,
+      pendingCount,
       balanceOf,
       poolOf,
       toBase,
@@ -868,7 +1001,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }),
     [
       ready, moneyHidden, error, userId, profile, rates, wallets, categories, balances, pools,
-      transactions, balanceOf, poolOf, toBase, refresh, addIncome, allocate,
+      visibleTransactions, pendingCount, balanceOf, poolOf, toBase, refresh, addIncome, allocate,
       addExpense, addTransfer, setWalletBalance, accrueInterest, updateTransaction, deleteTransaction,
       saveWallet, deleteWallet, resetMoneyData, saveCategory, reorderCategories, addSubcategory, importDrafts, deleteCategory, saveProfile, saveRate,
     ],

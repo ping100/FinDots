@@ -17,7 +17,7 @@ const TABS = [
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { ready, error } = useStore();
+  const { ready, error, pendingCount } = useStore();
 
   if (!ready) return <Loader />;
 
@@ -32,6 +32,16 @@ export function Shell({ children }: { children: React.ReactNode }) {
           style={{ background: "var(--danger)", color: "#fff" }}
         >
           {error}
+        </p>
+      ) : null}
+
+      {pendingCount > 0 ? (
+        <p
+          className="mx-4 mt-3 rounded-2xl px-4 py-2 text-xs"
+          style={{ background: "var(--surface)", color: "var(--muted)", border: "1px solid var(--border)" }}
+        >
+          Нет связи: {pendingCount === 1 ? "трата сохранена" : `трат сохранено: ${pendingCount}`} на телефоне
+          и уйдёт на сервер сама, когда появится интернет.
         </p>
       ) : null}
 

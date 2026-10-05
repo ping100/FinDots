@@ -77,6 +77,14 @@ export function HomeScreen() {
   const [toast, setToast] = useState<string | null>(null);
   // Режим «Порядок»: кружки расходов перетаскиваются, тап и долгое нажатие молчат.
   const [arranging, setArranging] = useState(false);
+  // «Новая трата» из меню иконки приложения (/money?add=expense): сразу
+  // список категорий, без поиска нужного кружка на главной.
+  const [quickPick, setQuickPick] = useState(false);
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("add") !== "expense") return;
+    setQuickPick(true);
+    window.history.replaceState(null, "", "/money");
+  }, []);
 
   useEffect(() => {
     if (!toast) return;
@@ -704,6 +712,24 @@ export function HomeScreen() {
             occurredAt,
           });
         }}
+      />
+
+      <PickerSheet
+        open={quickPick && allExpense.length > 0}
+        title="Новая трата"
+        options={allExpense.map((c) => ({
+          id: c.id,
+          name: c.name,
+          caption: formatMoney(month.expense.get(c.id) ?? 0, base),
+          color: c.color,
+          icon: c.icon,
+        }))}
+        onPick={(id) => {
+          setQuickPick(false);
+          const category = allExpense.find((c) => c.id === id);
+          if (category) setDialog({ kind: "expense", category });
+        }}
+        onClose={() => setQuickPick(false)}
       />
 
       <PickerSheet

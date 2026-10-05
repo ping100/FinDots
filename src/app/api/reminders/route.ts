@@ -30,8 +30,11 @@ export async function POST(request: Request) {
     supabase.rpc("claim_due_reminders", { p_secret: secret }),
     supabase.rpc("claim_due_bill_reminders", { p_secret: secret }),
   ]);
-  if (tasksRes.error) return NextResponse.json({ error: tasksRes.error.message }, { status: 500 });
-  if (billsRes.error) return NextResponse.json({ error: billsRes.error.message }, { status: 500 });
+  // Рассылки независимы: сбой в напоминаниях о платежах не должен
+  // оставить без напоминаний задачи — и наоборот.
+  if (tasksRes.error && billsRes.error) {
+    return NextResponse.json({ error: `${tasksRes.error.message}; ${billsRes.error.message}` }, { status: 500 });
+  }
 
   const tasks = (tasksRes.data ?? []) as { endpoint: string; p256dh: string; auth: string; title: string; task_id: string }[];
   const bills = (billsRes.data ?? []) as {
@@ -73,6 +76,7 @@ export async function POST(request: Request) {
   );
 
   return NextResponse.json({
+    errors: [tasksRes.error?.message, billsRes.error?.message].filter(Boolean),
     sent: results.filter((r) => r === "ok").length,
     dead: results.filter((r) => r === "dead").length,
     failed: results.filter((r) => r === "failed").length,

@@ -12,6 +12,8 @@ export interface AmountResult {
   occurredAt: string;
   optionId?: string;
   subcategoryId?: string | null;
+  /** Комиссия — только если окно её спрашивает (withFee). */
+  fee?: number;
 }
 
 /**
@@ -32,6 +34,7 @@ export function AmountSheet({
   onAddSubcategory,
   submitLabel = "Готово",
   extra,
+  withFee,
   onSubmit,
   onClose,
 }: {
@@ -52,11 +55,14 @@ export function AmountSheet({
   submitLabel?: string;
   /** Дополнительная кнопка под подзаголовком — например, «настроить категорию». */
   extra?: ReactNode;
+  /** Спросить комиссию: спишется вместе с суммой, но учтётся отдельно. */
+  withFee?: boolean;
   onSubmit: (result: AmountResult) => Promise<void> | void;
   onClose: () => void;
 }) {
   const [raw, setRaw] = useState("");
   const [note, setNote] = useState("");
+  const [fee, setFee] = useState("");
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [optionId, setOptionId] = useState<string | undefined>(undefined);
   const [subcategoryId, setSubcategoryId] = useState<string | null>(null);
@@ -77,6 +83,7 @@ export function AmountSheet({
     const { initial: from, firstOption } = start.current;
     setRaw(from != null && from > 0 ? trimZeros(from) : "");
     setNote("");
+    setFee("");
     setDate(new Date().toISOString().slice(0, 10));
     setOptionId(firstOption);
     setSubcategoryId(null);
@@ -86,7 +93,9 @@ export function AmountSheet({
   }, [open]);
 
   const amount = parseAmount(raw) ?? 0;
-  const overMax = max != null && amount > max + 0.004;
+  const feeAmount = withFee ? Math.max(parseAmount(fee) ?? 0, 0) : 0;
+  // Комиссия уходит с того же кошелька — в остаток должны влезть обе суммы.
+  const overMax = max != null && amount + feeAmount > max + 0.004;
   const valid = amount > 0 && !overMax && (!options?.length || !!optionId);
 
   const press = (key: string) => {
@@ -123,6 +132,7 @@ export function AmountSheet({
         occurredAt: new Date(date + "T" + new Date().toTimeString().slice(0, 8)).toISOString(),
         optionId,
         subcategoryId,
+        fee: feeAmount > 0 ? feeAmount : undefined,
       });
       onClose();
     } catch (e) {
@@ -264,6 +274,19 @@ export function AmountSheet({
             ))}
           </div>
         </FieldGroup>
+      ) : null}
+
+      {withFee ? (
+        <Field label="Комиссия" hint="Необязательно. Спишется с того же кошелька, в статистике — отдельно">
+          <input
+            className={inputClass}
+            style={inputStyle}
+            inputMode="decimal"
+            value={fee}
+            onChange={(e) => setFee(e.target.value)}
+            placeholder="0"
+          />
+        </Field>
       ) : null}
 
       <Field label="Комментарий">

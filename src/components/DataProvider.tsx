@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { FEE_LABEL } from "@/lib/fee";
 import { createClient } from "@/lib/supabase/client";
 import { PALETTE } from "@/lib/icons";
 import { convert } from "@/lib/money";
@@ -72,6 +73,8 @@ export interface Store {
     currency: CurrencyCode;
     note?: string;
     occurredAt?: string;
+    /** Комиссия банка или сервиса — спишется с того же кошелька отдельной строкой. */
+    fee?: number;
   }) => Promise<void>;
   addTransfer: (args: {
     fromWalletId: string;
@@ -92,6 +95,8 @@ export interface Store {
   saveWallet: (wallet: Partial<Wallet> & { id?: string }) => Promise<string>;
   deleteWallet: (id: string) => Promise<void>;
   saveCategory: (category: Partial<Category> & { id?: string }) => Promise<void>;
+  /** Новый порядок кружков: id в том порядке, в каком их показывать. */
+  reorderCategories: (orderedIds: string[]) => Promise<void>;
   /** Завести подкатегорию внутри категории; возвращает её id. */
   addSubcategory: (parentId: string, name: string) => Promise<string>;
   /** Загрузить операции из чужой выгрузки; сообщает о ходе работы. */
@@ -353,20 +358,45 @@ export function DataProvider({ children }: { children: ReactNode }) {
   );
 
   const addExpense: Store["addExpense"] = useCallback(
-    async ({ categoryId, subcategoryId, walletId, amount, currency, note, occurredAt }) =>
-      guard(() =>
+    async ({ categoryId, subcategoryId, walletId, amount, currency, note, occurredAt, fee }) => {
+      const at = occurredAt ?? new Date().toISOString();
+      let expenseId: string | null = null;
+      await guard(async () => {
+        const res = await supabase()
+          .from("transactions")
+          .insert({
+            user_id: userId,
+            type: "expense",
+            amount,
+            currency,
+            category_id: categoryId,
+            subcategory_id: subcategoryId || null,
+            wallet_id: walletId,
+            note: note || null,
+            occurred_at: at,
+          })
+          .select("id")
+          .single();
+        expenseId = res.data?.id ?? null;
+        return res;
+      });
+      if (!fee || fee <= 0 || !expenseId) return;
+      // Отдельной строкой без категории — см. lib/fee.ts.
+      const parentId: string = expenseId;
+      await guard(() =>
         supabase().from("transactions").insert({
           user_id: userId,
           type: "expense",
-          amount,
+          amount: fee,
           currency,
-          category_id: categoryId,
-          subcategory_id: subcategoryId || null,
+          category_id: null,
           wallet_id: walletId,
-          note: note || null,
-          occurred_at: occurredAt ?? new Date().toISOString(),
+          parent_id: parentId,
+          note: FEE_LABEL,
+          occurred_at: at,
         }),
-      ),
+      );
+    },
     [guard, supabase, userId],
   );
 
@@ -564,6 +594,34 @@ export function DataProvider({ children }: { children: ReactNode }) {
       await Promise.all([reloadDictionaries(), refresh()]);
     },
     [refresh, reloadDictionaries, supabase, userId],
+  );
+
+  const reorderCategories: Store["reorderCategories"] = useCallback(
+    async (orderedIds) => {
+      const position = new Map(orderedIds.map((id, index) => [id, index]));
+      const changed = categories.filter(
+        (c) => position.has(c.id) && c.sort_order !== position.get(c.id),
+      );
+      if (changed.length === 0) return;
+      // Сразу на экране — ждать ответа базы на каждый кружок незачем.
+      setCategories((list) =>
+        list
+          .map((c) => (position.has(c.id) ? { ...c, sort_order: position.get(c.id)! } : c))
+          .sort((a, b) => a.sort_order - b.sort_order),
+      );
+      const results = await Promise.all(
+        changed.map((c) =>
+          supabase().from("categories").update({ sort_order: position.get(c.id) }).eq("id", c.id),
+        ),
+      );
+      const failed = results.find((r) => r.error);
+      if (failed?.error) {
+        setError(failed.error.message);
+        await reloadDictionaries();
+        throw new Error(failed.error.message);
+      }
+    },
+    [categories, reloadDictionaries, supabase],
   );
 
   /**
@@ -801,6 +859,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       deleteWallet,
       resetMoneyData,
       saveCategory,
+      reorderCategories,
       addSubcategory,
       importDrafts,
       deleteCategory,
@@ -811,7 +870,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       ready, moneyHidden, error, userId, profile, rates, wallets, categories, balances, pools,
       transactions, balanceOf, poolOf, toBase, refresh, addIncome, allocate,
       addExpense, addTransfer, setWalletBalance, accrueInterest, updateTransaction, deleteTransaction,
-      saveWallet, deleteWallet, resetMoneyData, saveCategory, addSubcategory, importDrafts, deleteCategory, saveProfile, saveRate,
+      saveWallet, deleteWallet, resetMoneyData, saveCategory, reorderCategories, addSubcategory, importDrafts, deleteCategory, saveProfile, saveRate,
     ],
   );
 

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Icon } from "@/lib/icons";
 import { formatMoney } from "@/lib/money";
+import { FEE_LABEL, isFee } from "@/lib/fee";
 import { useStore } from "./DataProvider";
 
 /**
@@ -73,10 +74,10 @@ export function TodayExpenses() {
                     className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white"
                     style={{ background: category?.color ?? "var(--muted)" }}
                   >
-                    <Icon name={category?.icon ?? "circle"} size={14} />
+                    <Icon name={isFee(t) ? "percent" : (category?.icon ?? "circle")} size={14} />
                   </span>
                   <span className="min-w-0 flex-1 truncate text-[0.8125rem]">
-                    {category?.name ?? "Без категории"}
+                    {isFee(t) ? FEE_LABEL : (category?.name ?? "Без категории")}
                     {sub ? ` → ${sub.name}` : ""}
                   </span>
                   <span className="shrink-0 text-[0.8125rem] tabular-nums" style={{ color: "var(--muted)" }}>

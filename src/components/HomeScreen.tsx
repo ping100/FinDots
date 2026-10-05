@@ -18,6 +18,7 @@ import {
 import { Icon } from "@/lib/icons";
 import { convert, formatMoney, monthLabel, monthRange } from "@/lib/money";
 import { pendingAccrual, toISODate } from "@/lib/savings";
+import { isFee } from "@/lib/fee";
 import { gridColumns, scaleFactor } from "@/lib/textScale";
 import type { Category, DragPayload, Wallet, WalletKind } from "@/lib/types";
 import { createClient } from "@/lib/supabase/client";
@@ -53,7 +54,7 @@ export function HomeScreen() {
   const {
     profile, wallets, categories, transactions, rates,
     balanceOf, poolOf, toBase,
-    addIncome, allocate, addExpense, addTransfer, addSubcategory, saveCategory, moneyHidden,
+    addIncome, allocate, addExpense, addTransfer, addSubcategory, saveCategory, reorderCategories, moneyHidden,
   } = useStore();
 
   const [offset, setOffset] = useState(0);
@@ -74,6 +75,8 @@ export function HomeScreen() {
   const [monthPicker, setMonthPicker] = useState(false);
   const [menu, setMenu] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  // Режим «Порядок»: кружки расходов перетаскиваются, тап и долгое нажатие молчат.
+  const [arranging, setArranging] = useState(false);
 
   useEffect(() => {
     if (!toast) return;
@@ -136,6 +139,8 @@ export function HomeScreen() {
     // Платежи по кредитам — переводы на кошелёк кредита, в его валюте: это
     // не доход/расход, поэтому считаем отдельно и без конвертации в base.
     const creditPaid = new Map<string, number>();
+    // Комиссии — без категории, общей суммой по всем тратам (lib/fee.ts).
+    let fees = 0;
     for (const t of transactions) {
       const at = new Date(t.occurred_at);
       if (at < from || at >= to) continue;
@@ -146,12 +151,13 @@ export function HomeScreen() {
       if (t.type === "expense" && t.category_id) {
         expense.set(t.category_id, (expense.get(t.category_id) ?? 0) + value);
       }
+      if (isFee(t)) fees += value;
       if (t.type === "transfer" && t.to_wallet_id) {
         creditPaid.set(t.to_wallet_id, (creditPaid.get(t.to_wallet_id) ?? 0) + Number(t.amount));
       }
     }
     const sum = (map: Map<string, number>) => [...map.values()].reduce((a, b) => a + b, 0);
-    return { income, expense, creditPaid, incomeTotal: sum(income), expenseTotal: sum(expense) };
+    return { income, expense, creditPaid, fees, incomeTotal: sum(income), expenseTotal: sum(expense) };
   }, [transactions, offset, toBase]);
 
   const expenseTotal = expenseCats.reduce((sum, c) => sum + (month.expense.get(c.id) ?? 0), 0);
@@ -203,9 +209,21 @@ export function HomeScreen() {
       | { target: "wallet"; walletId: string }
       | { target: "category"; categoryId: string }
       | { target: "debts"; group: DebtGroup }
+      | { target: "reorder"; categoryId: string }
       | undefined;
     setDragging(null);
     if (!payload || !target) return;
+
+    if (payload.source === "reorder") {
+      if (target.target !== "reorder" || target.categoryId === payload.categoryId) return;
+      // Перетащенный кружок встаёт ровно на место того, на который его бросили.
+      const ids = expenseCats.map((c) => c.id);
+      const to = ids.indexOf(target.categoryId);
+      ids.splice(ids.indexOf(payload.categoryId), 1);
+      ids.splice(to, 0, payload.categoryId);
+      void reorderCategories(ids).catch(() => setToast("Не получилось сохранить порядок"));
+      return;
+    }
 
     if (payload.source === "income") {
       if (target.target !== "wallet") {
@@ -246,6 +264,7 @@ export function HomeScreen() {
       return;
     }
 
+    if (target.target !== "wallet") return;
     const to = wallets.find((w) => w.id === target.walletId);
     if (to && to.id !== from.id) setDialog({ kind: "transfer", from, to });
   };
@@ -412,23 +431,41 @@ export function HomeScreen() {
           title="Расходы"
           total={formatMoney(expenseTotal, base)}
           hint={expenseCats.length === 0 ? "Нажми «+» и создай категорию трат — можно задать лимит на месяц." : undefined}
+          note={
+            arranging
+              ? "Зажмите кружок и перетащите на новое место"
+              : month.fees > 0
+                ? `и комиссии ${formatMoney(month.fees, base)}`
+                : undefined
+          }
+          action={
+            expenseCats.length > 1
+              ? { label: arranging ? "Готово" : "Порядок", onClick: () => setArranging((v) => !v) }
+              : undefined
+          }
           collapsed={!!collapsed.expenses}
           onToggle={() => setCollapsed((c) => ({ ...c, expenses: !c.expenses }))}
         >
-          {expenseCats.map((category) => (
-            <ExpenseBubble
-              key={category.id}
-              category={category}
-              spent={month.expense.get(category.id) ?? 0}
-              base={base}
-              size={bubble}
-              onTap={() => setDialog({ kind: "expense", category })}
-              onHold={() => setCategoryEditor({ kind: "expense", category })}
-            />
-          ))}
-          <button onClick={() => setCategoryEditor({ kind: "expense", category: null })} className="transition-transform duration-100 active:scale-95">
-            <AddBubble size={bubble} />
-          </button>
+          {arranging
+            ? expenseCats.map((category) => (
+                <ArrangeBubble key={category.id} category={category} size={bubble} />
+              ))
+            : expenseCats.map((category) => (
+                <ExpenseBubble
+                  key={category.id}
+                  category={category}
+                  spent={month.expense.get(category.id) ?? 0}
+                  base={base}
+                  size={bubble}
+                  onTap={() => setDialog({ kind: "expense", category })}
+                  onHold={() => setCategoryEditor({ kind: "expense", category })}
+                />
+              ))}
+          {arranging ? null : (
+            <button onClick={() => setCategoryEditor({ kind: "expense", category: null })} className="transition-transform duration-100 active:scale-95">
+              <AddBubble size={bubble} />
+            </button>
+          )}
         </Section>
 
         <Section
@@ -615,8 +652,9 @@ export function HomeScreen() {
             : undefined
         }
         submitLabel="Записать трату"
+        withFee
         onClose={() => setDialog(null)}
-        onSubmit={async ({ amount, note, occurredAt, optionId, subcategoryId }) => {
+        onSubmit={async ({ amount, note, occurredAt, optionId, subcategoryId, fee }) => {
           if (dialog?.kind !== "expense") return;
           const wallet = dialog.wallet ?? wallets.find((w) => w.id === optionId);
           if (!wallet) throw new Error("Выбери кошелёк");
@@ -628,6 +666,7 @@ export function HomeScreen() {
             currency: wallet.currency,
             note,
             occurredAt,
+            fee,
           });
         }}
       />
@@ -778,6 +817,7 @@ function Section({
   onToggle,
   hint,
   note,
+  action,
   columns,
   children,
 }: {
@@ -789,6 +829,8 @@ function Section({
   hint?: string;
   /** Строчка под заголовком: что-то ждёт действия. */
   note?: string;
+  /** Маленькая кнопка рядом с заголовком — например, «Порядок». */
+  action?: { label: string; onClick: () => void };
   columns: number;
   children: React.ReactNode;
 }) {
@@ -803,6 +845,15 @@ function Section({
           />
           <h2 className="text-[1.0625rem] font-semibold">{title}</h2>
         </button>
+        {action && !collapsed ? (
+          <button
+            onClick={action.onClick}
+            className="rounded-full px-2.5 py-0.5 text-[0.75rem] font-medium"
+            style={{ background: "var(--surface-2)", color: "var(--accent)" }}
+          >
+            {action.label}
+          </button>
+        ) : null}
         <span className="ml-auto text-[0.9375rem] font-semibold tabular-nums">{total}</span>
       </div>
       {note && !collapsed ? (
@@ -1245,6 +1296,32 @@ function CreditBubble({
   );
 }
 
+/** Кружок в режиме «Порядок»: и тащится, и принимает другой кружок на своё место. */
+function ArrangeBubble({ category, size }: { category: Category; size: number }) {
+  const { attributes, listeners, setNodeRef: dragRef, isDragging } = useDraggable({
+    id: `arrange:${category.id}`,
+    data: { source: "reorder", categoryId: category.id },
+  });
+  const { setNodeRef: dropRef, isOver } = useDroppable({
+    id: `arrange-drop:${category.id}`,
+    data: { target: "reorder", categoryId: category.id },
+  });
+  return (
+    <button
+      ref={(node) => {
+        dragRef(node);
+        dropRef(node);
+      }}
+      className="animate-wiggle"
+      style={{ touchAction: "none", opacity: isDragging ? 0.3 : 1 }}
+      {...attributes}
+      {...listeners}
+    >
+      <Bubble icon={category.icon} color={category.color} label={category.name} size={size} highlighted={isOver} />
+    </button>
+  );
+}
+
 function DragGhost({ payload }: { payload: DragPayload }) {
   const { wallets, categories } = useStore();
   const item =
@@ -1274,12 +1351,14 @@ function DragGhost({ payload }: { payload: DragPayload }) {
         >
           <Icon name={item.icon} size={28} />
         </span>
-        <span
-          className="whitespace-nowrap rounded-full px-2.5 py-1 text-[0.75rem] font-semibold tabular-nums shadow-lg"
-          style={{ background: "var(--surface)", border: `1px solid ${item.color}` }}
-        >
-          {formatMoney(payload.available, payload.currency)}
-        </span>
+        {payload.source !== "reorder" ? (
+          <span
+            className="whitespace-nowrap rounded-full px-2.5 py-1 text-[0.75rem] font-semibold tabular-nums shadow-lg"
+            style={{ background: "var(--surface)", border: `1px solid ${item.color}` }}
+          >
+            {formatMoney(payload.available, payload.currency)}
+          </span>
+        ) : null}
       </div>
     </div>
   );

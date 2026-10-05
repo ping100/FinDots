@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { FEE_LABEL, isFee } from "@/lib/fee";
 import { parseCsv, toCsv } from "@/lib/csv";
 import { COLUMNS, buildDrafts, guessMapping, summarize, type Draft, type Mapping } from "@/lib/importCsv";
 import { formatMoney } from "@/lib/money";
@@ -55,7 +56,7 @@ export function DataTransfer({ onlyImport = false }: { onlyImport?: boolean } = 
         // человеку, и любой программе, которая читает его по знаку суммы.
         (t.type === "expense" ? -Number(t.amount) : Number(t.amount)).toFixed(2).replace(".", ","),
         t.currency,
-        nameOfCategory(t.type === "allocation" ? parentOf(t) : t.category_id),
+        isFee(t) ? FEE_LABEL : nameOfCategory(t.type === "allocation" ? parentOf(t) : t.category_id),
         nameOfCategory(t.subcategory_id),
         nameOfWallet(t.wallet_id),
         nameOfWallet(t.from_wallet_id),

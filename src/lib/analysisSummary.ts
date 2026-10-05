@@ -1,4 +1,5 @@
 import { buildSchedule } from "./amortization";
+import { isFee } from "./fee";
 import type { Wallet } from "./types";
 
 /**
@@ -46,6 +47,8 @@ export interface SummaryTx {
   category_id: string | null;
   subcategory_id: string | null;
   to_wallet_id: string | null;
+  /** У комиссии — id её траты (lib/fee.ts). */
+  parent_id?: string | null;
   occurred_at: string;
 }
 
@@ -103,16 +106,18 @@ export function buildAnalysisSummary(input: SummaryInput) {
     const perSub = new Map<string, number>();
     let income = 0;
     let expense = 0;
+    let fees = 0;
     for (const t of transactions) {
       if (!inRange(t, from, to)) continue;
       if (t.type === "income") income += value(t);
+      if (isFee(t)) fees += value(t);
       if (t.type === "expense") {
         expense += value(t);
         if (t.category_id) add(perCategory, t.category_id, value(t));
         if (t.subcategory_id) add(perSub, t.subcategory_id, value(t));
       }
     }
-    return { perCategory, perSub, income, expense };
+    return { perCategory, perSub, income, expense, fees };
   };
 
   const cur = sumBy(monthStart, nextMonth);
@@ -257,6 +262,9 @@ export function buildAnalysisSummary(input: SummaryInput) {
     итоги_месяца: {
       доход: round(cur.income),
       траты_всего: round(cur.expense),
+      // Входят в траты_всего, но ни в одну категорию — общей суммой.
+      комиссии: round(cur.fees),
+      комиссии_за_весь_прошлый_месяц: round(prevFull.fees),
       доход_минус_траты: round(cur.income - cur.expense),
       траты_в_процентах_от_дохода: cur.income > 0 ? Math.round((cur.expense / cur.income) * 100) : null,
       отложено_в_накопления: round(savedThisMonth),

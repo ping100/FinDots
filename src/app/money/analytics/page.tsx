@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { isFee } from "@/lib/fee";
 import { Icon } from "@/lib/icons";
 import { formatMoney, monthLabel, monthRange } from "@/lib/money";
 import { maskDigits } from "@/lib/privacy";
@@ -74,6 +75,9 @@ export default function AnalyticsPage() {
       // Уточнения внутри категории: id подкатегории → сумма. Считаем сразу
       // здесь, чтобы разбивка бралась из того же прохода по операциям.
       const subs = new Map<string, number>();
+      // Комиссии — без категории, общей строкой по всем тратам (lib/fee.ts).
+      let fees = 0;
+      let feeCount = 0;
       for (const t of transactions) {
         const at = new Date(t.occurred_at);
         if (at < from || at >= to) continue;
@@ -84,11 +88,15 @@ export default function AnalyticsPage() {
         if (t.type === "expense" && t.category_id) {
           expense.set(t.category_id, (expense.get(t.category_id) ?? 0) + value);
         }
+        if (isFee(t)) {
+          fees += value;
+          feeCount += 1;
+        }
         if ((t.type === "income" || t.type === "expense") && t.subcategory_id) {
           subs.set(t.subcategory_id, (subs.get(t.subcategory_id) ?? 0) + value);
         }
       }
-      return { income, expense, subs };
+      return { income, expense, subs, fees, feeCount };
     };
 
     const current = collect(offset);
@@ -124,6 +132,9 @@ export default function AnalyticsPage() {
       incomeTotal: total(current.income),
       expenseTotal: total(current.expense),
       prevExpenseTotal: total(previous.expense),
+      fees: current.fees,
+      feeCount: current.feeCount,
+      prevFees: previous.fees,
     };
   }, [transactions, categories, offset, mode, toBase]);
 
@@ -222,10 +233,34 @@ export default function AnalyticsPage() {
         <Stat label="Расходы" value={formatMoney(stats.expenseTotal, base)} color={SERIES.expense.color} />
         <Stat
           label="Итого"
-          value={formatMoney(stats.incomeTotal - stats.expenseTotal, base)}
+          value={formatMoney(stats.incomeTotal - stats.expenseTotal - stats.fees, base)}
           hint={share != null ? `${diff > 0 ? "+" : ""}${share}% к прошлому` : undefined}
         />
       </div>
+
+      {stats.fees > 0 || stats.prevFees > 0 ? (
+        <div
+          className="-mt-2 mb-4 flex items-center gap-3 rounded-2xl px-4 py-3"
+          style={{ background: "var(--surface)" }}
+        >
+          <span
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+            style={{ background: "var(--surface-2)", color: "var(--muted)" }}
+          >
+            <Icon name="percent" size={16} />
+          </span>
+          <span className="flex-1">
+            <span className="block text-sm">Комиссии</span>
+            <span className="block text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+              {stats.feeCount > 0 ? `${stats.feeCount} шт. · ` : ""}
+              по всем тратам · в прошлом месяце {formatMoney(stats.prevFees, base)}
+            </span>
+          </span>
+          <span className="text-[0.9375rem] font-semibold tabular-nums" style={{ color: SERIES.expense.color }}>
+            {formatMoney(stats.fees, base)}
+          </span>
+        </div>
+      ) : null}
 
       <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
         {MODES.map((item) => (

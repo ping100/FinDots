@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { FEE_LABEL, isFee } from "@/lib/fee";
 import Link from "next/link";
 import { Icon } from "@/lib/icons";
 import { formatMoney, monthLabel, monthRange, parseAmount } from "@/lib/money";
@@ -51,7 +52,7 @@ export default function OperationsPage() {
           transactions.find((p) => p.id === t.parent_id)?.category_id ?? null,
         )} → ${nameOfWallet(t.wallet_id)}`;
       case "expense":
-        return `${withSub(t)} · ${nameOfWallet(t.wallet_id)}`;
+        return `${isFee(t) ? FEE_LABEL : withSub(t)} · ${nameOfWallet(t.wallet_id)}`;
       case "transfer":
         return `${nameOfWallet(t.from_wallet_id)} → ${nameOfWallet(t.to_wallet_id)}`;
       case "adjustment":
@@ -233,7 +234,15 @@ export default function OperationsPage() {
         categories={categories}
         wallets={wallets}
         onClose={() => setEditing(null)}
-        onSave={updateTransaction}
+        onSave={async (id, patch) => {
+          await updateTransaction(id, patch);
+          // Комиссия списывается с того же кошелька, что и трата: сменили
+          // кошелёк у траты — переносим и её комиссию.
+          const fee = transactions.find((t) => isFee(t) && t.parent_id === id);
+          if (fee && patch.wallet_id && patch.wallet_id !== fee.wallet_id) {
+            await updateTransaction(fee.id, { wallet_id: patch.wallet_id });
+          }
+        }}
         onDelete={deleteTransaction}
       />
     </div>
@@ -279,7 +288,9 @@ function EditSheet({
   // Убранные с экрана не предлагаем, но ту, что уже стоит в операции,
   // показываем — иначе при сохранении она молча заменится на другую.
   const usable = (c: Category) => !c.archived || c.id === transaction.category_id;
-  const moveable = transaction.type === "income" || transaction.type === "expense";
+  // Комиссии категория не положена — она общая, по всем тратам (lib/fee.ts).
+  const moveable =
+    (transaction.type === "income" || transaction.type === "expense") && !isFee(transaction);
   const tops = categories.filter((c) => c.kind === transaction.type && !c.parent_id && usable(c));
   const subs = categories.filter((c) => !c.archived && c.parent_id === categoryId);
   const money = wallets.filter(
@@ -312,7 +323,7 @@ function EditSheet({
   return (
     <Sheet
       open
-      title={TYPE_LABEL[transaction.type]}
+      title={isFee(transaction) ? FEE_LABEL : TYPE_LABEL[transaction.type]}
       onClose={onClose}
       footer={
         <div className="space-y-2">

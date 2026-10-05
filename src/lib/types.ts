@@ -99,7 +99,9 @@ export interface IncomePool {
 /** Что именно тащат пальцем по экрану. */
 export type DragPayload =
   | { source: "income"; categoryId: string; currency: CurrencyCode; available: number }
-  | { source: "wallet"; walletId: string; currency: CurrencyCode; available: number };
+  | { source: "wallet"; walletId: string; currency: CurrencyCode; available: number }
+  /** Перестановка кружков расходов в режиме «Порядок». */
+  | { source: "reorder"; categoryId: string };
 
 /** Куда его можно бросить. */
 export type DropTarget =

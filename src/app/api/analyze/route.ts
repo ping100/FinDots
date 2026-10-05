@@ -39,6 +39,8 @@ const SYSTEM_PROMPT = [
   "• «каждый_месяц» — регулярные платежи. Если отмечено_оплаченным_вручную = true,",
   "  платёж оплачен, даже если оплачено_тратами = 0. Не советуй его оплатить.",
   "• «прогноз_переменных_трат_на_весь_месяц» — если тратить в том же темпе.",
+  "• «комиссии» — банковские и сервисные комиссии по всем тратам сразу; если заметны —",
+  "  упомяни их в «Где сократить».",
   "",
   "Четыре РАЗНЫХ вида денег, не путай их:",
   "• «кошельки» — наличные и карты, свободные деньги;",
@@ -143,7 +145,7 @@ export async function POST(request: Request) {
       supabase.from("wallet_balances").select("wallet_id, currency, balance"),
       supabase
         .from("transactions")
-        .select("type, amount, currency, category_id, subcategory_id, to_wallet_id, occurred_at")
+        .select("type, amount, currency, category_id, subcategory_id, to_wallet_id, parent_id, occurred_at")
         .gte("occurred_at", since),
     ]);
 
@@ -152,7 +154,7 @@ export async function POST(request: Request) {
   const debtPaymentsRes = debtIds.length
     ? await supabase
         .from("transactions")
-        .select("type, amount, currency, category_id, subcategory_id, to_wallet_id, occurred_at")
+        .select("type, amount, currency, category_id, subcategory_id, to_wallet_id, parent_id, occurred_at")
         .eq("type", "transfer")
         .in("to_wallet_id", debtIds)
     : { data: [] };

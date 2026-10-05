@@ -102,6 +102,19 @@ textarea,
   animation: rise 0.18s ease-out;
 }
 
+/* Safari на iPhone даёт полю даты свою минимальную ширину, и оно вылезает
+   за край листа, игнорируя w-full. Снимаем её и держим текст слева. */
+input[type="date"] {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+}
+input[type="date"]::-webkit-date-and-time-value {
+  text-align: left;
+}
+
 /* Режим «Порядок»: кружки чуть покачиваются — их можно двигать. */
 @keyframes wiggle {
   0%, 100% { transform: rotate(-2deg); }

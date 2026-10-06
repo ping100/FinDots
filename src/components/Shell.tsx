@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Icon } from "@/lib/icons";
 import { useStore } from "./DataProvider";
+import { ConnectionStatus } from "./ConnectionStatus";
 import { Loader } from "./Loader";
 import { Welcome } from "./Welcome";
 
@@ -17,7 +18,7 @@ const TABS = [
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { ready, error, pendingCount } = useStore();
+  const { ready, error } = useStore();
 
   if (!ready) return <Loader />;
 
@@ -35,15 +36,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         </p>
       ) : null}
 
-      {pendingCount > 0 ? (
-        <p
-          className="mx-4 mt-3 rounded-2xl px-4 py-2 text-xs"
-          style={{ background: "var(--surface)", color: "var(--muted)", border: "1px solid var(--border)" }}
-        >
-          Нет связи: {pendingCount === 1 ? "трата сохранена" : `трат сохранено: ${pendingCount}`} на телефоне
-          и уйдёт на сервер сама, когда появится интернет.
-        </p>
-      ) : null}
+      <ConnectionStatus />
 
       {/* key по маршруту — иначе анимация не повторится при смене вкладки */}
       <div key={pathname} className="animate-page">

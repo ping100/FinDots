@@ -5,7 +5,8 @@ import {
   DndContext,
   DragOverlay,
   MeasuringStrategy,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   pointerWithin,
   useSensor,
   useSensors,
@@ -32,11 +33,14 @@ export default function TodayPage() {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, {
-      // Короткое удержание: обычный тап остаётся тапом и открывает задачу,
-      // вертикальный скролл списка не превращается в перетаскивание.
+    useSensor(MouseSensor, {
+      // Мышью — короткое удержание: клик остаётся кликом и открывает задачу.
       activationConstraint: { delay: 160, tolerance: 8 },
     }),
+    // Пальцем — свайп прокручивает список, а задачу берёт только задержка
+    // на ней. С PointerSensor карточкам приходилось запрещать прокрутку
+    // (touch-action: none), и длинный список не листался вовсе.
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
   );
 
   const openNew = useCallback(() => {

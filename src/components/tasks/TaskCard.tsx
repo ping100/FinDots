@@ -32,13 +32,17 @@ export function TaskCard({
       {...listeners}
       {...attributes}
       onClick={onOpen}
-      className="flex items-center gap-3 rounded-2xl px-3 py-2.5 transition"
+      className="flex select-none items-center gap-2.5 rounded-xl px-2.5 py-1.5 transition"
       style={{
         background: "var(--surface)",
         border: "1px solid var(--border)",
         opacity: isDragging ? 0.35 : 1,
-        touchAction: "none",
+        // Прокрутку не запрещаем — перетаскивание пальцем начинает
+        // задержка (TouchSensor). Меню телефона на долгое нажатие убираем.
+        touchAction: "manipulation",
+        WebkitTouchCallout: "none",
       }}
+      onContextMenu={(e) => e.preventDefault()}
     >
       <button
         aria-label={task.done ? "Не выполнено" : "Выполнено"}
@@ -46,19 +50,19 @@ export function TaskCard({
           e.stopPropagation();
           onToggle();
         }}
-        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white transition active:scale-90"
+        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-white transition active:scale-90"
         style={{
           background: task.done ? PRIORITY_COLOR[task.priority] : "transparent",
           border: `2px solid ${PRIORITY_COLOR[task.priority]}`,
           color: task.done ? "#fff" : "transparent",
         }}
       >
-        <Icon name="check" size={14} />
+        <Icon name="check" size={12} />
       </button>
 
-      <div className="min-w-0 flex-1">
+      <div className="flex min-w-0 flex-1 items-center gap-2">
         <p
-          className="truncate text-sm font-medium"
+          className="min-w-0 flex-1 truncate text-sm font-medium"
           style={{
             color: task.done ? "var(--muted)" : "var(--text)",
             textDecoration: task.done ? "line-through" : undefined,
@@ -67,8 +71,7 @@ export function TaskCard({
           {task.title}
         </p>
         {task.time ? (
-          <p className="mt-0.5 flex items-center gap-1 text-xs" style={{ color: "var(--muted)" }}>
-            <Icon name="clock" size={12} />
+          <span className="flex shrink-0 items-center gap-1 text-xs tabular-nums" style={{ color: "var(--muted)" }}>
             {task.time.slice(0, 5)}
             {/* Колокольчик — единственное, что отличает «просто во столько»
                 от «дёрни меня во столько». */}
@@ -77,17 +80,17 @@ export function TaskCard({
                 <Icon name="bell" size={12} />
               </span>
             ) : null}
-          </p>
+          </span>
         ) : null}
       </div>
 
       {category ? (
         <span
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white"
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-white"
           style={{ background: category.color }}
           aria-label={category.name}
         >
-          <Icon name={category.icon} size={14} />
+          <Icon name={category.icon} size={12} />
         </span>
       ) : null}
     </div>

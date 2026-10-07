@@ -25,7 +25,7 @@ export function TaskList({
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-1.5">
       {tasks.map((task) => (
         <TaskCard
           key={task.id}

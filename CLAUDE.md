@@ -107,10 +107,14 @@ own data, not the money/tasks `DataProvider`s.
 
 ### Multi-currency
 
-Users manually set exchange rates (`exchange_rates` table, `rate_to_base`).
+Rates live in `exchange_rates` (`rate_to_base`). With `profiles.rates_auto`
+on (the default), the money `DataProvider` refreshes them from `/api/rates`
+(National Bank of Kazakhstan feed, open.er-api.com as fallback, KZT cross
+rates converted to the user's base) at most every 12h and on base-currency
+change; with it off they're entered manually in Settings.
 `toBase()`/`convert()` (`src/lib/money.ts`, mirrored in SQL as
 `convert_amount()`) convert between currencies through the user's base
-currency — there's no external rate feed.
+currency.
 
 ## Environment / secrets
 

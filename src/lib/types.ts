@@ -15,11 +15,14 @@ export interface Profile {
   onboarding_seen: boolean;
   /** Разрешён ли ИИ-разбор бюджета — переключает администратор. */
   access_ai: boolean;
+  /** Курсы валют подтягиваются сами (Нацбанк РК). */
+  rates_auto: boolean;
 }
 
 export interface ExchangeRate {
   code: CurrencyCode;
   rate_to_base: number;
+  updated_at?: string;
 }
 
 export interface Wallet {

@@ -21,7 +21,7 @@ import {
 } from "@/lib/offlineQueue";
 import { createClient } from "@/lib/supabase/client";
 import { PALETTE } from "@/lib/icons";
-import { convert } from "@/lib/money";
+import { CURRENCIES, convert } from "@/lib/money";
 import type { Draft } from "@/lib/importCsv";
 import { maturedAccruals, toISODate } from "@/lib/savings";
 import { scaleFactor } from "@/lib/textScale";
@@ -37,6 +37,9 @@ import type {
   Wallet,
   WalletBalance,
 } from "@/lib/types";
+
+/** Когда и к какой основной валюте последний раз подтянули курс. */
+export const RATES_KEY = "dots.rates.synced";
 
 export interface Store {
   ready: boolean;
@@ -119,6 +122,8 @@ export interface Store {
 
   saveProfile: (patch: Partial<Profile>) => Promise<void>;
   saveRate: (code: CurrencyCode, rate: number) => Promise<void>;
+  /** Подтянуть официальный курс сейчас. Возвращает дату курса и источник. */
+  syncRates: () => Promise<{ date: string; source: "nbk" | "open" }>;
 }
 
 /**
@@ -186,7 +191,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
     const [p, r, w, c, b, ip, tx] = await Promise.all([
       supabase().from("profiles").select("*").eq("id", user.id).single(),
-      supabase().from("exchange_rates").select("code, rate_to_base"),
+      supabase().from("exchange_rates").select("code, rate_to_base, updated_at"),
       // Архивные тоже: операция по убранной категории иначе теряет название
       // и показывается в истории прочерком. Экраны сами прячут archived.
       supabase().from("wallets").select("*").order("sort_order"),
@@ -948,6 +953,61 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [refresh, supabase, userId],
   );
 
+  const syncRates: Store["syncRates"] = useCallback(async () => {
+    const base = profile?.base_currency ?? "KZT";
+    const res = await fetch("/api/rates");
+    const json = (await res.json()) as { kzt?: Record<string, number>; date?: string; source?: "nbk" | "open"; error?: string };
+    if (!res.ok || !json.kzt) throw new Error(json.error ?? "Курс сейчас недоступен");
+    // Таблица — «сколько тенге за единицу». Основная валюта может быть и не
+    // тенге: тогда считаем через тенге, кросс-курсом.
+    const kzt = (code: string) => (code === "KZT" ? 1 : json.kzt![code]);
+    const rows = CURRENCIES.filter((c) => c.code !== base && kzt(c.code) && kzt(base)).map((c) => ({
+      user_id: userId,
+      code: c.code,
+      rate_to_base: Math.round((kzt(c.code) / kzt(base)) * 1e6) / 1e6,
+      updated_at: new Date().toISOString(),
+    }));
+    if (!userId || rows.length === 0) throw new Error("Курс сейчас недоступен");
+    const up = await supabase().from("exchange_rates").upsert(rows);
+    if (up.error) throw new Error(up.error.message);
+    setRates((prev) => [
+      ...prev.filter((r) => !rows.some((row) => row.code === r.code)),
+      ...rows.map(({ code, rate_to_base, updated_at }) => ({ code, rate_to_base, updated_at })),
+    ]);
+    const info = { date: json.date ?? "", source: json.source ?? "nbk", base };
+    try {
+      localStorage.setItem(RATES_KEY, JSON.stringify(info));
+    } catch {
+      // Нет хранилища — в следующий раз просто обновим ещё раз.
+    }
+    return info;
+  }, [profile?.base_currency, supabase, userId]);
+
+  // Сам курс — раз в полдня при открытии, и сразу после смены основной
+  // валюты: старые курсы были посчитаны к прежней.
+  useEffect(() => {
+    if (!ready || !profile?.rates_auto || !userId) return;
+    const base = profile.base_currency;
+    let synced: { base?: string } = {};
+    try {
+      synced = JSON.parse(localStorage.getItem(RATES_KEY) ?? "{}");
+    } catch {
+      // Испорченная запись — считаем, что не обновляли.
+    }
+    const others = CURRENCIES.filter((c) => c.code !== base);
+    const oldest = Math.min(
+      ...others.map((c) => {
+        const at = rates.find((r) => r.code === c.code)?.updated_at;
+        return at ? new Date(at).getTime() : 0;
+      }),
+    );
+    const stale = Date.now() - oldest > 12 * 3600_000 || synced.base !== base;
+    if (stale) void syncRates().catch(() => undefined);
+    // rates намеренно не в зависимостях: после записи они меняются, а
+    // повторять запрос из-за собственной записи незачем.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, profile?.rates_auto, profile?.base_currency, userId, syncRates]);
+
   const moneyHidden = useMoneyHidden();
 
   // Траты из очереди показываем вместе с остальными — человек их уже записал.
@@ -998,12 +1058,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
       deleteCategory,
       saveProfile,
       saveRate,
+      syncRates,
     }),
     [
       ready, moneyHidden, error, userId, profile, rates, wallets, categories, balances, pools,
       visibleTransactions, pendingCount, balanceOf, poolOf, toBase, refresh, addIncome, allocate,
       addExpense, addTransfer, setWalletBalance, accrueInterest, updateTransaction, deleteTransaction,
-      saveWallet, deleteWallet, resetMoneyData, saveCategory, reorderCategories, addSubcategory, importDrafts, deleteCategory, saveProfile, saveRate,
+      saveWallet, deleteWallet, resetMoneyData, saveCategory, reorderCategories, addSubcategory, importDrafts, deleteCategory, saveProfile, saveRate, syncRates,
     ],
   );
 

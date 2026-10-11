@@ -34,6 +34,9 @@ import { CategoryEditor } from "./CategoryEditor";
 import { WalletEditor } from "./WalletEditor";
 import { WalletSheet } from "./WalletSheet";
 import { AddBubble, Bubble, Button, PickerSheet, Sheet } from "./ui";
+import { AnimatedMoney } from "./AnimatedMoney";
+import { Celebration, celebrated, markCelebrated } from "./Celebration";
+import { EmptyMonth } from "./EmptyMonth";
 import { setMoneyHidden } from "@/lib/privacy";
 
 type Dialog =
@@ -149,6 +152,18 @@ export function HomeScreen() {
     live.filter((c) => c.parent_id === parentId).map((c) => ({ id: c.id, name: c.name }));
   const moneyWallets = liveWallets.filter((w) => w.kind === "cash" || w.kind === "card");
   const savings = liveWallets.filter((w) => w.kind === "savings");
+
+  // Копилка дошла до цели — праздник, один раз на цель.
+  const [party, setParty] = useState<Wallet | null>(null);
+  useEffect(() => {
+    if (party) return;
+    const reached = savings.find(
+      (w) => w.goal && Number(w.goal) > 0 && balanceOf(w.id) >= Number(w.goal) && !celebrated(w),
+    );
+    if (!reached) return;
+    markCelebrated(reached);
+    setParty(reached);
+  });
   const debts = useMemo(
     () => ({
       debt_out: wallets.filter((w) => !w.archived && w.kind === "debt_out"),
@@ -161,6 +176,15 @@ export function HomeScreen() {
   const credits = debts.debt_out.filter((w) => !!w.monthly_payment);
 
   /** Суммы выбранного месяца по категориям, в базовой валюте. */
+  // Ни одной операции за месяц — показываем «чистый лист» с подсказкой.
+  const monthEmpty = useMemo(() => {
+    const { from, to } = monthRange(offset);
+    return !transactions.some((t) => {
+      const at = new Date(t.occurred_at);
+      return at >= from && at < to;
+    });
+  }, [transactions, offset]);
+
   const month = useMemo(() => {
     const { from, to } = monthRange(offset);
     const income = new Map<string, number>();
@@ -395,10 +419,14 @@ export function HomeScreen() {
           </>
         ) : null}
 
+        {monthEmpty ? (
+          <EmptyMonth past={offset < 0} hasWallets={moneyWallets.length > 0} hasIncome={incomeCats.length > 0} />
+        ) : null}
+
         <Section
           columns={columns}
           title="Накопления"
-          total={formatMoney(savingsTotal, base)}
+          total={<AnimatedMoney value={savingsTotal} currency={base} />}
           note={ripe > 0 ? "Созрели проценты — открой вклад" : undefined}
           hint={
             savings.length === 0
@@ -433,7 +461,7 @@ export function HomeScreen() {
         <Section
           columns={columns}
           title="Доходы"
-          total={formatMoney(month.incomeTotal, base)}
+          total={<AnimatedMoney value={month.incomeTotal} currency={base} />}
           hint={incomeCats.length === 0 ? "Нажми «+» и заведи источник дохода: название, цвет, иконка." : undefined}
           collapsed={!!collapsed.income}
           onToggle={() => setCollapsed((c) => ({ ...c, income: !c.income }))}
@@ -455,7 +483,7 @@ export function HomeScreen() {
         <Section
           columns={columns}
           title="Кошельки"
-          total={formatMoney(walletsTotal, base)}
+          total={<AnimatedMoney value={walletsTotal} currency={base} />}
           hint={wallets.length === 0 ? "Нажми «+»: наличные, карта или долг — что заведёшь, то и будет." : undefined}
           collapsed={!!collapsed.wallets}
           onToggle={() => setCollapsed((c) => ({ ...c, wallets: !c.wallets }))}
@@ -492,7 +520,7 @@ export function HomeScreen() {
         <Section
           columns={columns}
           title="Расходы"
-          total={formatMoney(expenseTotal, base)}
+          total={<AnimatedMoney value={expenseTotal} currency={base} />}
           hint={expenseCats.length === 0 ? "Нажми «+» и создай категорию трат — можно задать лимит на месяц." : undefined}
           note={
             arranging
@@ -534,7 +562,7 @@ export function HomeScreen() {
         <Section
           columns={columns}
           title="Каждый месяц"
-          total={formatMoney(billsLeft, base)}
+          total={<AnimatedMoney value={billsLeft} currency={base} />}
           note={billsLeft > 0 ? "столько ещё не оплачено" : undefined}
           hint={
             bills.length === 0
@@ -568,7 +596,7 @@ export function HomeScreen() {
           <Section
             columns={columns}
             title="Кредиты"
-            total={formatMoney(creditsLeft, base)}
+            total={<AnimatedMoney value={creditsLeft} currency={base} />}
             note={creditsLeft > 0 ? "ещё не оплачено в этом месяце" : undefined}
             collapsed={!!collapsed.credits}
             onToggle={() => setCollapsed((c) => ({ ...c, credits: !c.credits }))}
@@ -592,6 +620,8 @@ export function HomeScreen() {
       <DragOverlay dropAnimation={overId ? ABSORB : FLY_BACK}>
         {dragging ? <DragGhost payload={dragging} /> : null}
       </DragOverlay>
+
+      {party ? <Celebration wallet={party} onDone={() => setParty(null)} /> : null}
 
       {toast ? (
         <button
@@ -907,7 +937,7 @@ function Section({
   children,
 }: {
   title: string;
-  total: string;
+  total: React.ReactNode;
   collapsed: boolean;
   onToggle: () => void;
   /** Подсказка рядом с «+», пока в блоке нет ни одного кружка. */

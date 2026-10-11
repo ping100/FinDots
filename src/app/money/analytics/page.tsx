@@ -9,8 +9,9 @@ import { buildBuckets, type Grouping } from "@/lib/report";
 import { useStore } from "@/components/DataProvider";
 import { IncomeExpenseChart, NetChart, SERIES, ShareBar } from "@/components/charts";
 import { Button } from "@/components/ui";
+import { SpendCalendar } from "@/components/SpendCalendar";
 
-type Mode = "spent" | "earned" | "flow" | "net";
+type Mode = "spent" | "calendar" | "earned" | "flow" | "net";
 
 /** Название отвечает на вопрос пользователя, подпись объясняет график. */
 const MODES: { id: Mode; label: string; caption: string }[] = [
@@ -18,6 +19,11 @@ const MODES: { id: Mode; label: string; caption: string }[] = [
     id: "spent",
     label: "На что ушло",
     caption: "Доля каждой категории в тратах за месяц",
+  },
+  {
+    id: "calendar",
+    label: "Календарь трат",
+    caption: "Чем насыщеннее день, тем больше в нём потрачено",
   },
   {
     id: "earned",
@@ -286,7 +292,15 @@ export default function AnalyticsPage() {
           {active.caption}
         </p>
 
-        {isStructure ? (
+        {mode === "calendar" ? (
+          <SpendCalendar
+            transactions={transactions}
+            categories={categories}
+            offset={offset}
+            currency={base}
+            toBase={toBase}
+          />
+        ) : isStructure ? (
           <ShareBar
             items={shareItems}
             total={mode === "earned" ? stats.incomeTotal : stats.expenseTotal}

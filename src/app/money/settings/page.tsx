@@ -8,7 +8,7 @@ import { CURRENT_BUILD, applyUpdate, buildMoment, serverBuild } from "@/lib/upda
 import { Icon } from "@/lib/icons";
 import { CURRENCIES, parseAmount, symbolOf } from "@/lib/money";
 import { createClient } from "@/lib/supabase/client";
-import { useStore } from "@/components/DataProvider";
+import { RATES_KEY, useStore } from "@/components/DataProvider";
 import { DataTransfer } from "@/components/DataTransfer";
 import { ResetMoneyData } from "@/components/ResetMoneyData";
 import { DeleteAccount } from "@/components/DeleteAccount";
@@ -26,11 +26,11 @@ import { AccountCard } from "@/components/AccountCard";
 import { AppSwitch } from "@/components/AppSwitch";
 import { AdminLink } from "@/components/AdminLink";
 import { HomeLink } from "@/components/HomeLink";
-import { Field, Sheet, inputClass, inputStyle } from "@/components/ui";
+import { Button, Field, Sheet, Switch, inputClass, inputStyle } from "@/components/ui";
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { profile, rates, saveProfile, saveRate } = useStore();
+  const { profile, rates, saveProfile, saveRate, syncRates } = useStore();
   const [sheet, setSheet] = useState<"currency" | "rates" | "theme" | "size" | null>(null);
   const [guide, setGuide] = useState(false);
   const [checking, setChecking] = useState(false);
@@ -92,7 +92,11 @@ export default function SettingsPage() {
         />
         <Row
           label="Курсы валют"
-          hint="Задаются вручную — автоподгрузки курсов нет"
+          hint={
+            profile?.rates_auto === false
+              ? "Задаются вручную"
+              : "Автоматически, по курсу Нацбанка РК"
+          }
           onClick={() => setSheet("rates")}
         />
       </Group>
@@ -189,15 +193,18 @@ export default function SettingsPage() {
       </Sheet>
 
       <Sheet open={sheet === "rates"} title="Курсы валют" onClose={() => setSheet(null)}>
+        <RatesAuto auto={profile?.rates_auto !== false} onToggle={(on) => saveProfile({ rates_auto: on })} sync={syncRates} />
         <p className="mb-3 text-xs" style={{ color: "var(--muted)" }}>
           Сколько {base} стоит одна единица валюты.
         </p>
         {CURRENCIES.filter((c) => c.code !== base).map((c) => (
           <RateRow
-            key={c.code}
+            // Новый курс с сервера — новое поле: черновик берёт свежее значение.
+            key={`${c.code}-${rates.find((r) => r.code === c.code)?.rate_to_base ?? 1}`}
             code={c.code}
             base={base}
             value={rates.find((r) => r.code === c.code)?.rate_to_base ?? 1}
+            readOnly={profile?.rates_auto !== false}
             onSave={(v) => saveRate(c.code, v)}
           />
         ))}
@@ -333,15 +340,93 @@ function Row({
   );
 }
 
+/**
+ * «Автоматически» сверху листа курсов: переключатель, дата курса и кнопка
+ * «Обновить сейчас». Включено — поля ниже только для чтения.
+ */
+function RatesAuto({
+  auto,
+  onToggle,
+  sync,
+}: {
+  auto: boolean;
+  onToggle: (on: boolean) => Promise<void>;
+  sync: () => Promise<{ date: string; source: "nbk" | "open" }>;
+}) {
+  const [info, setInfo] = useState<{ date?: string; source?: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  useEffect(() => {
+    try {
+      setInfo(JSON.parse(localStorage.getItem(RATES_KEY) ?? "null"));
+    } catch {
+      setInfo(null);
+    }
+  }, []);
+
+  const refresh = async () => {
+    setBusy(true);
+    setProblem(null);
+    try {
+      setInfo(await sync());
+    } catch (e) {
+      setProblem(e instanceof Error ? e.message : "Курс сейчас недоступен");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const when = info?.date ? info.date.split("-").reverse().join(".") : null;
+  const from = info?.source === "open" ? "открытый источник (Нацбанк не ответил)" : "Нацбанк РК";
+
+  return (
+    <div className="mb-4 rounded-2xl p-3" style={{ background: "var(--surface-2)" }}>
+      <div className="flex items-center gap-3">
+        <span className="flex-1 text-[0.9375rem]">
+          Обновлять автоматически
+          <span className="mt-0.5 block text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+            {auto
+              ? when
+                ? `Курс на ${when} — ${from}`
+                : "Официальный курс Нацбанка РК, раз в полдня"
+              : "Выключено — курсы вводите сами"}
+          </span>
+        </span>
+        <Switch
+          checked={auto}
+          onChange={(on) => {
+            void onToggle(on).then(() => (on ? refresh() : undefined));
+          }}
+          label="Обновлять курс автоматически"
+        />
+      </div>
+      {auto ? (
+        <div className="mt-3">
+          <Button variant="ghost" onClick={refresh} disabled={busy}>
+            {busy ? "Обновляю…" : "Обновить сейчас"}
+          </Button>
+        </div>
+      ) : null}
+      {problem ? (
+        <p className="mt-2 text-xs" style={{ color: "var(--danger)" }}>
+          {problem}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function RateRow({
   code,
   base,
   value,
+  readOnly,
   onSave,
 }: {
   code: string;
   base: string;
   value: number;
+  readOnly?: boolean;
   onSave: (value: number) => void;
 }) {
   const [draft, setDraft] = useState(String(value));
@@ -349,12 +434,14 @@ function RateRow({
   return (
     <Field label={`1 ${code} = ? ${base}`}>
       <input
+        readOnly={readOnly}
         className={inputClass}
-        style={inputStyle}
+        style={{ ...inputStyle, opacity: readOnly ? 0.7 : 1 }}
         inputMode="decimal"
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={() => {
+          if (readOnly) return;
           const parsed = parseAmount(draft);
           if (parsed && parsed > 0) onSave(parsed);
           else setDraft(String(value));

@@ -2,9 +2,12 @@
 
 import { useMemo, useState } from "react";
 import { formatMoney } from "@/lib/money";
+import type { CurrencyCode } from "@/lib/types";
+import { SERIES } from "./charts";
 import { toISODate } from "@/lib/savings";
 import { useStore } from "./DataProvider";
 import { Sheet } from "./ui";
+import { AnimatedMoney } from "./AnimatedMoney";
 
 /**
  * Шапка главного экрана: сколько всего денег и сколько из них можно потратить
@@ -108,7 +111,21 @@ export function DailyAllowance() {
       return sum + toBase(Number(t.amount), t.currency);
     }, 0);
 
+    // Траты по дням этого месяца — для мини-графика под карточкой.
+    const daily = new Array<number>(daysInMonth).fill(0);
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    for (const t of transactions) {
+      if (t.type !== "expense") continue;
+      const at = new Date(t.occurred_at);
+      if (at < monthStart || at >= monthEnd) continue;
+      daily[at.getDate() - 1] += toBase(Number(t.amount), t.currency);
+    }
+    const spentSoFar = daily.slice(0, now.getDate()).reduce((a, b) => a + b, 0);
+
     return {
+      daily,
+      dayOfMonth: now.getDate(),
+      avg: spentSoFar / now.getDate(),
       money,
       saved,
       owed,
@@ -135,7 +152,7 @@ export function DailyAllowance() {
           Свободно
         </p>
         <p className="text-[1.625rem] font-bold leading-tight tabular-nums">
-          {formatMoney(data.money, base)}
+          <AnimatedMoney value={data.money} currency={base} />
         </p>
         <p className="mt-0.5 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
           всего {formatMoney(data.total, base)}
@@ -158,7 +175,7 @@ export function DailyAllowance() {
           className="text-[1.625rem] font-bold leading-tight tabular-nums"
           style={{ color: data.short ? "var(--danger)" : "var(--text)" }}
         >
-          {formatMoney(data.short ? data.obligations - data.money : data.perDay, base)}
+          <AnimatedMoney value={data.short ? data.obligations - data.money : data.perDay} currency={base} />
         </p>
         <p className="mt-0.5 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
           осталось {data.daysLeft} {plural(data.daysLeft, "день", "дня", "дней")}
@@ -171,6 +188,7 @@ export function DailyAllowance() {
             </>
           ) : null}
         </p>
+        <SpendSpark daily={data.daily} today={data.dayOfMonth} limit={data.short ? 0 : data.perDay} avg={data.avg} base={base} />
       </button>
 
       <Sheet open={explain} title="Откуда эти числа" onClose={() => setExplain(false)}>
@@ -257,4 +275,81 @@ function plural(count: number, one: string, few: string, many: string): string {
   if (mod10 === 1 && mod100 !== 11) return one;
   if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
   return many;
+}
+
+/**
+ * Мини-график под «Можно тратить сегодня»: столбик на каждый день месяца.
+ * Пунктир — сколько можно в день; столбики выше него — красные, ниже —
+ * серые: перерасход видно, не читая цифр. Будущие дни — точками.
+ */
+function SpendSpark({
+  daily,
+  today,
+  limit,
+  avg,
+  base,
+}: {
+  daily: number[];
+  today: number;
+  limit: number;
+  avg: number;
+  base: string;
+}) {
+  if (!daily.some((v) => v > 0)) return null;
+  const H = 30;
+  const step = 6;
+  const max = Math.max(limit, ...daily) || 1;
+  const y = (v: number) => H - Math.max(2, (v / max) * H);
+  return (
+    <div className="mt-2.5">
+      <div className="mb-1 flex items-baseline justify-between text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+        <span>Траты по дням</span>
+        <span className="tabular-nums">в среднем {formatMoney(Math.round(avg), base as CurrencyCode)} в день</span>
+      </div>
+      <svg
+        viewBox={`0 0 ${daily.length * step} ${H}`}
+        preserveAspectRatio="none"
+        className="block h-[30px] w-full"
+        aria-label={`Траты по дням месяца, в среднем ${formatMoney(Math.round(avg), base as CurrencyCode)} в день`}
+      >
+        {daily.map((v, i) => {
+          const day = i + 1;
+          if (day > today) {
+            return <rect key={i} x={i * step + 1} y={H - 2} width={4} height={2} rx={1} fill="var(--border)" />;
+          }
+          const over = limit > 0 && v > limit;
+          return (
+            <rect
+              key={i}
+              x={i * step + 1}
+              y={y(v)}
+              width={4}
+              height={H - y(v)}
+              rx={1.5}
+              fill={v === 0 ? "var(--border)" : over ? SERIES.expense.color : "var(--muted)"}
+              opacity={day === today || over ? 1 : 0.55}
+            />
+          );
+        })}
+        {limit > 0 ? (
+          <line
+            x1={0}
+            x2={daily.length * step}
+            y1={y(limit)}
+            y2={y(limit)}
+            stroke="var(--text)"
+            strokeOpacity={0.35}
+            strokeDasharray="3 3"
+            vectorEffect="non-scaling-stroke"
+            strokeWidth={1}
+          />
+        ) : null}
+      </svg>
+      {limit > 0 ? (
+        <p className="mt-0.5 text-[0.625rem]" style={{ color: "var(--muted)" }}>
+          пунктир — сколько можно в день, красные дни — выше него
+        </p>
+      ) : null}
+    </div>
+  );
 }

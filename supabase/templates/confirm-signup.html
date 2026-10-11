@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<title>Подтвердите почту — Dots</title>
+<!--
+  Письмо «Подтвердите почту» для Supabase → Authentication → Emails →
+  Confirm signup. Тема письма: «Подтвердите почту для Dots».
+  Почтовики не понимают SVG и внешние стили, поэтому всё на таблицах и
+  встроенных стилях; знак Dots — три кружка из ячеек со скруглением.
+-->
+<style>
+  @media (prefers-color-scheme: dark) {
+    .bg { background: #0b0f16 !important; }
+    .card { background: #151b24 !important; }
+    .text { color: #e8edf5 !important; }
+    .muted { color: #8b97a8 !important; }
+    .link-box { background: #1d2531 !important; }
+  }
+  @media (max-width: 480px) {
+    .card { padding: 32px 22px !important; }
+  }
+</style>
+</head>
+<body style="margin:0;padding:0;background:#f2f2f7;" class="bg">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="bg" style="background:#f2f2f7;">
+  <tr>
+    <td align="center" style="padding:32px 16px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:440px;">
+        <tr>
+          <td class="card" style="background:#ffffff;border-radius:28px;padding:40px 32px;font-family:Onest,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;text-align:center;">
+
+            <!-- Знак Dots: доход, кошелёк, расход -->
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto 28px;">
+              <tr>
+                <td align="center" colspan="2" style="padding-bottom:4px;">
+                  <div style="width:26px;height:26px;border-radius:13px;background:#22c55e;margin:0 auto;"></div>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding-right:4px;">
+                  <div style="width:26px;height:26px;border-radius:13px;background:#60a5fa;"></div>
+                </td>
+                <td style="padding-left:4px;">
+                  <div style="width:26px;height:26px;border-radius:13px;background:#f97316;"></div>
+                </td>
+              </tr>
+            </table>
+
+            <h1 class="text" style="margin:0 0 12px;font-size:24px;line-height:30px;font-weight:700;color:#0b0b0d;">
+              Подтвердите почту
+            </h1>
+            <p class="muted" style="margin:0 0 28px;font-size:15px;line-height:22px;color:#8a8a8f;">
+              Остался один шаг — и можно начинать вести деньги и задачи в&nbsp;Dots.
+            </p>
+
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto 28px;">
+              <tr>
+                <td align="center" style="border-radius:999px;background:#007aff;">
+                  <a href="{{ .ConfirmationURL }}" target="_blank"
+                     style="display:inline-block;padding:15px 34px;font-size:16px;line-height:20px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:999px;font-family:Onest,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;">
+                    Подтвердить почту
+                  </a>
+                </td>
+              </tr>
+            </table>
+
+            <p class="muted" style="margin:0 0 8px;font-size:13px;line-height:18px;color:#8a8a8f;">
+              Кнопка не нажимается? Откройте эту ссылку:
+            </p>
+            <div class="link-box" style="background:#eceef3;border-radius:14px;padding:10px 12px;margin:0 0 28px;font-size:12px;line-height:17px;word-break:break-all;text-align:left;">
+              <a href="{{ .ConfirmationURL }}" target="_blank" style="color:#007aff;text-decoration:none;">{{ .ConfirmationURL }}</a>
+            </div>
+
+            <p class="muted" style="margin:0;font-size:12px;line-height:18px;color:#8a8a8f;">
+              Письмо пришло на {{ .Email }}. Если вы не регистрировались в Dots — просто удалите его, ничего не произойдёт.
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td align="center" class="muted" style="padding:20px 8px 0;font-family:Onest,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:12px;line-height:18px;color:#8a8a8f;">
+            Dots — деньги и задачи · <a href="https://dotsapp.vercel.app" style="color:#8a8a8f;text-decoration:underline;">dotsapp.vercel.app</a>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>

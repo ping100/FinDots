@@ -207,6 +207,7 @@ export function Bubble({
   highlighted,
   badge,
   muted,
+  wiggle,
 }: {
   icon: string;
   color: string;
@@ -219,12 +220,16 @@ export function Bubble({
   /** Точка-маркер: у категории есть нераспределённый доход, его можно утащить. */
   badge?: boolean;
   muted?: boolean;
+  /** Пока тащат другой кружок: сюда можно бросить. */
+  wiggle?: boolean;
 }) {
   return (
     <div
       className={`flex w-full flex-col items-center gap-0.5 transition ${
         dimmed ? "opacity-30" : ""
-      }`}
+      } ${wiggle ? "animate-wiggle" : ""}`}
+      // Каждый со своей фазой — иначе ряд качается строем, как один.
+      style={wiggle ? { animationDelay: `-${(label.length * 47 + color.charCodeAt(1) * 13) % 280}ms` } : undefined}
     >
       {/* Полоса под названием фиксирована, чтобы кружки в ряду стояли на одной
           линии. Две строки в неё помещаются за счёт плотного интерлиньяжа. */}

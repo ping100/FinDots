@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -50,6 +50,23 @@ const DEBT_GROUP: Record<DebtGroup, { label: string; icon: string; color: string
   debt_out: { label: "Долги −", icon: "cash", color: "#e5383b" },
   debt_in: { label: "Долги +", icon: "cash", color: "#e5383b" },
 };
+
+type DropData =
+  | { target: "wallet"; walletId: string }
+  | { target: "category"; categoryId: string }
+  | { target: "debts"; group: DebtGroup }
+  | { target: "reorder"; categoryId: string };
+
+/**
+ * Можно ли бросить взятый кружок сюда. Пока тащишь, такие цели мелко
+ * дрожат — видно, куда можно, ещё до того, как поднёс палец.
+ */
+const DropHint = createContext<(target: DropData) => boolean>(() => false);
+
+/** Дрожит, если сюда можно бросить, и замирает под пальцем. */
+function useWiggle(target: DropData, isOver: boolean): boolean {
+  return useContext(DropHint)(target) && !isOver;
+}
 
 export function HomeScreen() {
   const router = useRouter();
@@ -215,12 +232,6 @@ export function HomeScreen() {
 
   // ─────────────────────────── перетаскивание ───────────────────────────
 
-  type DropData =
-    | { target: "wallet"; walletId: string }
-    | { target: "category"; categoryId: string }
-    | { target: "debts"; group: DebtGroup }
-    | { target: "reorder"; categoryId: string };
-
   /** Что делать с брошенным кружком. false — бросок не принят, кружок вернётся. */
   // Окно после броска — с паузой, иначе оно закрывает приземление.
   const afterLanding = (open: () => void) => window.setTimeout(open, AFTER_LANDING_MS);
@@ -281,6 +292,21 @@ export function HomeScreen() {
     return true;
   };
 
+  // Те же правила, что в handleDrop, только без последствий: подсказка
+  // не должна обещать бросок, который потом не примут.
+  const canDrop = useCallback(
+    (target: DropData) => {
+      if (!dragging || dragging.source === "reorder") return false; // «Порядок» качается сам
+      if (dragging.source === "income") return target.target === "wallet";
+      const from = wallets.find((w) => w.id === dragging.walletId);
+      if (!from) return false;
+      if (target.target === "category") return from.kind !== "savings";
+      if (target.target === "debts") return true;
+      return target.target === "wallet" && target.walletId !== from.id;
+    },
+    [dragging, wallets],
+  );
+
   const onDragEnd = (event: DragEndEvent) => {
     const payload = event.active.data.current as DragPayload | undefined;
     const target = event.over?.data.current as DropData | undefined;
@@ -319,6 +345,7 @@ export function HomeScreen() {
         setOverId(null);
       }}
     >
+      <DropHint.Provider value={canDrop}>
       <div className="mx-auto w-full max-w-md px-4 pb-32">
         {/* Три колонки, крайние равной ширины: кнопка слева шире кнопки
             меню справа, и при простом justify-between месяц съезжал бы из
@@ -861,6 +888,7 @@ export function HomeScreen() {
         recurring={categoryEditor?.recurring}
         onClose={() => setCategoryEditor(null)}
       />
+      </DropHint.Provider>
     </DndContext>
   );
 }
@@ -1038,6 +1066,7 @@ function WalletBubble({
     id: `drop-wallet:${wallet.id}`,
     data: { target: "wallet", walletId: wallet.id },
   });
+  const wiggle = useWiggle({ target: "wallet", walletId: wallet.id }, isOver);
 
   return (
     <button
@@ -1060,6 +1089,7 @@ function WalletBubble({
         size={size}
         dimmed={isDragging}
         highlighted={isOver}
+        wiggle={wiggle}
       />
     </button>
   );
@@ -1094,6 +1124,7 @@ function SavingsBubble({
     id: `drop-wallet:${wallet.id}`,
     data: { target: "wallet", walletId: wallet.id },
   });
+  const wiggle = useWiggle({ target: "wallet", walletId: wallet.id }, isOver);
 
   const goal = wallet.goal != null ? Number(wallet.goal) : null;
   const ratio = goal ? Math.min(Math.max(balance, 0) / goal, 1) : 0;
@@ -1120,6 +1151,7 @@ function SavingsBubble({
         badge={ripe}
         dimmed={isDragging}
         highlighted={isOver}
+        wiggle={wiggle}
       />
       {goal ? (
         <span
@@ -1153,6 +1185,7 @@ function DebtBubble({
     id: `drop-debts:${group}`,
     data: { target: "debts", group },
   });
+  const wiggle = useWiggle({ target: "debts", group }, isOver);
   const style = DEBT_GROUP[group];
   // «Я должен» показываем со знаком минус — это обязательство, а не деньги.
   const shown = group === "debt_out" ? -amount : amount;
@@ -1167,6 +1200,7 @@ function DebtBubble({
         amount={amount === 0 ? formatMoney(0, base) : formatMoney(shown, base)}
         muted={group === "debt_out"}
         highlighted={isOver}
+        wiggle={wiggle}
       />
     </button>
   );
@@ -1191,6 +1225,7 @@ function ExpenseBubble({
     id: `drop-category:${category.id}`,
     data: { target: "category", categoryId: category.id },
   });
+  const wiggle = useWiggle({ target: "category", categoryId: category.id }, isOver);
   const hold = useLongPress(onHold);
 
   const limit = category.monthly_limit ?? null;
@@ -1206,6 +1241,7 @@ function ExpenseBubble({
         amount={formatMoney(spent, base)}
         size={size}
         highlighted={isOver}
+        wiggle={wiggle}
       />
       {limit ? (
         <span
@@ -1250,6 +1286,7 @@ function BillBubble({
     id: `drop-category:${category.id}`,
     data: { target: "category", categoryId: category.id },
   });
+  const wiggle = useWiggle({ target: "category", categoryId: category.id }, isOver);
   const hold = useLongPress(onHold);
 
   const planned = Number(category.planned_amount);
@@ -1269,6 +1306,7 @@ function BillBubble({
         muted={done}
         dimmed={done}
         highlighted={isOver}
+        wiggle={wiggle}
       />
       <span
         className="mx-auto -mt-0.5 block h-1 w-10 overflow-hidden rounded-full"

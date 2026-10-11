@@ -23,3 +23,22 @@ export function PrivacyLink({ from }: { from: string }) {
     </Link>
   );
 }
+
+/** «Пользовательское соглашение» — соседняя строка той же группы. */
+export function TermsLink({ from }: { from: string }) {
+  return (
+    <Link
+      href={`/terms?from=${encodeURIComponent(from)}`}
+      className="flex w-full items-center gap-3 px-4 py-3.5 text-left [&:not(:first-child)]:border-t"
+      style={{ borderColor: "var(--border)" }}
+    >
+      <span className="flex-1">
+        <span className="block text-[0.9375rem]">Пользовательское соглашение</span>
+        <span className="mt-0.5 block text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
+          Условия пользования приложением
+        </span>
+      </span>
+      <Icon name="chevron-right" size={16} className="opacity-30" />
+    </Link>
+  );
+}

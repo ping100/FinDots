@@ -12,7 +12,7 @@ import { SupportRow } from "@/components/SupportRow";
 import { ReviewRow } from "@/components/ReviewRow";
 import { DeleteAccount } from "@/components/DeleteAccount";
 import { SettingsHeading } from "@/components/SettingsHeading";
-import { PrivacyLink } from "@/components/PrivacyLink";
+import { PrivacyLink, TermsLink } from "@/components/PrivacyLink";
 import { TEXT_SCALES } from "@/lib/textScale";
 import { PushSettings } from "@/components/PushSettings";
 import { disablePush } from "@/lib/pushClient";
@@ -158,6 +158,7 @@ export default function SettingsPage() {
       <SettingsHeading>Помощь</SettingsHeading>
       <Group>
         <PrivacyLink from="/tasks/settings" />
+        <TermsLink from="/tasks/settings" />
       </Group>
       <SupportRow />
       <ReviewRow />

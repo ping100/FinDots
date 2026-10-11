@@ -20,7 +20,7 @@ import { SupportRow } from "@/components/SupportRow";
 import { ReviewRow } from "@/components/ReviewRow";
 import { PushSettings } from "@/components/PushSettings";
 import { SettingsHeading } from "@/components/SettingsHeading";
-import { PrivacyLink } from "@/components/PrivacyLink";
+import { PrivacyLink, TermsLink } from "@/components/PrivacyLink";
 import { disablePush } from "@/lib/pushClient";
 import { AccountCard } from "@/components/AccountCard";
 import { AppSwitch } from "@/components/AppSwitch";
@@ -130,6 +130,7 @@ export default function SettingsPage() {
           onClick={() => setGuide(true)}
         />
         <PrivacyLink from="/money/settings" />
+        <TermsLink from="/money/settings" />
       </Group>
       <button
         onClick={() => setGuide(true)}

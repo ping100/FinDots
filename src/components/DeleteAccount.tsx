@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { disablePush } from "@/lib/pushClient";
+import { removeThreadAttachments } from "@/lib/supportStorage";
 import { Button, Sheet, inputClass, inputStyle } from "./ui";
 
 /** Слово, которое нужно вписать, чтобы разрешить удаление. */
@@ -37,6 +38,10 @@ export function DeleteAccount() {
     setProblem(null);
     try {
       const supabase = createClient();
+      // Фото из переписки с администратором лежат в хранилище, а не в базе —
+      // удаление учётной записи их само не заберёт.
+      const { data } = await supabase.auth.getSession();
+      if (data.session) await removeThreadAttachments(supabase, data.session.user.id).catch(() => undefined);
       const { error } = await supabase.rpc("delete_own_account");
       if (error) throw new Error(error.message);
       await disablePush().catch(() => undefined);

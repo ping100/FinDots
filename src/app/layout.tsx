@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Onest } from "next/font/google";
 import { BottomBanners } from "@/components/BottomBanners";
+import { ConsentGate } from "@/components/ConsentGate";
 import { NoEdgeSwipe } from "@/components/NoEdgeSwipe";
 import { Presence } from "@/components/Presence";
 import { ReturnHome } from "@/components/ReturnHome";
@@ -81,6 +82,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Presence />
         <ReturnHome />
         <ThemeSync />
+        <ConsentGate />
       </body>
     </html>
   );

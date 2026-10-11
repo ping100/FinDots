@@ -7,6 +7,7 @@ import { Icon } from "@/lib/icons";
 import { Button, Sheet, inputClass, inputStyle } from "@/components/ui";
 import { SupportComposer, SupportThread } from "@/components/SupportThread";
 import { loadThread, sendMessage, type SupportMessage } from "@/lib/support";
+import { removeThreadAttachments } from "@/lib/supportStorage";
 import type { AdminUser } from "@/lib/admin";
 
 const WIPE_PHRASE = "ОЧИСТИТЬ";
@@ -148,6 +149,8 @@ export function UserActionsSheet({
     if (!user) return;
     const id = user.id;
     return run("delete", async () => {
+      // Фото переписки — в хранилище, удаление учётной записи их не заберёт.
+      await removeThreadAttachments(supabase, id).catch(() => undefined);
       const { error } = await supabase.rpc("admin_delete_user", { p_user_id: id });
       if (error) throw new Error(error.message);
       close();

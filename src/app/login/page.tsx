@@ -11,6 +11,8 @@ import { GoogleButton } from "@/components/GoogleButton";
 import { useProvider } from "@/lib/providers";
 import { TURNSTILE_SITE_KEY, Turnstile } from "@/components/Turnstile";
 import { Button, Field, inputClass, inputStyle } from "@/components/ui";
+import { ConsentChecks, NO_CONSENT, consentGiven } from "@/components/ConsentChecks";
+import { CONSENT_PENDING_KEY, TERMS_VERSION, consentMetadata } from "@/lib/legal";
 
 /**
  * Supabase отвечает по-английски, а тестируют приложение обычные люди.
@@ -51,6 +53,9 @@ function LoginForm() {
   const [problem, setProblem] = useState<string | null>(null);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [captchaNonce, setCaptchaNonce] = useState(0);
+  const [consent, setConsent] = useState(NO_CONSENT);
+  // Новую учётную запись не создать без обеих галочек — ни по почте, ни через Google.
+  const consentMissing = mode === "up" && !consentGiven(consent);
 
   // Возврат из Google мог сорваться — тогда мы попадаем сюда с пометкой, и
   // молчать об этом нельзя: человек нажал кнопку и вернулся ни с чем.
@@ -84,8 +89,12 @@ function LoginForm() {
               captchaToken: captcha,
               emailRedirectTo: `${location.origin}/auth/callback`,
               // Имя уходит в профиль при создании учётной записи: его
-              // подхватывает триггер в базе (handle_new_user).
-              data: name.trim() ? { display_name: name.trim().slice(0, 40) } : undefined,
+              // подхватывает триггер в базе (handle_new_user). Согласие —
+              // туда же, с датой и редакцией документов.
+              data: {
+                ...(name.trim() ? { display_name: name.trim().slice(0, 40) } : {}),
+                ...consentMetadata(),
+              },
             },
           });
 
@@ -107,6 +116,16 @@ function LoginForm() {
   };
 
   const withGoogle = async () => {
+    if (consentMissing) return;
+    // Галочки отмечены здесь, а учётную запись создаст Google — отметку
+    // запишет ConsentGate после возврата, без второго окна согласия.
+    if (mode === "up") {
+      try {
+        localStorage.setItem(CONSENT_PENDING_KEY, TERMS_VERSION);
+      } catch {
+        // Нет хранилища — тогда ConsentGate просто спросит ещё раз.
+      }
+    }
     setBusy(true);
     setProblem(null);
     const { error } = await createClient().auth.signInWithOAuth({
@@ -175,8 +194,13 @@ function LoginForm() {
           <GoogleButton
             label={mode === "in" ? "Войти через Google" : "Продолжить с Google"}
             onClick={() => void withGoogle()}
-            disabled={busy}
+            disabled={busy || consentMissing}
           />
+          {consentMissing ? (
+            <p className="mt-1.5 text-center text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+              Сначала отметьте согласие внизу формы
+            </p>
+          ) : null}
           {/* Разделитель, а не просто отступ: иначе кнопка читается как
               часть формы ниже, и человек ищет, куда же вписать почту. */}
           <div className="mt-4 flex items-center gap-3" style={{ color: "var(--muted)" }}>
@@ -259,9 +283,15 @@ function LoginForm() {
           </p>
         ) : null}
 
+        {mode === "up" ? (
+          <div className="mb-4">
+            <ConsentChecks value={consent} onChange={setConsent} />
+          </div>
+        ) : null}
+
         <Turnstile onToken={setCaptchaToken} resetKey={captchaNonce} />
 
-        <Button type="submit" disabled={busy || (captchaRequired && !captchaToken)}>
+        <Button type="submit" disabled={busy || consentMissing || (captchaRequired && !captchaToken)}>
           {busy ? "Минуту…" : mode === "in" ? "Войти" : "Создать аккаунт"}
         </Button>
       </form>
@@ -274,14 +304,18 @@ function LoginForm() {
         и закрыта на стороне базы.
       </p>
 
-      {/* До регистрации — самое время прочитать, что происходит с данными. */}
-      <Link
-        href="/privacy"
-        className="animate-lift mt-auto self-center pt-8 text-[0.6875rem] underline decoration-dotted underline-offset-2"
+      {/* До регистрации — самое время прочитать условия и что происходит с данными. */}
+      <div
+        className="animate-lift mt-auto flex justify-center gap-3 self-center pt-8 text-[0.6875rem]"
         style={{ color: "var(--muted)", animationDelay: "600ms" }}
       >
-        Политика конфиденциальности
-      </Link>
+        <Link href="/terms" className="whitespace-nowrap underline decoration-dotted underline-offset-2">
+          Соглашение
+        </Link>
+        <Link href="/privacy" className="whitespace-nowrap underline decoration-dotted underline-offset-2">
+          Политика конфиденциальности
+        </Link>
+      </div>
     </div>
   );
 }

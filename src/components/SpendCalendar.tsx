@@ -8,17 +8,15 @@ import type { Category, CurrencyCode, Transaction } from "@/lib/types";
 import { SERIES } from "./charts";
 
 const HEADS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
-/**
- * Пять ступеней одного цвета — цвета расходов, как на остальных графиках.
- * Смешиваем с фоном карточки, а не с белым: так ступени остаются
- * ступенями и в тёмной теме.
- */
-const STEPS = [22, 40, 58, 78, 100];
+/** Кружок дня: от самого скромного до самого дорогого дня месяца. */
+const MIN_D = 18;
+const MAX_D = 34;
 
 /**
- * Календарь трат: месяц сеткой, чем темнее день — тем больше потрачено.
- * Нажали на день — под календарём его траты. Сверху два факта, которые
- * иначе пришлось бы высчитывать: самый дорогой день и дни без трат.
+ * Календарь трат в стиле Dots: каждый день — кружок, как на главном
+ * экране. Размер — сколько потрачено (по площади, чтобы вдвое большая
+ * сумма не выглядела вчетверо больше), цвет — категория, на которую в тот
+ * день ушло больше всего. Нажали на день — под календарём его траты.
  */
 export function SpendCalendar({
   transactions,
@@ -40,13 +38,20 @@ export function SpendCalendar({
     const days = Math.round((to.getTime() - from.getTime()) / 86400000);
     const sums = new Array<number>(days + 1).fill(0);
     const byDay = new Map<number, Transaction[]>();
+    // Сколько в каждый день ушло по каждой категории — чтобы покрасить кружок.
+    const perCat = new Map<number, Map<string, number>>();
     for (const t of transactions) {
       if (t.type !== "expense") continue;
       const at = new Date(t.occurred_at);
       if (at < from || at >= to) continue;
       const d = at.getDate();
-      sums[d] += toBase(Number(t.amount), t.currency);
+      const value = toBase(Number(t.amount), t.currency);
+      sums[d] += value;
       byDay.set(d, [...(byDay.get(d) ?? []), t]);
+      const key = isFee(t) ? "fee" : (t.category_id ?? "none");
+      const cats = perCat.get(d) ?? new Map<string, number>();
+      cats.set(key, (cats.get(key) ?? 0) + value);
+      perCat.set(d, cats);
     }
     const max = Math.max(0, ...sums);
     const now = new Date();
@@ -55,11 +60,14 @@ export function SpendCalendar({
     let top = 0;
     for (let d = 1; d <= days; d++) if (sums[d] > sums[top]) top = d;
     const empty = Array.from({ length: lastDay }, (_, i) => i + 1).filter((d) => sums[d] === 0).length;
+    const lead = new Map<number, string>();
+    for (const [d, cats] of perCat) lead.set(d, [...cats].sort((a, b) => b[1] - a[1])[0][0]);
     return {
       from,
       days,
       sums,
       byDay,
+      leadCat: lead,
       max,
       today: isCurrent ? now.getDate() : null,
       lastDay,
@@ -70,13 +78,13 @@ export function SpendCalendar({
     };
   }, [transactions, offset, toBase]);
 
-  const step = (sum: number) => {
-    if (sum <= 0 || month.max <= 0) return null;
-    // Ступень по доле от самого дорогого дня: даже маленькая трата видна.
-    return STEPS[Math.min(STEPS.length - 1, Math.floor((sum / month.max) * STEPS.length))];
+  const diameter = (sum: number) =>
+    sum <= 0 || month.max <= 0 ? 0 : MIN_D + (MAX_D - MIN_D) * Math.sqrt(sum / month.max);
+  const colorOf = (d: number) => {
+    const id = month.leadCat.get(d);
+    if (id === "fee") return "#8b97a8";
+    return categories.find((c) => c.id === id)?.color ?? SERIES.expense.color;
   };
-  const fill = (pct: number | null) =>
-    pct == null ? "var(--surface-2)" : `color-mix(in srgb, ${SERIES.expense.color} ${pct}%, var(--surface))`;
 
   const dayLabel = (d: number) =>
     new Date(month.from.getFullYear(), month.from.getMonth(), d).toLocaleDateString("ru-RU", {
@@ -84,6 +92,9 @@ export function SpendCalendar({
       month: "long",
       weekday: "short",
     });
+
+  const shortLabel = (d: number) =>
+    new Date(month.from.getFullYear(), month.from.getMonth(), d).toLocaleDateString("ru-RU", { day: "numeric", month: "short" }).replace(".", "");
 
   const list = picked ? (month.byDay.get(picked) ?? []) : [];
   const nameOf = (t: Transaction) => {
@@ -94,20 +105,14 @@ export function SpendCalendar({
 
   return (
     <div>
-      <div className="mb-3 grid grid-cols-2 gap-2">
-        <Fact
-          label="Самый дорогой день"
-          value={month.top ? formatMoney(month.sums[month.top], currency) : "—"}
-          hint={month.top ? dayLabel(month.top) : "трат не было"}
-        />
-        <Fact
-          label="Дней без трат"
-          value={`${month.empty} из ${month.lastDay}`}
-          hint={month.today ? "по сегодня включительно" : "за весь месяц"}
-        />
+      <div className="mb-2 flex flex-wrap gap-1.5">
+        {month.top ? (
+          <Fact label="Макс." value={formatMoney(month.sums[month.top], currency)} hint={shortLabel(month.top)} />
+        ) : null}
+        <Fact label="Без трат" value={`${month.empty} из ${month.lastDay}`} hint="дн." />
       </div>
 
-      <div className="grid grid-cols-7 gap-1.5">
+      <div className="grid grid-cols-7 gap-y-0.5">
         {HEADS.map((h) => (
           <span key={h} className="pb-0.5 text-center text-[0.625rem]" style={{ color: "var(--muted)" }}>
             {h}
@@ -119,9 +124,9 @@ export function SpendCalendar({
         {Array.from({ length: month.days }, (_, i) => {
           const d = i + 1;
           const future = month.today != null && d > month.today;
-          const pct = step(month.sums[d]);
-          const dark = pct != null && pct >= 58;
+          const size = diameter(month.sums[d]);
           const on = picked === d;
+          const isToday = d === month.today;
           return (
             <button
               key={d}
@@ -129,37 +134,48 @@ export function SpendCalendar({
               onClick={() => setPicked(on ? null : d)}
               aria-label={`${dayLabel(d)}: ${month.sums[d] > 0 ? formatMoney(month.sums[d], currency) : "без трат"}`}
               aria-pressed={on}
-              className="relative flex aspect-square items-center justify-center rounded-xl text-[0.8125rem] tabular-nums transition active:scale-90 disabled:opacity-35"
-              style={{
-                background: future ? "transparent" : fill(pct),
-                color: dark ? "#fff" : "var(--text)",
-                fontWeight: d === month.today ? 700 : 500,
-                // Сегодня — обводкой цвета текста, выбранный — акцентом.
-                boxShadow: on
-                  ? "0 0 0 2px var(--accent)"
-                  : d === month.today
-                    ? "inset 0 0 0 1.5px var(--text)"
-                    : undefined,
-              }}
+              className="relative flex h-10 items-center justify-center transition active:scale-90 disabled:opacity-30"
             >
-              {d}
+              {size ? (
+                <span
+                  className="absolute rounded-full"
+                  style={{
+                    width: size,
+                    height: size,
+                    background: colorOf(d),
+                    boxShadow: on ? "0 0 0 2px var(--surface), 0 0 0 4px var(--accent)" : undefined,
+                  }}
+                />
+              ) : on || isToday ? (
+                <span
+                  className="absolute h-7 w-7 rounded-full"
+                  style={{
+                    boxShadow: on ? "inset 0 0 0 2px var(--accent)" : "inset 0 0 0 1.5px var(--text)",
+                  }}
+                />
+              ) : null}
+              <span
+                className="relative text-[0.6875rem] tabular-nums"
+                style={{
+                  color: size ? "#fff" : "var(--muted)",
+                  fontWeight: isToday ? 800 : size ? 600 : 400,
+                  textDecoration: isToday && size ? "underline" : undefined,
+                  textUnderlineOffset: 2,
+                }}
+              >
+                {d}
+              </span>
             </button>
           );
         })}
       </div>
 
-      {/* Легенда: ступени насыщенности и что они значат. */}
-      <div className="mt-3 flex items-center justify-center gap-1.5 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-        <span>без трат</span>
-        <span className="h-3 w-3 rounded" style={{ background: fill(null) }} />
-        {STEPS.map((pct) => (
-          <span key={pct} className="h-3 w-3 rounded" style={{ background: fill(pct) }} />
-        ))}
-        <span>больше</span>
-      </div>
+      <p className="mt-1.5 text-center text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+        Цвет кружка — категория, на которую ушло больше всего
+      </p>
 
       {picked ? (
-        <div className="animate-rise mt-4 rounded-2xl p-3" style={{ background: "var(--surface-2)" }}>
+        <div className="animate-rise mt-3 rounded-2xl p-3" style={{ background: "var(--surface-2)" }}>
           <div className="mb-2 flex items-baseline justify-between px-1">
             <span className="text-sm font-semibold first-letter:uppercase">{dayLabel(picked)}</span>
             <span className="text-sm font-semibold tabular-nums">{formatMoney(month.sums[picked], currency)}</span>
@@ -197,25 +213,17 @@ export function SpendCalendar({
             </div>
           )}
         </div>
-      ) : (
-        <p className="mt-3 text-center text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-          Нажмите на день — покажу его траты
-        </p>
-      )}
+      ) : null}
     </div>
   );
 }
 
 function Fact({ label, value, hint }: { label: string; value: string; hint: string }) {
   return (
-    <div className="rounded-xl px-3 py-2" style={{ background: "var(--surface-2)" }}>
-      <span className="block text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-        {label}
-      </span>
-      <span className="block text-[0.9375rem] font-semibold tabular-nums">{value}</span>
-      <span className="block text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-        {hint}
-      </span>
+    <div className="flex items-baseline gap-1 whitespace-nowrap rounded-full px-3 py-1 text-[0.75rem]" style={{ background: "var(--surface-2)" }}>
+      <span style={{ color: "var(--muted)" }}>{label}</span>
+      <span className="font-semibold tabular-nums">{value}</span>
+      {hint ? <span style={{ color: "var(--muted)" }}>{hint}</span> : null}
     </div>
   );
 }

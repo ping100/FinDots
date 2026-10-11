@@ -23,7 +23,7 @@ const MODES: { id: Mode; label: string; caption: string }[] = [
   {
     id: "calendar",
     label: "Календарь трат",
-    caption: "Чем насыщеннее день, тем больше в нём потрачено",
+    caption: "Каждый день — кружок: чем больше потрачено, тем он крупнее",
   },
   {
     id: "earned",

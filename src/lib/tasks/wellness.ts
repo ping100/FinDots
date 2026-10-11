@@ -16,6 +16,9 @@ export interface Wellness {
   /** ISO: 1 — понедельник … 7 — воскресенье. */
   sleep_days: number[];
   sleep_prep_min: number;
+  /** Утренняя сводка задач пушем. */
+  summary_on: boolean;
+  summary_at: string;
 }
 
 export const WELLNESS_DEFAULTS: Wellness = {
@@ -28,6 +31,8 @@ export const WELLNESS_DEFAULTS: Wellness = {
   sleep_at: "23:00",
   sleep_days: [1, 2, 3, 4, 5, 6, 7],
   sleep_prep_min: 30,
+  summary_on: false,
+  summary_at: "08:00",
 };
 
 const FIELDS = Object.keys(WELLNESS_DEFAULTS).join(", ");
@@ -57,7 +62,13 @@ export function useWellness() {
     ]).then(([s, w]) => {
       const row = s.data as Wellness | null;
       settingsRef.current = row
-        ? { ...row, water_from: hm(row.water_from), water_to: hm(row.water_to), sleep_at: hm(row.sleep_at) }
+        ? {
+            ...row,
+            water_from: hm(row.water_from),
+            water_to: hm(row.water_to),
+            sleep_at: hm(row.sleep_at),
+            summary_at: hm(row.summary_at),
+          }
         : WELLNESS_DEFAULTS;
       glassesRef.current = (w.data as { glasses: number } | null)?.glasses ?? 0;
       setSettings(settingsRef.current);

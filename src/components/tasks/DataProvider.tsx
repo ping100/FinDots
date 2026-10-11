@@ -15,6 +15,7 @@ import { createClient } from "@/lib/supabase/client";
 import { applyLook } from "@/lib/look";
 import { scaleFactor } from "@/lib/textScale";
 import { today } from "@/lib/tasks/dates";
+import { nextAfterDone } from "@/lib/tasks/repeat";
 import type { Task, TaskCategory } from "@/lib/tasks/types";
 import type { Profile } from "@/lib/types";
 
@@ -98,6 +99,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [userId, setUserId] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
+  // Свежий список для действий, вызванных позже рендера (например, «Вернуть»
+  // во всплывашке): замкнутый в колбэке tasks к тому времени устарел.
+  const tasksRef = useRef<Task[]>([]);
+  tasksRef.current = tasks;
   const [categories, setCategories] = useState<TaskCategory[]>([]);
 
   const load = useCallback(async (retry = true) => {
@@ -201,17 +206,51 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const toggleDone: Store["toggleDone"] = useCallback(
     async (id) => {
-      const task = tasks.find((t) => t.id === id);
+      const current = tasksRef.current;
+      const task = current.find((t) => t.id === id);
       if (!task) return;
+      const done = !task.done;
+      // Повтор: выполнили — сразу появляется следующая. Отменили выполнение —
+      // созданная из неё (если её ещё не выполнили) убирается.
+      const next = done && task.repeat ? nextAfterDone(task) : null;
+      const spawned: Task | null = next
+        ? {
+            ...task,
+            id: crypto.randomUUID(),
+            date: next,
+            done: false,
+            carried_from: null,
+            repeat_parent: task.id,
+            checklist: task.checklist.map((item) => ({ ...item, done: false })),
+            created_at: new Date().toISOString(),
+          }
+        : null;
+      const orphans = done ? [] : current.filter((t) => t.repeat_parent === id && !t.done).map((t) => t.id);
+
       // Оптимистично: галочка должна откликаться сразу, а не после round-trip.
-      setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
+      setTasks((prev) => [
+        ...prev.filter((t) => !orphans.includes(t.id)).map((t) => (t.id === id ? { ...t, done } : t)),
+        ...(spawned ? [spawned] : []),
+      ]);
       try {
-        await guard(() => supabase().from("tasks").update({ done: !task.done }).eq("id", id));
+        await guard(async () => {
+          const res = await supabase().from("tasks").update({ done }).eq("id", id);
+          if (res.error) return res;
+          if (spawned) {
+            const { id: newId, ...fields } = spawned;
+            return supabase().from("tasks").insert({ ...fields, id: newId, user_id: userId });
+          }
+          if (orphans.length) return supabase().from("tasks").delete().in("id", orphans);
+          return res;
+        });
       } catch {
-        setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, done: task.done } : t)));
+        setTasks((prev) => [
+          ...prev.filter((t) => t.id !== spawned?.id).map((t) => (t.id === id ? { ...t, done: task.done } : t)),
+          ...current.filter((t) => orphans.includes(t.id)),
+        ]);
       }
     },
-    [guard, supabase, tasks],
+    [guard, supabase, userId],
   );
 
   // Сами поставили день — пометка «перенесено с …» больше ни к чему.

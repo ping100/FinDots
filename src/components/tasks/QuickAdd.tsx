@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { Icon } from "@/lib/icons";
 import { addDays, today } from "@/lib/tasks/dates";
-import type { Priority, Task, TaskCategory } from "@/lib/tasks/types";
+import { REPEATS, isoDow, repeatLabel } from "@/lib/tasks/repeat";
+import type { ChecklistItem, Priority, Repeat, Task, TaskCategory } from "@/lib/tasks/types";
 import { PushNudge } from "@/components/PushSettings";
 import { Button, FieldGroup, Sheet, Switch, inputClass, inputStyle } from "@/components/ui";
 
@@ -36,6 +37,11 @@ export function QuickAdd({
   const [time, setTime] = useState("");
   const [remind, setRemind] = useState(false);
   const [carry, setCarry] = useState(false);
+  const [repeat, setRepeat] = useState<Repeat | null>(null);
+  const [repeatDays, setRepeatDays] = useState<number[]>([]);
+  const [note, setNote] = useState("");
+  const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
+  const [newItem, setNewItem] = useState("");
   const [priority, setPriority] = useState<Priority>("medium");
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -48,6 +54,11 @@ export function QuickAdd({
     setTime(task?.time?.slice(0, 5) ?? "");
     setRemind(task?.remind ?? false);
     setCarry(task?.carry_over ?? false);
+    setRepeat(task?.repeat ?? null);
+    setRepeatDays(task?.repeat === "weekly" ? task.repeat_days ?? [] : []);
+    setNote(task?.note ?? "");
+    setChecklist(task?.checklist ?? []);
+    setNewItem("");
     setPriority(task?.priority ?? "medium");
     setCategoryId(task?.category_id ?? null);
     setConfirming(false);
@@ -67,6 +78,19 @@ export function QuickAdd({
     setRemind(false);
   };
 
+  /** Пункт, набранный, но не добавленный кнопкой, — тоже в список. */
+  const withPending = () =>
+    newItem.trim() ? [...checklist, { id: crypto.randomUUID(), text: newItem.trim(), done: false }] : checklist;
+
+  /**
+   * Чек-лист уже созданной задачи сохраняется сразу: открыли «Купить
+   * продукты» в магазине, отметили «молоко» — и закрыли, без «Сохранить».
+   */
+  const updateChecklist = (next: ChecklistItem[], persist: boolean) => {
+    setChecklist(next);
+    if (persist && task) void onSave({ id: task.id, checklist: next });
+  };
+
   const save = async () => {
     if (!title.trim()) return;
     setBusy(true);
@@ -78,6 +102,19 @@ export function QuickAdd({
         time: time || null,
         remind: !!time && remind,
         carry_over: carry,
+        repeat: date ? repeat : null,
+        repeat_days:
+          !date || !repeat
+            ? null
+            : repeat === "weekly"
+              ? repeatDays.length
+                ? [...repeatDays].sort()
+                : [isoDow(date)]
+              : repeat === "monthly"
+                ? [Number(date.slice(8, 10))]
+                : null,
+        note: note.trim() || null,
+        checklist: withPending(),
         // Другой день выбран вручную — пометка «перенесено с …» больше не нужна.
         carried_from: task && date === task.date ? task.carried_from : null,
         priority,
@@ -191,6 +228,59 @@ export function QuickAdd({
         ) : null}
       </FieldGroup>
 
+      {date ? (
+        <FieldGroup label="Повтор">
+          <div className="flex flex-wrap gap-2">
+            {REPEATS.map((option) => (
+              <button
+                key={option.label}
+                onClick={() => setRepeat(option.value)}
+                className="rounded-full px-3 py-1.5 text-sm"
+                style={{
+                  background: repeat === option.value ? "var(--accent)" : "var(--surface-2)",
+                  color: repeat === option.value ? "#fff" : "var(--text)",
+                }}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          {repeat === "weekly" ? (
+            <div className="mt-2 grid grid-cols-7 gap-1.5">
+              {["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].map((label, i) => {
+                const d = i + 1;
+                const days = repeatDays.length ? repeatDays : [isoDow(date)];
+                const on = days.includes(d);
+                return (
+                  <button
+                    key={d}
+                    aria-pressed={on}
+                    onClick={() => {
+                      const next = on ? days.filter((x) => x !== d) : [...days, d];
+                      // Хотя бы один день: пустая неделя — это «не повторять».
+                      if (next.length) setRepeatDays(next);
+                    }}
+                    className="rounded-xl py-2 text-[0.8125rem] font-medium transition active:scale-95"
+                    style={{ background: on ? "var(--accent)" : "var(--surface-2)", color: on ? "#fff" : "var(--muted)" }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+          {repeat ? (
+            <p className="mt-1.5 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+              {`Повторяется ${repeatLabel({
+                repeat,
+                repeat_days: repeat === "weekly" ? (repeatDays.length ? repeatDays : [isoDow(date)]) : null,
+                date,
+              })}. Отметите выполненной — следующая появится сама.`}
+            </p>
+          ) : null}
+        </FieldGroup>
+      ) : null}
+
       <FieldGroup label="Время">
         <div className="mb-2 flex flex-wrap gap-2">
           {[
@@ -247,6 +337,86 @@ export function QuickAdd({
             {remind ? <PushNudge /> : null}
           </>
         ) : null}
+      </FieldGroup>
+
+      <FieldGroup label="Чек-лист">
+        {checklist.length ? (
+          <div className="mb-2 space-y-1">
+            {checklist.map((item) => (
+              <div key={item.id} className="flex items-center gap-2.5 rounded-xl px-2 py-1.5" style={{ background: "var(--surface-2)" }}>
+                <button
+                  aria-label={item.done ? "Не сделано" : "Сделано"}
+                  onClick={() =>
+                    updateChecklist(
+                      checklist.map((x) => (x.id === item.id ? { ...x, done: !x.done } : x)),
+                      true,
+                    )
+                  }
+                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-white transition active:scale-90"
+                  style={{
+                    background: item.done ? "var(--ok)" : "transparent",
+                    border: `2px solid ${item.done ? "var(--ok)" : "var(--muted)"}`,
+                  }}
+                >
+                  {item.done ? <Icon name="check" size={11} /> : null}
+                </button>
+                <span
+                  className="min-w-0 flex-1 text-sm"
+                  style={{ color: item.done ? "var(--muted)" : "var(--text)", textDecoration: item.done ? "line-through" : undefined }}
+                >
+                  {item.text}
+                </span>
+                <button
+                  aria-label="Убрать пункт"
+                  onClick={() => updateChecklist(checklist.filter((x) => x.id !== item.id), true)}
+                  className="flex h-6 w-6 items-center justify-center rounded-full text-base leading-none"
+                  style={{ color: "var(--muted)" }}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        <div className="flex gap-2">
+          <input
+            className={inputClass}
+            style={inputStyle}
+            value={newItem}
+            onChange={(e) => setNewItem(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== "Enter" || !newItem.trim()) return;
+              e.preventDefault();
+              updateChecklist(withPending(), true);
+              setNewItem("");
+            }}
+            placeholder={checklist.length ? "Ещё пункт" : "Например, молоко"}
+            maxLength={120}
+          />
+          <button
+            aria-label="Добавить пункт"
+            disabled={!newItem.trim() || checklist.length >= 50}
+            onClick={() => {
+              updateChecklist(withPending(), true);
+              setNewItem("");
+            }}
+            className="flex w-12 shrink-0 items-center justify-center rounded-2xl text-white transition active:scale-95 disabled:opacity-40"
+            style={{ background: "var(--accent)" }}
+          >
+            <Icon name="plus" size={18} />
+          </button>
+        </div>
+      </FieldGroup>
+
+      <FieldGroup label="Заметка">
+        <textarea
+          className={`${inputClass} min-h-[4.5rem] resize-y`}
+          style={inputStyle}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Адрес, телефон, что взять с собой…"
+          maxLength={2000}
+        />
       </FieldGroup>
 
       <FieldGroup label="Приоритет">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -15,7 +15,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { ABSORB, FLY_BACK, buzz, landOn } from "@/lib/dragFx";
-import { dayLabel, today } from "@/lib/tasks/dates";
+import { addDays, dayLabel, shortDay, today } from "@/lib/tasks/dates";
 import type { DragPayload, DropTarget, Task } from "@/lib/tasks/types";
 import { useStore } from "@/components/tasks/DataProvider";
 import { useAddAction } from "@/components/tasks/Shell";
@@ -24,6 +24,7 @@ import { TaskList } from "@/components/tasks/TaskList";
 import { QuickAdd } from "@/components/tasks/QuickAdd";
 import { WellnessCard } from "@/components/tasks/WellnessCard";
 import { AppSwitchPill } from "@/components/AppSwitch";
+import { DayProgress, EmptyDay, TimeGroups } from "@/components/tasks/DayParts";
 import { Icon } from "@/lib/icons";
 
 export default function TodayPage() {
@@ -68,23 +69,81 @@ export default function TodayPage() {
     categoryFilter ? list.filter((t) => t.category_id === categoryFilter) : list;
   const liveCategories = categories.filter((c) => !c.archived);
 
+  // Только что выполненные ещё ~секунду стоят на месте и доигрывают
+  // анимацию: галочка, зачёркивание, уход в «Выполнено».
+  const [settling, setSettling] = useState<Set<string>>(() => new Set());
+  const active = (t: Task) => !t.done || settling.has(t.id);
+
   const dayTasks = byCategory(tasks.filter((t) => t.date === selected));
-  const untimed = dayTasks.filter((t) => !t.time && !t.done);
-  const timed = dayTasks.filter((t) => t.time && !t.done);
-  const done = dayTasks.filter((t) => t.done);
-  const unscheduled = byCategory(tasks.filter((t) => t.date === null && !t.done));
+  const untimed = dayTasks.filter((t) => !t.time && active(t));
+  const timed = dayTasks.filter((t) => t.time && active(t));
+  const done = dayTasks.filter((t) => t.done && !settling.has(t.id));
+  const unscheduled = byCategory(tasks.filter((t) => t.date === null && active(t)));
   // Не сделанные в свой день и без «Переносить на следующий день» —
   // остаются на своём дне, но видны здесь, чтобы не потеряться в календаре.
   const now = today();
   const overdue =
     selected === now
-      ? byCategory(tasks.filter((t) => !t.done && !t.carry_over && t.date !== null && t.date < now))
+      ? byCategory(tasks.filter((t) => active(t) && !t.carry_over && t.date !== null && t.date < now))
       : [];
 
   const loadedDates = useMemo(
     () => new Set(tasks.filter((t) => !t.done && t.date).map((t) => t.date as string)),
     [tasks],
   );
+
+  // Всплывашка с «Вернуть» после выполнения и свайпа.
+  const [toast, setToast] = useState<{ text: string; undo: () => void } | null>(null);
+  const toastTimer = useRef<number | undefined>(undefined);
+  const showToast = (text: string, undo: () => void) => {
+    window.clearTimeout(toastTimer.current);
+    setToast({ text, undo });
+    toastTimer.current = window.setTimeout(() => setToast(null), 4000);
+  };
+  useEffect(() => () => window.clearTimeout(toastTimer.current), []);
+
+  const complete = (id: string) => {
+    const task = tasks.find((t) => t.id === id);
+    if (!task) return;
+    void toggleDone(id);
+    if (task.done) return; // сняли галочку — это и есть «вернуть»
+    buzz([8, 30, 12]);
+    setSettling((prev) => new Set(prev).add(id));
+    window.setTimeout(
+      () =>
+        setSettling((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        }),
+      900,
+    );
+    showToast(task.repeat ? "Выполнено — следующая уже в календаре" : "Выполнено", () => {
+      setToast(null);
+      setSettling((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      void toggleDone(id);
+    });
+  };
+
+  /** Свайп влево: пропущенная — на сегодня, остальные — на день позже. */
+  const postponeTo = (task: Task) => (!task.date || task.date < now ? now : addDays(task.date, 1));
+  const postponeLabel = (task: Task) => {
+    const to = postponeTo(task);
+    return to === now ? "Сегодня" : to === addDays(now, 1) ? "Завтра" : shortDay(to);
+  };
+  const postpone = (task: Task) => {
+    const to = postponeTo(task);
+    const label = postponeLabel(task);
+    void rescheduleTask(task.id, to);
+    showToast(`Перенесено: ${label.toLowerCase()}`, () => {
+      setToast(null);
+      void saveTask({ id: task.id, date: task.date, carried_from: task.carried_from });
+    });
+  };
 
   const onDragEnd = (event: DragEndEvent) => {
     setDragging(null);
@@ -127,7 +186,10 @@ export default function TodayPage() {
     >
       <div className="mx-auto w-full max-w-md px-4 pb-32">
         <header className="flex items-center justify-between py-3">
-          <h1 className="text-xl font-semibold">{dayLabel(selected)}</h1>
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-xl font-semibold">{dayLabel(selected)}</h1>
+            <DayProgress done={dayTasks.filter((t) => t.done).length} total={dayTasks.length} />
+          </div>
           <AppSwitchPill from="tasks" />
         </header>
 
@@ -182,7 +244,16 @@ export default function TodayPage() {
                   Всё на сегодня
                 </button>
               </div>
-              <TaskList tasks={overdue} categories={categories} onToggle={toggleDone} onOpen={openEdit} overdue />
+              <TaskList
+                tasks={overdue}
+                categories={categories}
+                onToggle={complete}
+                onOpen={openEdit}
+                overdue
+                settling={settling}
+                onSwipeLeft={postpone}
+                swipeLabel={postponeLabel}
+              />
               <p className="mt-1.5 px-1.5 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
                 Отметьте сделанное или перетащите задачу на нужный день
               </p>
@@ -190,16 +261,28 @@ export default function TodayPage() {
           ) : null}
 
           {untimed.length || timed.length ? (
-            <TaskList
-              tasks={[...untimed, ...timed]}
-              categories={categories}
-              onToggle={toggleDone}
-              onOpen={openEdit}
+            <TimeGroups
+              untimed={untimed}
+              timed={timed}
+              render={(list) => (
+                <TaskList
+                  tasks={list}
+                  categories={categories}
+                  onToggle={complete}
+                  onOpen={openEdit}
+                  settling={settling}
+                  onSwipeLeft={postpone}
+                  swipeLabel={postponeLabel}
+                />
+              )}
             />
-          ) : (
-            <p className="py-10 text-center text-sm" style={{ color: "var(--muted)" }}>
-              {categoryFilter ? "Пусто в этой категории" : "Пусто — самое время выдохнуть"}
-            </p>
+          ) : overdue.length ? null : (
+            <EmptyDay
+              filtered={!!categoryFilter}
+              allDone={done.length > 0}
+              isToday={selected === now}
+              past={selected < now}
+            />
           )}
 
           {done.length > 0 ? (
@@ -208,7 +291,7 @@ export default function TodayPage() {
                 Выполнено ({done.length})
               </summary>
               <div className="mt-2">
-                <TaskList tasks={done} categories={categories} onToggle={toggleDone} onOpen={openEdit} />
+                <TaskList tasks={done} categories={categories} onToggle={complete} onOpen={openEdit} />
               </div>
             </details>
           ) : null}
@@ -222,8 +305,11 @@ export default function TodayPage() {
                 <TaskList
                   tasks={unscheduled}
                   categories={categories}
-                  onToggle={toggleDone}
+                  onToggle={complete}
                   onOpen={openEdit}
+                  settling={settling}
+                  onSwipeLeft={postpone}
+                  swipeLabel={postponeLabel}
                 />
               </div>
             </details>
@@ -252,6 +338,23 @@ export default function TodayPage() {
         onSave={saveTask}
         onDelete={deleteTask}
       />
+      {toast ? (
+        <div className="pointer-events-none fixed inset-x-0 bottom-28 z-40 flex justify-center px-4">
+          <div
+            className="animate-rise pointer-events-auto flex items-center gap-3 rounded-full py-2 pl-4 pr-2 text-sm shadow-lg"
+            style={{ background: "var(--text)", color: "var(--bg)" }}
+          >
+            <span>{toast.text}</span>
+            <button
+              onClick={toast.undo}
+              className="rounded-full px-3 py-1 text-sm font-semibold transition active:scale-95"
+              style={{ background: "color-mix(in srgb, var(--bg) 18%, transparent)" }}
+            >
+              Вернуть
+            </button>
+          </div>
+        </div>
+      ) : null}
     </DndContext>
   );
 }

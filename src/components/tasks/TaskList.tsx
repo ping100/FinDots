@@ -10,6 +10,9 @@ export function TaskList({
   onOpen,
   empty,
   overdue,
+  settling,
+  onSwipeLeft,
+  swipeLabel,
 }: {
   tasks: Task[];
   categories: TaskCategory[];
@@ -17,6 +20,11 @@ export function TaskList({
   onOpen: (task: Task) => void;
   empty?: string;
   overdue?: boolean;
+  /** Только что выполненные — доигрывают анимацию, прежде чем уйти. */
+  settling?: Set<string>;
+  /** Свайп влево: перенести. Без него карточки не свайпаются. */
+  onSwipeLeft?: (task: Task) => void;
+  swipeLabel?: (task: Task) => string;
 }) {
   if (tasks.length === 0) {
     return empty ? (
@@ -36,6 +44,9 @@ export function TaskList({
           onToggle={() => onToggle(task.id)}
           onOpen={() => onOpen(task)}
           overdue={overdue}
+          settling={settling?.has(task.id)}
+          onSwipeLeft={onSwipeLeft ? () => onSwipeLeft(task) : undefined}
+          leftLabel={swipeLabel?.(task)}
         />
       ))}
     </div>

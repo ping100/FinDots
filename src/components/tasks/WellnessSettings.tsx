@@ -9,6 +9,7 @@ import { WEEKDAYS, daysLabel, everyLabel, useWellness } from "@/lib/tasks/wellne
 
 const WATER = "#0ea5e9";
 const SLEEP = "#6366f1";
+const SUMMARY = "#f59e0b";
 const EVERY = [60, 90, 120, 180];
 const PREP = [
   { min: 0, label: "Не надо" },
@@ -24,13 +25,33 @@ const PREP = [
 export function WellnessSettings() {
   const { settings, problem, save } = useWellness();
   const [push] = usePushState();
-  const [open, setOpen] = useState<"water" | "sleep" | null>(null);
+  const [open, setOpen] = useState<"water" | "sleep" | "summary" | null>(null);
   if (!settings) return null;
 
-  const anyOn = settings.water_on || settings.sleep_on;
+  const anyOn = settings.water_on || settings.sleep_on || settings.summary_on;
 
   return (
     <>
+      <SettingsHeading>Утренняя сводка</SettingsHeading>
+      <div className="mb-4 overflow-hidden rounded-2xl" style={{ background: "var(--surface)" }}>
+        <Row
+          icon="sun"
+          color={SUMMARY}
+          title="Сводка на день"
+          hint={
+            settings.summary_on
+              ? `В ${settings.summary_at} — сколько задач и что пропущено`
+              : "Утром пуш: сколько задач на сегодня, первая по времени"
+          }
+          on={settings.summary_on}
+          onToggle={(on) => {
+            void save({ summary_on: on });
+            if (on) setOpen("summary");
+          }}
+          onOpen={() => setOpen("summary")}
+        />
+      </div>
+
       <SettingsHeading>Здоровье</SettingsHeading>
       <div className="mb-1 overflow-hidden rounded-2xl" style={{ background: "var(--surface)" }}>
         <Row
@@ -75,6 +96,22 @@ export function WellnessSettings() {
             ? "Чтобы напоминания приходили, включите уведомления в разделе «Напоминания» выше."
             : "Напоминания приходят пушем, даже когда приложение закрыто.")}
       </p>
+
+      <Sheet
+        open={open === "summary"}
+        title="Утренняя сводка"
+        onClose={() => setOpen(null)}
+        footer={<Button onClick={() => setOpen(null)}>Готово</Button>}
+      >
+        <p className="mb-3 text-[0.8125rem] leading-snug" style={{ color: "var(--muted)" }}>
+          Каждое утро пришлю пуш: «Доброе утро! Сегодня 5 задач. Первая в 10:00 — позвонить в банк.
+          Пропущено: 2».
+        </p>
+        <Field label="Во сколько">
+          <input type="time" className={inputClass} style={inputStyle} value={settings.summary_at}
+            onChange={(e) => e.target.value && void save({ summary_at: e.target.value })} />
+        </Field>
+      </Sheet>
 
       <Sheet open={open === "water"} title="Вода" onClose={() => setOpen(null)} footer={<Button onClick={() => setOpen(null)}>Готово</Button>}>
         <p className="mb-3 text-[0.8125rem] leading-snug" style={{ color: "var(--muted)" }}>

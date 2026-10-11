@@ -36,6 +36,21 @@ export interface Task {
   carry_over: boolean;
   /** С какого дня переезжает: «перенесено с 10 окт». */
   carried_from: string | null;
+  /** Повтор: выполнили — появляется следующая на ближайший подходящий день. */
+  repeat: Repeat | null;
+  /** weekly — дни недели ISO (1 — пн … 7 — вс); monthly — [число месяца]. */
+  repeat_days: number[] | null;
+  /** Из какой задачи создана повтором: отмена выполнения убирает её. */
+  repeat_parent: string | null;
+  checklist: ChecklistItem[];
+}
+
+export type Repeat = "daily" | "weekdays" | "weekly" | "monthly" | "yearly";
+
+export interface ChecklistItem {
+  id: string;
+  text: string;
+  done: boolean;
 }
 
 /** Что тащат пальцем: карточку задачи. */

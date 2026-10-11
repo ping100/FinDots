@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 /**
  * Разослать напоминания, которым пришло время: о задачах (Todots) и о
  * регулярных платежах из «Каждый месяц» (Findots, за два дня до числа),
- * о воде и о сне («Здоровье» в Todots).
+ * о воде и о сне («Здоровье» в Todots), утренняя сводка задач.
  *
  * Зовёт сама база (pg_cron раз в минуту, и только когда есть что
  * отправить) с секретом из Vault. Вход здесь не нужен и не используется:
@@ -27,15 +27,16 @@ export async function POST(request: Request) {
     auth: { persistSession: false },
   });
 
-  const [tasksRes, billsRes, wellnessRes] = await Promise.all([
+  const [tasksRes, billsRes, wellnessRes, summaryRes] = await Promise.all([
     supabase.rpc("claim_due_reminders", { p_secret: secret }),
     supabase.rpc("claim_due_bill_reminders", { p_secret: secret }),
     supabase.rpc("claim_due_wellness_reminders", { p_secret: secret }),
+    supabase.rpc("claim_due_task_summaries", { p_secret: secret }),
   ]);
   // Рассылки независимы: сбой в напоминаниях о платежах не должен
   // оставить без напоминаний задачи — и наоборот.
-  const failures = [tasksRes.error, billsRes.error, wellnessRes.error].filter(Boolean);
-  if (failures.length === 3) {
+  const failures = [tasksRes.error, billsRes.error, wellnessRes.error, summaryRes.error].filter(Boolean);
+  if (failures.length === 4) {
     return NextResponse.json({ error: failures.map((e) => e!.message).join("; ") }, { status: 500 });
   }
 
@@ -62,6 +63,16 @@ export async function POST(request: Request) {
     prep_min: number;
   }[];
 
+  const summaries = (summaryRes.data ?? []) as {
+    endpoint: string;
+    p256dh: string;
+    auth: string;
+    total: number;
+    overdue: number;
+    first_title: string | null;
+    first_time: string | null;
+  }[];
+
   const messages = [
     ...tasks.map((row) => ({
       sub: row,
@@ -77,6 +88,7 @@ export async function POST(request: Request) {
       },
     })),
     ...wellness.map((row) => ({ sub: row, push: wellnessPush(row) })),
+    ...summaries.map((row) => ({ sub: row, push: summaryPush(row) })),
   ];
 
   const results = await Promise.all(
@@ -137,4 +149,25 @@ function wellnessPush(row: { kind: "water" | "sleep_prep" | "sleep"; glasses: nu
     };
   }
   return { title: "Пора спать", body: "Спокойной ночи! Задачи подождут до утра", url: "/tasks", tag: "sleep" };
+}
+
+/** «Доброе утро! Сегодня 5 задач» — «Первая в 10:00 — Позвонить в банк. Пропущено: 2». */
+function summaryPush(row: { total: number; overdue: number; first_title: string | null; first_time: string | null }) {
+  const parts: string[] = [];
+  if (row.first_title && row.first_time) parts.push(`Первая в ${row.first_time.slice(0, 5)} — ${row.first_title}`);
+  if (row.overdue > 0) parts.push(`Пропущено: ${row.overdue}`);
+  return {
+    title: row.total > 0 ? `Доброе утро! Сегодня ${row.total} ${plural(row.total, "задача", "задачи", "задач")}` : "Доброе утро! На сегодня задач нет",
+    body: parts.length ? parts.join(". ") : row.total > 0 ? "Хорошего дня!" : "Свободный день — можно что-то запланировать",
+    url: "/tasks",
+    tag: "summary",
+  };
+}
+
+function plural(n: number, one: string, few: string, many: string) {
+  const m10 = n % 10;
+  const m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+  return many;
 }

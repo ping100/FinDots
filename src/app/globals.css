@@ -369,3 +369,32 @@ input[type="date"]::-webkit-date-and-time-value {
     scroll-behavior: auto !important;
   }
 }
+
+/* Выполнили задачу: галочка подпрыгивает… */
+@keyframes pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.35); }
+  70% { transform: scale(0.9); }
+  100% { transform: scale(1); }
+}
+.animate-pop {
+  animation: pop 0.42s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* …название зачёркивается, и карточка уезжает в «Выполнено», схлопываясь.
+   Последним в файле: перебивает покачивание перенесённой задачи. */
+@keyframes complete-out {
+  0%, 45% {
+    opacity: 1;
+    max-height: 64px;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+    max-height: 0;
+    transform: translateX(28px);
+  }
+}
+.animate-complete {
+  animation: complete-out 0.85s ease-in both;
+}

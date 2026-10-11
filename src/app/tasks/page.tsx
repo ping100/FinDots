@@ -199,6 +199,7 @@ export default function TodayPage() {
       <DragOverlay dropAnimation={overId ? ABSORB : FLY_BACK}>
         {draggedTask ? (
           <div
+            data-ghost
             className="animate-lift-card rounded-2xl px-4 py-2 text-sm font-medium text-white"
             style={{ background: "var(--accent)", boxShadow: "0 14px 30px rgba(0,0,0,0.22)" }}
           >

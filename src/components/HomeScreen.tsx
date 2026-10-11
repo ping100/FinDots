@@ -1398,6 +1398,7 @@ function DragGhost({ payload }: { payload: DragPayload }) {
         style={{ transform: "translate(-50%, calc(-50% - 26px))" }}
       >
         <span
+          data-ghost
           className="animate-lift-up flex h-[60px] w-[60px] items-center justify-center rounded-full text-white"
           style={{
             background: item.color,
@@ -1408,6 +1409,7 @@ function DragGhost({ payload }: { payload: DragPayload }) {
         </span>
         {payload.source !== "reorder" ? (
           <span
+            data-ghost-extra
             className="whitespace-nowrap rounded-full px-2.5 py-1 text-[0.75rem] font-semibold tabular-nums shadow-lg"
             style={{ background: "var(--surface)", border: `1px solid ${item.color}` }}
           >

@@ -11,8 +11,10 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragOverEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
+import { ABSORB, FLY_BACK, buzz, landOn } from "@/lib/dragFx";
 import { dayLabel, today } from "@/lib/tasks/dates";
 import type { DragPayload, DropTarget, Task } from "@/lib/tasks/types";
 import { useStore } from "@/components/tasks/DataProvider";
@@ -29,6 +31,8 @@ export default function TodayPage() {
   const [selected, setSelected] = useState(today());
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
+  // Над каким днём сейчас задача — для вибрации и анимации броска.
+  const [overId, setOverId] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
@@ -78,7 +82,12 @@ export default function TodayPage() {
     setDragging(null);
     const payload = event.active.data.current as DragPayload | undefined;
     const target = event.over?.data.current as DropTarget | undefined;
-    if (!payload || !target) return;
+    if (!payload || !target || !event.over) {
+      setOverId(null);
+      return;
+    }
+    landOn(String(event.over.id));
+    buzz([10, 40, 14]);
     void rescheduleTask(payload.taskId, target.date);
   };
 
@@ -94,10 +103,19 @@ export default function TodayPage() {
       measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
       onDragStart={(event: DragStartEvent) => {
         setDragging(event.active.id as string);
-        if (navigator.vibrate) navigator.vibrate(8);
+        setOverId(null);
+        buzz(8);
+      }}
+      onDragOver={(event: DragOverEvent) => {
+        const id = event.over ? String(event.over.id) : null;
+        if (id && id !== overId) buzz(5);
+        setOverId(id);
       }}
       onDragEnd={onDragEnd}
-      onDragCancel={() => setDragging(null)}
+      onDragCancel={() => {
+        setDragging(null);
+        setOverId(null);
+      }}
     >
       <div className="mx-auto w-full max-w-md px-4 pb-32">
         <header className="flex items-center justify-between py-3">
@@ -175,11 +193,11 @@ export default function TodayPage() {
         </div>
       </div>
 
-      <DragOverlay dropAnimation={null}>
+      <DragOverlay dropAnimation={overId ? ABSORB : FLY_BACK}>
         {draggedTask ? (
           <div
-            className="rounded-2xl px-4 py-2 text-sm font-medium text-white shadow-lg"
-            style={{ background: "var(--accent)" }}
+            className="animate-lift-card rounded-2xl px-4 py-2 text-sm font-medium text-white"
+            style={{ background: "var(--accent)", boxShadow: "0 14px 30px rgba(0,0,0,0.22)" }}
           >
             {draggedTask.title}
           </div>

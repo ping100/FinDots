@@ -115,6 +115,24 @@ input[type="date"]::-webkit-date-and-time-value {
   text-align: left;
 }
 
+/* Взяли кружок: он приподнимается, подрастает и чуть наклоняется. */
+@keyframes drag-lift {
+  from { transform: scale(0.94) rotate(0deg); }
+  to { transform: scale(1.1) rotate(-6deg); }
+}
+.animate-lift-up {
+  animation: drag-lift 260ms cubic-bezier(.34,1.56,.64,1) both;
+}
+
+/* То же для карточки задачи: широкая, поэтому наклон меньше. */
+@keyframes drag-lift-card {
+  from { transform: scale(0.98) rotate(0deg); }
+  to { transform: scale(1.04) rotate(-2.5deg); }
+}
+.animate-lift-card {
+  animation: drag-lift-card 240ms cubic-bezier(.34,1.56,.64,1) both;
+}
+
 /* Режим «Порядок»: кружки чуть покачиваются — их можно двигать. */
 @keyframes wiggle {
   0%, 100% { transform: rotate(-2deg); }

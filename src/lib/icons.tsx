@@ -2,7 +2,8 @@ import type { CSSProperties, ReactNode } from "react";
 
 /**
  * Иконки рисуются штрихом currentColor в сетке 24×24 — так они одинаково
- * читаются на цветном круге и в тёмной, и в светлой теме.
+ * читаются на цветном круге и в тёмной, и в светлой теме. У иконок
+ * категорий под контуром ещё мягкая заливка того же цвета (TONES).
  *
  * Имена менять нельзя: они хранятся в базе у каждой категории и кошелька.
  * Глиф переработать можно, имя — нет.
@@ -555,6 +556,275 @@ const PATHS: Record<string, ReactNode> = {
       <circle cx="12" cy="16.6" r="1" fill="currentColor" stroke="none" />
     </>
   ),
+  // ──────────────────────────── новые ───────────────────────────────
+  tax: (
+    <>
+      <path d="M6 3h9l4 4v14H6z" />
+      <path d="M15 3v4h4M9.5 16.5l5-5" />
+      <circle cx="10" cy="12" r="1.1" fill="currentColor" stroke="none" />
+      <circle cx="14" cy="16" r="1.1" fill="currentColor" stroke="none" />
+    </>
+  ),
+  exchange: <path d="M4 8.5h15l-3.5-3.5M20 15.5H5l3.5 3.5" />,
+  fruit: (
+    <>
+      <path d="M12 7.5c-1.8-1.3-4.5-1.5-6 .3-2 2.4-1.2 7 1 10 1.4 1.9 2.8 2.7 5 1.7 2.2 1 3.6.2 5-1.7 2.2-3 3-7.6 1-10-1.5-1.8-4.2-1.6-6-.3z" />
+      <path d="M12 7.5c0-2 1-3.5 2.8-4.2" />
+    </>
+  ),
+  bread: (
+    <>
+      <path d="M4 11a4 4 0 0 1 2-7.5h12A4 4 0 0 1 20 11v8.5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z" />
+      <path d="M9 9l-1.5 2.5M13 9l-1.5 2.5M17 9l-1.5 2.5" />
+    </>
+  ),
+  key: (
+    <>
+      <circle cx="8" cy="15.5" r="4.5" />
+      <path d="M11.2 12.3L20 3.5M16.5 7l2.5 2.5M14.3 9.2l2 2" />
+    </>
+  ),
+  flame: (
+    <path d="M12 21c-3.9 0-7-2.8-7-6.6 0-3 1.9-4.8 3.4-6.6.3 1.7 1.1 2.7 2.1 3 0-3.2 1.3-6.2 4.3-7.8-.4 3 1.2 4.8 2.7 6.4A7.3 7.3 0 0 1 19 14.4C19 18.2 15.9 21 12 21z" />
+  ),
+  plant: (
+    <>
+      <path d="M7 14h10l-1.3 7H8.3z" />
+      <path d="M12 14V8M12 10.5C12 7.5 9.8 5 6.5 5c0 3.3 2.4 5.5 5.5 5.5zM12 9c0-2.6 1.9-4.8 4.8-4.8 0 2.7-2.1 4.8-4.8 4.8z" />
+    </>
+  ),
+  tv: (
+    <>
+      <rect x="2.5" y="5.5" width="19" height="13" rx="2" />
+      <path d="M8 21h8M9 2.5l3 3 3-3" />
+    </>
+  ),
+  box: (
+    <>
+      <path d="M3.5 7.5L12 3l8.5 4.5v9L12 21l-8.5-4.5z" />
+      <path d="M3.5 7.5L12 12l8.5-4.5M12 12v9M7.8 5.3l8.5 4.5" />
+    </>
+  ),
+  globe: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M3 12h18M12 3c2.5 2.6 3.7 5.6 3.7 9s-1.2 6.4-3.7 9c-2.5-2.6-3.7-5.6-3.7-9S9.5 5.6 12 3z" />
+    </>
+  ),
+  scissors: (
+    <>
+      <circle cx="6" cy="6.5" r="2.8" />
+      <circle cx="6" cy="17.5" r="2.8" />
+      <path d="M8.4 8L20 18M8.4 16L20 6" />
+    </>
+  ),
+  sun: (
+    <>
+      <circle cx="12" cy="12" r="4.5" />
+      <path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4" />
+    </>
+  ),
+  balloon: (
+    <>
+      <path d="M12 15c-3.3 0-6-3-6-6.5S8.7 2.5 12 2.5s6 2.7 6 6S15.3 15 12 15z" />
+      <path d="M11 15l1 1.5 1-1.5M12 16.5c0 2-2 2.5-2 4.5" />
+    </>
+  ),
+  baby: (
+    <>
+      <path d="M8.5 8.5h7v10.5a2 2 0 0 1-2 2h-3a2 2 0 0 1-2-2z" />
+      <path d="M9.5 8.5V6.5h5v2M10.5 6.5l.6-3h1.8l.6 3M8.5 12.5H11M8.5 16H11" />
+    </>
+  ),
+  palette: (
+    <>
+      <path d="M12 3a9 9 0 0 0 0 18c1.4 0 2-.9 2-1.8 0-1.3-1.2-1.6-1.2-2.8 0-1 .8-1.9 2-1.9h2.2A4 4 0 0 0 21 10.7C21 6.4 17 3 12 3z" />
+      <circle cx="7.5" cy="11" r="1.2" fill="currentColor" stroke="none" />
+      <circle cx="10" cy="7.3" r="1.2" fill="currentColor" stroke="none" />
+      <circle cx="14.5" cy="7.3" r="1.2" fill="currentColor" stroke="none" />
+    </>
+  ),
+  // Вода и сон — для напоминаний в «Задачах».
+  glass: (
+    <>
+      <path d="M6 3.5h12l-1.6 16a1.7 1.7 0 0 1-1.7 1.5H9.3a1.7 1.7 0 0 1-1.7-1.5z" />
+      <path d="M7 10.5c1.7-.9 3.3-.9 5 0s3.3.9 5 0" />
+    </>
+  ),
+  moon: (
+    <>
+      <path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" />
+      <path d="M17 3.5v3M15.5 5h3" />
+    </>
+  ),
+};
+
+
+/**
+ * Второй слой иконки — мягкая заливка внутри формы, поверх неё контур.
+ * Двухцветная иконка читается объёмнее и легче узнаётся на цветном
+ * кружке. Только у иконок категорий и кошельков: служебные (стрелки,
+ * галочки, навигация) остаются чистым контуром, иначе интерфейс пестрит.
+ */
+const TONES: Record<string, ReactNode> = {
+  // деньги
+  cash: <rect x="2" y="6" width="20" height="12" rx="2" />,
+  card: <rect x="2" y="5" width="20" height="14" rx="2.5" />,
+  wallet: <rect x="3" y="7" width="18" height="12" rx="2" />,
+  bank: <path d="M3 10l9-6 9 6z" />,
+  savings: <path d="M5 6.5C5 5.1 8.1 4 12 4s7 1.1 7 2.5v11c0 1.4-3.1 2.5-7 2.5s-7-1.1-7-2.5z" />,
+  coins: <circle cx="9" cy="9" r="5.5" />,
+  safe: <rect x="3" y="3.5" width="18" height="15" rx="2" />,
+  crypto: <circle cx="12" cy="12" r="8.5" />,
+  percent: (
+    <>
+      <circle cx="8" cy="8" r="2.2" />
+      <circle cx="16" cy="16" r="2.2" />
+    </>
+  ),
+  receipt: <path d="M6 3h12v18l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4L6 21z" />,
+  shield: <path d="M12 3l7.5 3v5c0 4.7-3.2 8.3-7.5 10-4.3-1.7-7.5-5.3-7.5-10V6z" />,
+  invest: <path d="M3 17l5.5-5.5 3 3L19 7v13H3z" />,
+  credit: <rect x="2" y="5" width="20" height="14" rx="2.5" />,
+  debt_out: <circle cx="12" cy="12" r="8" />,
+  debt_in: <circle cx="12" cy="12" r="8" />,
+  tax: <path d="M6 3h9l4 4v14H6z" />,
+  // работа
+  briefcase: <rect x="3" y="7" width="18" height="13" rx="2" />,
+  laptop: <rect x="4" y="5" width="16" height="11" rx="1.5" />,
+  hammer: <path d="M4.5 6.5h15v5h-15z" />,
+  rocket: <path d="M12 2.5c2.6 2 4 5 4 8.2 0 2.9-1.4 5.3-4 7.3-2.6-2-4-4.4-4-7.3 0-3.2 1.4-6.2 4-8.2z" />,
+  crown: <path d="M3 8.5l4 3.5 5-7 5 7 4-3.5-1.5 9.5h-15z" />,
+  gift: <rect x="3" y="9" width="18" height="12" rx="2" />,
+  star: <path d="M12 3l2.6 5.5 6 .9-4.3 4.3 1 6.1-5.3-2.9-5.3 2.9 1-6.1L3.4 9.4l6-.9z" />,
+  // еда
+  burger: (
+    <>
+      <path d="M3.5 10.5c0-3.3 3.8-5.5 8.5-5.5s8.5 2.2 8.5 5.5z" />
+      <path d="M4 16.5h16c0 1.9-1.6 3-3.5 3h-9c-1.9 0-3.5-1.1-3.5-3z" />
+    </>
+  ),
+  cart: <path d="M6 7h14l-2.5 8h-10z" />,
+  groceries: <path d="M3 9h18l-1.8 10.5H4.8z" />,
+  coffee: <path d="M4 8h13v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V8z" />,
+  pizza: <path d="M3.5 7.5a17 17 0 0 1 17 0L12 21z" />,
+  restaurant: <path d="M5 18.5a7 7 0 0 1 14 0z" />,
+  cake: <path d="M4 20.5h16V14c0-1.7-1.8-3-4-3H8c-2.2 0-4 1.3-4 3z" />,
+  bar: <path d="M7.2 7h9.6L12 12.5z" />,
+  fruit: <path d="M12 7.5c-1.8-1.3-4.5-1.5-6 .3-2 2.4-1.2 7 1 10 1.4 1.9 2.8 2.7 5 1.7 2.2 1 3.6.2 5-1.7 2.2-3 3-7.6 1-10-1.5-1.8-4.2-1.6-6-.3z" />,
+  bread: <path d="M4 11a4 4 0 0 1 2-7.5h12A4 4 0 0 1 20 11v8.5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z" />,
+  // транспорт
+  transport: <rect x="4" y="4" width="16" height="12" rx="2" />,
+  car: <path d="M3 16.5v-3.5l2-5.5h14l2 5.5v3.5z" />,
+  taxi: <path d="M3 16.5v-3.5l2-5.5h14l2 5.5v3.5z" />,
+  train: <rect x="5" y="4" width="14" height="12" rx="2.5" />,
+  plane: <path d="M2 14l3-1 4 2 5-2-7-8 2-1 9 6 4-1a2 2 0 0 1 0 4l-17 5z" />,
+  fuel: <path d="M4 21V5a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v16z" />,
+  parking: <rect x="4" y="3" width="16" height="18" rx="3.5" />,
+  bike: (
+    <>
+      <circle cx="6" cy="16.5" r="3.5" />
+      <circle cx="18" cy="16.5" r="3.5" />
+    </>
+  ),
+  scooter: (
+    <>
+      <circle cx="5.5" cy="17.5" r="2.5" />
+      <circle cx="18.5" cy="17.5" r="2.5" />
+    </>
+  ),
+  // жильё
+  home: <path d="M4 10l8-6 8 6v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-9z" />,
+  rent: <path d="M5 21V8l7-5 7 5v13z" />,
+  repair: <path d="M17.6 3.1l-3.2 3.2 2.3 2.3 3.2-3.2a5.6 5.6 0 0 1-7.2 7.2l-6.4 6.4a2.1 2.1 0 0 1-3-3l6.4-6.4a5.6 5.6 0 0 1 7.9-6.5z" />,
+  bulb: <path d="M12 3a6 6 0 0 0-3.5 10.9V16h7v-2.1A6 6 0 0 0 12 3z" />,
+  bolt: <path d="M13 2.5L5 13.5h6l-1 8 8-11h-6z" />,
+  water: <path d="M12 3s6.5 6.8 6.5 11a6.5 6.5 0 0 1-13 0C5.5 9.8 12 3 12 3z" />,
+  trash: <path d="M6.5 7l1 13h9l1-13z" />,
+  furniture: <path d="M3 12.5h18v5H3z" />,
+  key: <circle cx="8" cy="15.5" r="4.5" />,
+  flame: <path d="M12 21c-3.9 0-7-2.8-7-6.6 0-3 1.9-4.8 3.4-6.6.3 1.7 1.1 2.7 2.1 3 0-3.2 1.3-6.2 4.3-7.8-.4 3 1.2 4.8 2.7 6.4A7.3 7.3 0 0 1 19 14.4C19 18.2 15.9 21 12 21z" />,
+  plant: (
+    <>
+      <path d="M7 14h10l-1.3 7H8.3z" />
+      <path d="M12 10.5C12 7.5 9.8 5 6.5 5c0 3.3 2.4 5.5 5.5 5.5zM12 9c0-2.6 1.9-4.8 4.8-4.8 0 2.7-2.1 4.8-4.8 4.8z" />
+    </>
+  ),
+  tv: <rect x="2.5" y="5.5" width="19" height="13" rx="2" />,
+  box: <path d="M3.5 7.5L12 3l8.5 4.5v9L12 21l-8.5-4.5z" />,
+  // здоровье
+  doctor: <path d="M9.5 3h5v6h6v5h-6v6h-5v-6h-6V9h6z" />,
+  pill: <rect x="2.5" y="8.5" width="19" height="7" rx="3.5" transform="rotate(-45 12 12)" />,
+  tooth: (
+    <path d="M6.5 3.5c-2 0-3.5 1.8-3.5 4.2 0 2 .8 3 1.3 5 .5 1.9.4 8.3 2.4 8.3s1.8-6 3.3-6 1.3 6 3.3 6 1.9-6.4 2.4-8.3c.5-2 1.3-3 1.3-5 0-2.4-1.5-4.2-3.5-4.2-1.6 0-2.7 1-3.5 1s-1.9-1-3.5-1z" />
+  ),
+  glasses: (
+    <>
+      <circle cx="6" cy="14" r="3.5" />
+      <circle cx="18" cy="14" r="3.5" />
+    </>
+  ),
+  sport: <circle cx="12" cy="12" r="8" />,
+  smoke: <path d="M3 16h13v3.5H3z" />,
+  glass: <path d="M7.2 10.5c1.6-.8 3.2-.8 4.8 0s3.2.8 4.8 0l-1 9.1a1.7 1.7 0 0 1-1.7 1.4H9.9a1.7 1.7 0 0 1-1.7-1.4z" />,
+  moon: <path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" />,
+  // развлечения
+  fun: <circle cx="12" cy="12" r="8" />,
+  film: <rect x="3" y="4" width="18" height="16" rx="2" />,
+  music: (
+    <>
+      <circle cx="6.5" cy="17.5" r="2.5" />
+      <circle cx="17.5" cy="14.5" r="2.5" />
+    </>
+  ),
+  game: <path d="M7.5 8h9a5 5 0 0 1 4.9 5.9l-.6 3.3A2.4 2.4 0 0 1 16.6 18l-1.4-2H8.8l-1.4 2a2.4 2.4 0 0 1-4.2-.8l-.6-3.3A5 5 0 0 1 7.5 8z" />,
+  ticket: <path d="M3 7h18v3a2 2 0 0 0 0 4v3H3v-3a2 2 0 0 0 0-4z" />,
+  dice: <rect x="4" y="4" width="16" height="16" rx="3.5" />,
+  book: <path d="M4.5 20V4.5A1.5 1.5 0 0 1 6 3h13.5v15.5H6A1.5 1.5 0 0 0 4.5 20z" />,
+  subscription: <rect x="3" y="5" width="18" height="14" rx="2" />,
+  sun: <circle cx="12" cy="12" r="4.5" />,
+  balloon: <path d="M12 15c-3.3 0-6-3-6-6.5S8.7 2.5 12 2.5s6 2.7 6 6S15.3 15 12 15z" />,
+  palette: <path d="M12 3a9 9 0 0 0 0 18c1.4 0 2-.9 2-1.8 0-1.3-1.2-1.6-1.2-2.8 0-1 .8-1.9 2-1.9h2.2A4 4 0 0 0 21 10.7C21 6.4 17 3 12 3z" />,
+  globe: <circle cx="12" cy="12" r="9" />,
+  // покупки
+  clothes: <path d="M8 3l4 2 4-2 5 4-3 3-1-1v12H7V9L6 10 3 7z" />,
+  shoe: <path d="M3 16.5v-5.5h3.5l3 2H15c3.2 0 6 1.2 6 3.5v2H3z" />,
+  bag: <path d="M4.5 9h15l-1 11.5h-13z" />,
+  watch: <circle cx="12" cy="12" r="5" />,
+  beauty: <path d="M12 3l2 5 5 2-5 2-2 5-2-5-5-2 5-2z" />,
+  perfume: <rect x="7" y="9" width="10" height="12" rx="2.5" />,
+  phone: <rect x="6" y="2" width="12" height="20" rx="2.5" />,
+  scissors: (
+    <>
+      <circle cx="6" cy="6.5" r="2.8" />
+      <circle cx="6" cy="17.5" r="2.8" />
+    </>
+  ),
+  // люди и поездки
+  kids: (
+    <>
+      <circle cx="12" cy="7" r="3" />
+      <path d="M6 21v-3a6 6 0 0 1 12 0v3z" />
+    </>
+  ),
+  family: (
+    <>
+      <circle cx="8" cy="7" r="3" />
+      <circle cx="17" cy="8.5" r="2.4" />
+    </>
+  ),
+  pet: <path d="M12 11c-3 0-5 2.5-5 5a3 3 0 0 0 3 3h4a3 3 0 0 0 3-3c0-2.5-2-5-5-5z" />,
+  education: <path d="M12 4L2 9l10 5 10-5z" />,
+  heart: <path d="M12 20s-7-4.3-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.7-7 9-7 9z" />,
+  travel: <path d="M2 14l3-1 4 2 5-2-7-8 2-1 9 6 4-1a2 2 0 0 1 0 4l-17 5z" />,
+  suitcase: <rect x="3" y="8" width="18" height="12" rx="2" />,
+  hotel: <path d="M3 18.5v-6.5h11a4.5 4.5 0 0 1 4.5 4.5v2z" />,
+  baby: <path d="M8.5 8.5h7v10.5a2 2 0 0 1-2 2h-3a2 2 0 0 1-2-2z" />,
+  // прочее
+  cloud: <path d="M7 18.5a4.2 4.2 0 0 1 .5-8.4 5.7 5.7 0 0 1 10.8 1.6 3.5 3.5 0 0 1-.8 6.8z" />,
+  tag: <path d="M3 11V4h7l10.5 10.5-7 7z" />,
+  calendar: <rect x="3" y="5" width="18" height="16" rx="2" />,
+  question: <circle cx="12" cy="12" r="8.5" />,
 };
 
 /** Группы для выбора иконки — искать в общей простыне из 80 штук невозможно. */
@@ -562,7 +832,7 @@ export const ICON_GROUPS: { title: string; icons: string[] }[] = [
   {
     title: "Деньги",
     icons: ["cash", "card", "bank", "wallet", "savings", "coins", "safe", "crypto",
-            "percent", "receipt", "shield", "invest", "credit", "debt_out", "debt_in"],
+            "percent", "receipt", "shield", "invest", "credit", "debt_out", "debt_in", "tax", "exchange"],
   },
   {
     title: "Работа и доход",
@@ -570,7 +840,7 @@ export const ICON_GROUPS: { title: string; icons: string[] }[] = [
   },
   {
     title: "Еда",
-    icons: ["food", "burger", "cart", "groceries", "coffee", "pizza", "restaurant", "cake", "bar"],
+    icons: ["food", "burger", "cart", "groceries", "coffee", "pizza", "restaurant", "cake", "bar", "fruit", "bread"],
   },
   {
     title: "Транспорт",
@@ -578,23 +848,23 @@ export const ICON_GROUPS: { title: string; icons: string[] }[] = [
   },
   {
     title: "Жильё",
-    icons: ["home", "rent", "repair", "bulb", "bolt", "water", "wifi", "trash", "furniture"],
+    icons: ["home", "rent", "repair", "bulb", "bolt", "water", "flame", "wifi", "tv", "key", "plant", "trash", "furniture"],
   },
   {
     title: "Здоровье и спорт",
-    icons: ["health", "doctor", "pill", "tooth", "glasses", "sport", "dumbbell", "smoke"],
+    icons: ["health", "doctor", "pill", "tooth", "glasses", "sport", "dumbbell", "glass", "moon", "smoke"],
   },
   {
     title: "Развлечения",
-    icons: ["fun", "film", "music", "game", "ticket", "dice", "book", "subscription"],
+    icons: ["fun", "film", "music", "game", "ticket", "dice", "book", "subscription", "palette", "balloon", "sun"],
   },
   {
     title: "Покупки",
-    icons: ["clothes", "shoe", "bag", "watch", "beauty", "perfume", "phone"],
+    icons: ["clothes", "shoe", "bag", "watch", "beauty", "perfume", "scissors", "phone", "globe", "box"],
   },
   {
     title: "Люди и поездки",
-    icons: ["kids", "family", "pet", "education", "heart", "travel", "suitcase", "hotel"],
+    icons: ["kids", "baby", "family", "pet", "education", "heart", "travel", "suitcase", "hotel"],
   },
   {
     title: "Прочее",
@@ -636,6 +906,11 @@ export function Icon({
       style={style}
       aria-hidden="true"
     >
+      {TONES[name] ? (
+        <g fill="currentColor" fillOpacity={0.3} stroke="none">
+          {TONES[name]}
+        </g>
+      ) : null}
       {PATHS[name] ?? PATHS.circle}
     </svg>
   );

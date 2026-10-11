@@ -13,8 +13,10 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragOverEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
+import { ABSORB, FLY_BACK, buzz, landOn } from "@/lib/dragFx";
 import { Icon } from "@/lib/icons";
 import { convert, formatMoney, monthLabel, monthRange } from "@/lib/money";
 import { pendingAccrual, toISODate } from "@/lib/savings";
@@ -60,6 +62,8 @@ export function HomeScreen() {
   const [offset, setOffset] = useState(0);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [dragging, setDragging] = useState<DragPayload | null>(null);
+  // Над какой целью сейчас кружок — для вибрации при наведении и анимации броска.
+  const [overId, setOverId] = useState<string | null>(null);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [walletSheet, setWalletSheet] = useState<Wallet | null>(null);
   const [walletEditor, setWalletEditor] =
@@ -211,71 +215,81 @@ export function HomeScreen() {
 
   // ─────────────────────────── перетаскивание ───────────────────────────
 
-  const onDragEnd = (event: DragEndEvent) => {
-    const payload = event.active.data.current as DragPayload | undefined;
-    const target = event.over?.data.current as
-      | { target: "wallet"; walletId: string }
-      | { target: "category"; categoryId: string }
-      | { target: "debts"; group: DebtGroup }
-      | { target: "reorder"; categoryId: string }
-      | undefined;
-    setDragging(null);
-    if (!payload || !target) return;
+  type DropData =
+    | { target: "wallet"; walletId: string }
+    | { target: "category"; categoryId: string }
+    | { target: "debts"; group: DebtGroup }
+    | { target: "reorder"; categoryId: string };
 
+  /** Что делать с брошенным кружком. false — бросок не принят, кружок вернётся. */
+  const handleDrop = (payload: DragPayload, target: DropData): boolean => {
     if (payload.source === "reorder") {
-      if (target.target !== "reorder" || target.categoryId === payload.categoryId) return;
+      if (target.target !== "reorder" || target.categoryId === payload.categoryId) return false;
       // Перетащенный кружок встаёт ровно на место того, на который его бросили.
       const ids = expenseCats.map((c) => c.id);
       const to = ids.indexOf(target.categoryId);
       ids.splice(ids.indexOf(payload.categoryId), 1);
       ids.splice(to, 0, payload.categoryId);
       void reorderCategories(ids).catch(() => setToast("Не получилось сохранить порядок"));
-      return;
+      return true;
     }
 
     if (payload.source === "income") {
       if (target.target !== "wallet") {
         setToast("Доход сначала переносится в кошелёк, а уже оттуда в расход");
-        return;
+        return false;
       }
       const category = incomeCats.find((c) => c.id === payload.categoryId);
       const wallet = wallets.find((w) => w.id === target.walletId);
-      if (category && wallet) setDialog({ kind: "allocate", category, wallet });
-      return;
+      if (!category || !wallet) return false;
+      setDialog({ kind: "allocate", category, wallet });
+      return true;
     }
 
     const from = wallets.find((w) => w.id === payload.walletId);
-    if (!from) return;
+    if (!from) return false;
 
     if (target.target === "category") {
       // С вклада не платят в магазине: сначала деньги переводят на карту.
       if (from.kind === "savings") {
         setToast("Сначала переведи со вклада на карту или в наличные");
-        return;
+        return false;
       }
       const category = expenseCats.find((c) => c.id === target.categoryId);
-      if (category) setDialog({ kind: "expense", category, wallet: from });
-      return;
+      if (!category) return false;
+      setDialog({ kind: "expense", category, wallet: from });
+      return true;
     }
 
     if (target.target === "debts") {
       const list = debts[target.group];
-      if (list.length === 0) {
-        setWalletEditor({ wallet: null, kind: target.group, kinds: [target.group] });
-        return;
-      }
-      if (list.length === 1) {
-        setDialog({ kind: "transfer", from, to: list[0] });
-        return;
-      }
-      setDebtPicker({ group: target.group, payFrom: from });
-      return;
+      if (list.length === 0) setWalletEditor({ wallet: null, kind: target.group, kinds: [target.group] });
+      else if (list.length === 1) setDialog({ kind: "transfer", from, to: list[0] });
+      else setDebtPicker({ group: target.group, payFrom: from });
+      return true;
     }
 
-    if (target.target !== "wallet") return;
+    if (target.target !== "wallet") return false;
     const to = wallets.find((w) => w.id === target.walletId);
-    if (to && to.id !== from.id) setDialog({ kind: "transfer", from, to });
+    if (!to || to.id === from.id) return false;
+    setDialog({ kind: "transfer", from, to });
+    return true;
   };
+
+  const onDragEnd = (event: DragEndEvent) => {
+    const payload = event.active.data.current as DragPayload | undefined;
+    const target = event.over?.data.current as DropData | undefined;
+    setDragging(null);
+    if (payload && target && event.over && handleDrop(payload, target)) {
+      // Принято: призрак «впитывается», цель подпрыгивает.
+      landOn(String(event.over.id));
+      buzz([10, 40, 14]);
+    } else {
+      // Не принято — призрак летит обратно (FLY_BACK у DragOverlay).
+      setOverId(null);
+    }
+  };
+
 
   return (
     <DndContext
@@ -286,10 +300,19 @@ export function HomeScreen() {
       collisionDetection={pointerWithin}
       onDragStart={(event: DragStartEvent) => {
         setDragging(event.active.data.current as DragPayload);
-        if (navigator.vibrate) navigator.vibrate(8);
+        setOverId(null);
+        buzz(8);
+      }}
+      onDragOver={(event: DragOverEvent) => {
+        const id = event.over ? String(event.over.id) : null;
+        if (id && id !== overId) buzz(5);
+        setOverId(id);
       }}
       onDragEnd={onDragEnd}
-      onDragCancel={() => setDragging(null)}
+      onDragCancel={() => {
+        setDragging(null);
+        setOverId(null);
+      }}
     >
       <div className="mx-auto w-full max-w-md px-4 pb-32">
         {/* Три колонки, крайние равной ширины: кнопка слева шире кнопки
@@ -531,7 +554,10 @@ export function HomeScreen() {
         ) : null}
       </div>
 
-      <DragOverlay dropAnimation={null}>
+      {/* Над целью отпустили — «впитывается», мимо — летит обратно. Состояние
+          overId не сбрасываем при удачном броске: DragOverlay читает
+          dropAnimation в том же рендере, где перетаскивание закончилось. */}
+      <DragOverlay dropAnimation={overId ? ABSORB : FLY_BACK}>
         {dragging ? <DragGhost payload={dragging} /> : null}
       </DragOverlay>
 
@@ -1010,6 +1036,7 @@ function WalletBubble({
 
   return (
     <button
+      data-drop-id={`drop-wallet:${wallet.id}`}
       ref={(node) => {
         dragRef(node);
         dropRef(node);
@@ -1068,6 +1095,7 @@ function SavingsBubble({
 
   return (
     <button
+      data-drop-id={`drop-wallet:${wallet.id}`}
       ref={(node) => {
         dragRef(node);
         dropRef(node);
@@ -1125,7 +1153,7 @@ function DebtBubble({
   const shown = group === "debt_out" ? -amount : amount;
 
   return (
-    <button ref={setNodeRef} onClick={onTap} className="transition-transform duration-100 active:scale-95">
+    <button ref={setNodeRef} data-drop-id={`drop-debts:${group}`} onClick={onTap} className="transition-transform duration-100 active:scale-95">
       <Bubble
         icon={style.icon}
         color={style.color}
@@ -1165,7 +1193,7 @@ function ExpenseBubble({
   const over = limit != null && spent > limit;
 
   return (
-    <button ref={setNodeRef} onClick={onTap} className="transition-transform duration-100 active:scale-95" {...hold}>
+    <button ref={setNodeRef} data-drop-id={`drop-category:${category.id}`} onClick={onTap} className="transition-transform duration-100 active:scale-95" {...hold}>
       <Bubble
         icon={category.icon}
         color={category.color}
@@ -1226,7 +1254,7 @@ function BillBubble({
   const late = !done && category.due_day != null && category.due_day < today;
 
   return (
-    <button ref={setNodeRef} onClick={onTap} className="transition-transform duration-100 active:scale-95" {...hold}>
+    <button ref={setNodeRef} data-drop-id={`drop-category:${category.id}`} onClick={onTap} className="transition-transform duration-100 active:scale-95" {...hold}>
       <Bubble
         icon={done ? "check" : category.icon}
         color={category.color}
@@ -1334,6 +1362,7 @@ function ArrangeBubble({ category, size }: { category: Category; size: number })
   });
   return (
     <button
+      data-drop-id={`arrange-drop:${category.id}`}
       ref={(node) => {
         dragRef(node);
         dropRef(node);
@@ -1369,13 +1398,13 @@ function DragGhost({ payload }: { payload: DragPayload }) {
         style={{ transform: "translate(-50%, calc(-50% - 26px))" }}
       >
         <span
-          className="flex h-[60px] w-[60px] items-center justify-center rounded-full text-white"
+          className="animate-lift-up flex h-[60px] w-[60px] items-center justify-center rounded-full text-white"
           style={{
             background: item.color,
-            boxShadow: `0 10px 26px ${item.color}66, 0 0 0 4px var(--surface)`,
+            boxShadow: `0 16px 32px ${item.color}66, 0 6px 12px rgba(0,0,0,0.18), 0 0 0 4px var(--surface)`,
           }}
         >
-          <Icon name={item.icon} size={28} />
+          <Icon name={item.icon} size={31} />
         </span>
         {payload.source !== "reorder" ? (
           <span

@@ -241,18 +241,21 @@ export function Bubble({
         </span>
       </span>
       <span
-        className="relative flex items-center justify-center rounded-full text-white transition"
+        data-disc
+        className="relative flex items-center justify-center rounded-full text-white"
         style={{
           width: size,
           height: size,
           background: color,
           boxShadow: highlighted
-            ? `0 0 0 3px var(--surface), 0 0 0 6px ${color}, 0 10px 22px ${color}66`
+            ? `0 0 0 3px var(--surface), 0 0 0 6px ${color}, 0 12px 26px ${color}77`
             : "0 1px 2px rgba(0,0,0,0.12)",
-          transform: highlighted ? "scale(1.06)" : undefined,
+          // Под пальцем цель упруго раздувается — видно, куда упадёт.
+          transform: highlighted ? "scale(1.14)" : undefined,
+          transition: "transform 280ms cubic-bezier(.34,1.56,.64,1), box-shadow 200ms ease, opacity 150ms ease",
         }}
       >
-        <Icon name={icon} size={size * 0.46} />
+        <Icon name={icon} size={Math.round(size * 0.52)} />
         {badge ? (
           <span
             className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full"
@@ -440,7 +443,7 @@ export function IconPicker({
                     color: value === name ? "#fff" : "var(--muted)",
                   }}
                 >
-                  <Icon name={name} size={21} />
+                  <Icon name={name} size={24} />
                 </button>
               ))}
             </div>

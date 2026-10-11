@@ -53,6 +53,7 @@ function DayCell({
   return (
     <button
       ref={setNodeRef}
+      data-drop-id={`date-${date}`}
       onClick={() => onSelect(date)}
       aria-label={date}
       aria-current={selected ? "date" : undefined}
@@ -64,8 +65,12 @@ function DayCell({
         </span>
       ) : null}
       <span
-        className="flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold transition"
+        data-disc
+        className="flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold"
         style={{
+          // Под задачей день упруго раздувается — видно, куда она переедет.
+          transform: isOver ? "scale(1.18)" : undefined,
+          transition: "transform 280ms cubic-bezier(.34,1.56,.64,1), background 150ms ease",
           background: selected ? "var(--accent)" : isOver ? "var(--surface-2)" : "transparent",
           color: selected ? "#fff" : faded ? "var(--muted)" : "var(--text)",
           boxShadow: isToday && !selected ? "inset 0 0 0 1.5px var(--accent)" : undefined,

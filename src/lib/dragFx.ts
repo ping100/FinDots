@@ -21,9 +21,24 @@ export function buzz(pattern: number | number[]) {
   }
 }
 
+/**
+ * Через сколько после броска открывать окно (сумма расхода и т.п.).
+ * Раньше оно открывалось сразу и закрывало собой приземление — его просто
+ * не было видно. Этого хватает, чтобы призрак впитался, а цель отыграла
+ * основной прыжок; волна дорасходится уже под затемнением.
+ */
+export const AFTER_LANDING_MS = 480;
+
+/** Отпустили на цели: прыжок начинается, когда призрак почти впитался. */
+const LAND_DELAY_MS = 120;
+
 /** Цель подпрыгивает, и от неё расходится волна её же цвета. */
 export function landOn(dropId: string) {
   if (typeof document === "undefined") return;
+  window.setTimeout(() => bounce(dropId), LAND_DELAY_MS);
+}
+
+function bounce(dropId: string) {
   if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
   const target = document.querySelector<HTMLElement>(`[data-drop-id="${CSS.escape(dropId)}"]`);
   const disc = target?.querySelector<HTMLElement>("[data-disc]") ?? target;

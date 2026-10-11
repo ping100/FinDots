@@ -16,7 +16,7 @@ import {
   type DragOverEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { ABSORB, FLY_BACK, buzz, landOn } from "@/lib/dragFx";
+import { ABSORB, AFTER_LANDING_MS, FLY_BACK, buzz, landOn } from "@/lib/dragFx";
 import { Icon } from "@/lib/icons";
 import { convert, formatMoney, monthLabel, monthRange } from "@/lib/money";
 import { pendingAccrual, toISODate } from "@/lib/savings";
@@ -222,6 +222,9 @@ export function HomeScreen() {
     | { target: "reorder"; categoryId: string };
 
   /** Что делать с брошенным кружком. false — бросок не принят, кружок вернётся. */
+  // Окно после броска — с паузой, иначе оно закрывает приземление.
+  const afterLanding = (open: () => void) => window.setTimeout(open, AFTER_LANDING_MS);
+
   const handleDrop = (payload: DragPayload, target: DropData): boolean => {
     if (payload.source === "reorder") {
       if (target.target !== "reorder" || target.categoryId === payload.categoryId) return false;
@@ -242,7 +245,7 @@ export function HomeScreen() {
       const category = incomeCats.find((c) => c.id === payload.categoryId);
       const wallet = wallets.find((w) => w.id === target.walletId);
       if (!category || !wallet) return false;
-      setDialog({ kind: "allocate", category, wallet });
+      afterLanding(() => setDialog({ kind: "allocate", category, wallet }));
       return true;
     }
 
@@ -257,22 +260,24 @@ export function HomeScreen() {
       }
       const category = expenseCats.find((c) => c.id === target.categoryId);
       if (!category) return false;
-      setDialog({ kind: "expense", category, wallet: from });
+      afterLanding(() => setDialog({ kind: "expense", category, wallet: from }));
       return true;
     }
 
     if (target.target === "debts") {
       const list = debts[target.group];
-      if (list.length === 0) setWalletEditor({ wallet: null, kind: target.group, kinds: [target.group] });
-      else if (list.length === 1) setDialog({ kind: "transfer", from, to: list[0] });
-      else setDebtPicker({ group: target.group, payFrom: from });
+      afterLanding(() => {
+        if (list.length === 0) setWalletEditor({ wallet: null, kind: target.group, kinds: [target.group] });
+        else if (list.length === 1) setDialog({ kind: "transfer", from, to: list[0] });
+        else setDebtPicker({ group: target.group, payFrom: from });
+      });
       return true;
     }
 
     if (target.target !== "wallet") return false;
     const to = wallets.find((w) => w.id === target.walletId);
     if (!to || to.id === from.id) return false;
-    setDialog({ kind: "transfer", from, to });
+    afterLanding(() => setDialog({ kind: "transfer", from, to }));
     return true;
   };
 

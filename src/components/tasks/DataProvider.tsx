@@ -14,6 +14,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { applyLook } from "@/lib/look";
 import { scaleFactor } from "@/lib/textScale";
+import { today } from "@/lib/tasks/dates";
 import type { Task, TaskCategory } from "@/lib/tasks/types";
 import type { Profile } from "@/lib/types";
 
@@ -31,6 +32,8 @@ export interface Store {
   toggleDone: (id: string) => Promise<void>;
   /** Перенос драгом на другой кружок в ленте дат. */
   rescheduleTask: (id: string, date: string | null) => Promise<void>;
+  /** «Всё на сегодня» из «Пропущено». */
+  rescheduleMany: (ids: string[], date: string) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
 
   saveCategory: (category: Partial<TaskCategory> & { id?: string }) => Promise<void>;
@@ -38,6 +41,29 @@ export interface Store {
   deleteCategory: (id: string) => Promise<void>;
 
   saveProfile: (patch: Partial<Profile>) => Promise<void>;
+}
+
+/**
+ * Задачи с «Переносить на следующий день», которые вчера не успели, сразу
+ * показываем на сегодня и записываем это в базу. Сервер делает то же раз
+ * в 10 минут — здесь только чтобы сразу после полуночи не ждать его.
+ */
+function carryOver(list: Task[]): Task[] {
+  const now = today();
+  const stale = list.filter((t) => t.carry_over && !t.done && t.date && t.date < now);
+  if (stale.length === 0) return list;
+  const db = createClient();
+  for (const t of stale) {
+    void db
+      .from("tasks")
+      .update({ date: now, carried_from: t.carried_from ?? t.date })
+      .eq("id", t.id)
+      .eq("done", false)
+      .then(() => undefined);
+  }
+  return list.map((t) =>
+    stale.includes(t) ? { ...t, date: now, carried_from: t.carried_from ?? t.date } : t,
+  );
 }
 
 function transient(message: string): boolean {
@@ -112,7 +138,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
     if (p.data) setProfile(p.data as Profile);
     setCategories((c.data ?? []) as TaskCategory[]);
-    setTasks((t.data ?? []) as Task[]);
+    setTasks(carryOver((t.data ?? []) as Task[]));
     setReady(true);
   }, [supabase]);
 
@@ -140,7 +166,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       .order("sort_order")
       .order("created_at")
       .limit(2000);
-    setTasks((t.data ?? []) as Task[]);
+    setTasks(carryOver((t.data ?? []) as Task[]));
   }, [supabase]);
 
   const guard = useCallback(
@@ -188,10 +214,20 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [guard, supabase, tasks],
   );
 
+  // Сами поставили день — пометка «перенесено с …» больше ни к чему.
   const rescheduleTask: Store["rescheduleTask"] = useCallback(
     async (id, date) => {
-      setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, date } : t)));
-      await guard(() => supabase().from("tasks").update({ date }).eq("id", id));
+      setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, date, carried_from: null } : t)));
+      await guard(() => supabase().from("tasks").update({ date, carried_from: null }).eq("id", id));
+    },
+    [guard, supabase],
+  );
+
+  const rescheduleMany: Store["rescheduleMany"] = useCallback(
+    async (ids, date) => {
+      if (ids.length === 0) return;
+      setTasks((prev) => prev.map((t) => (ids.includes(t.id) ? { ...t, date, carried_from: null } : t)));
+      await guard(() => supabase().from("tasks").update({ date, carried_from: null }).in("id", ids));
     },
     [guard, supabase],
   );
@@ -253,6 +289,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       saveTask,
       toggleDone,
       rescheduleTask,
+      rescheduleMany,
       deleteTask,
       saveCategory,
       deleteCategory,
@@ -260,7 +297,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }),
     [
       ready, error, userId, profile, tasks, categories, refresh,
-      saveTask, toggleDone, rescheduleTask, deleteTask, saveCategory, deleteCategory, saveProfile,
+      saveTask, toggleDone, rescheduleTask, rescheduleMany, deleteTask, saveCategory, deleteCategory, saveProfile,
     ],
   );
 

@@ -27,7 +27,7 @@ import { AppSwitchPill } from "@/components/AppSwitch";
 import { Icon } from "@/lib/icons";
 
 export default function TodayPage() {
-  const { tasks, categories, toggleDone, saveTask, deleteTask, rescheduleTask } = useStore();
+  const { tasks, categories, toggleDone, saveTask, deleteTask, rescheduleTask, rescheduleMany } = useStore();
 
   const [selected, setSelected] = useState(today());
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
@@ -73,6 +73,13 @@ export default function TodayPage() {
   const timed = dayTasks.filter((t) => t.time && !t.done);
   const done = dayTasks.filter((t) => t.done);
   const unscheduled = byCategory(tasks.filter((t) => t.date === null && !t.done));
+  // Не сделанные в свой день и без «Переносить на следующий день» —
+  // остаются на своём дне, но видны здесь, чтобы не потеряться в календаре.
+  const now = today();
+  const overdue =
+    selected === now
+      ? byCategory(tasks.filter((t) => !t.done && !t.carry_over && t.date !== null && t.date < now))
+      : [];
 
   const loadedDates = useMemo(
     () => new Set(tasks.filter((t) => !t.done && t.date).map((t) => t.date as string)),
@@ -154,6 +161,33 @@ export default function TodayPage() {
         ) : null}
 
         <div className="mt-4 space-y-5">
+          {overdue.length > 0 ? (
+            <section
+              className="rounded-2xl p-2"
+              style={{
+                background: "color-mix(in srgb, var(--danger) 6%, transparent)",
+                border: "1px solid color-mix(in srgb, var(--danger) 22%, transparent)",
+              }}
+            >
+              <div className="mb-1.5 flex items-center justify-between gap-2 pl-1.5">
+                <span className="text-sm font-semibold" style={{ color: "var(--danger)" }}>
+                  Пропущено · {overdue.length}
+                </span>
+                <button
+                  onClick={() => void rescheduleMany(overdue.map((t) => t.id), now)}
+                  className="rounded-full px-3 py-1 text-xs font-medium text-white transition active:scale-95"
+                  style={{ background: "var(--accent)" }}
+                >
+                  Всё на сегодня
+                </button>
+              </div>
+              <TaskList tasks={overdue} categories={categories} onToggle={toggleDone} onOpen={openEdit} overdue />
+              <p className="mt-1.5 px-1.5 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+                Отметьте сделанное или перетащите задачу на нужный день
+              </p>
+            </section>
+          ) : null}
+
           {untimed.length || timed.length ? (
             <TaskList
               tasks={[...untimed, ...timed]}

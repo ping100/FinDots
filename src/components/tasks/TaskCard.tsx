@@ -2,6 +2,7 @@
 
 import { useDraggable } from "@dnd-kit/core";
 import { Icon } from "@/lib/icons";
+import { shortDay } from "@/lib/tasks/dates";
 import type { DragPayload, Priority, Task, TaskCategory } from "@/lib/tasks/types";
 
 const PRIORITY_COLOR: Record<Priority, string> = {
@@ -15,9 +16,12 @@ export function TaskCard({
   category,
   onToggle,
   onOpen,
+  overdue,
 }: {
   task: Task;
   category: TaskCategory | undefined;
+  /** В «Пропущено»: показать, от какого она дня. */
+  overdue?: boolean;
   onToggle: () => void;
   onOpen: () => void;
 }) {
@@ -70,6 +74,15 @@ export function TaskCard({
         >
           {task.title}
         </p>
+        {overdue && task.date ? (
+          <span className="shrink-0 text-xs" style={{ color: "var(--danger)" }}>
+            {shortDay(task.date)}
+          </span>
+        ) : task.carried_from && !task.done ? (
+          <span className="flex shrink-0 items-center gap-0.5 text-xs" style={{ color: "var(--muted)" }}>
+            <Icon name="carry" size={11} />с {shortDay(task.carried_from)}
+          </span>
+        ) : null}
         {task.time ? (
           <span className="flex shrink-0 items-center gap-1 text-xs tabular-nums" style={{ color: "var(--muted)" }}>
             {task.time.slice(0, 5)}

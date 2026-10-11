@@ -5,7 +5,7 @@ import { Icon } from "@/lib/icons";
 import { addDays, today } from "@/lib/tasks/dates";
 import type { Priority, Task, TaskCategory } from "@/lib/tasks/types";
 import { PushNudge } from "@/components/PushSettings";
-import { Button, FieldGroup, Sheet, inputClass, inputStyle } from "@/components/ui";
+import { Button, FieldGroup, Sheet, Switch, inputClass, inputStyle } from "@/components/ui";
 
 const PRIORITIES: { value: Priority; color: string; label: string }[] = [
   { value: "low", color: "#8b97a8", label: "Низкий" },
@@ -35,6 +35,7 @@ export function QuickAdd({
   const [date, setDate] = useState<string | null>(defaultDate);
   const [time, setTime] = useState("");
   const [remind, setRemind] = useState(false);
+  const [carry, setCarry] = useState(false);
   const [priority, setPriority] = useState<Priority>("medium");
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -46,6 +47,7 @@ export function QuickAdd({
     setDate(task ? task.date : defaultDate);
     setTime(task?.time?.slice(0, 5) ?? "");
     setRemind(task?.remind ?? false);
+    setCarry(task?.carry_over ?? false);
     setPriority(task?.priority ?? "medium");
     setCategoryId(task?.category_id ?? null);
     setConfirming(false);
@@ -75,6 +77,9 @@ export function QuickAdd({
         date,
         time: time || null,
         remind: !!time && remind,
+        carry_over: carry,
+        // Другой день выбран вручную — пометка «перенесено с …» больше не нужна.
+        carried_from: task && date === task.date ? task.carried_from : null,
         priority,
         category_id: categoryId,
         done: task?.done ?? false,
@@ -158,6 +163,32 @@ export function QuickAdd({
           value={date ?? ""}
           onChange={(e) => setDate(e.target.value || null)}
         />
+        {date ? (
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => setCarry((v) => !v)}
+            onKeyDown={(e) => e.key === "Enter" && setCarry((v) => !v)}
+            className="mt-2 flex w-full cursor-pointer items-center gap-2.5 rounded-2xl border px-4 py-3 text-left text-sm"
+            style={{
+              borderColor: carry ? "var(--accent)" : "var(--border)",
+              background: carry ? "color-mix(in srgb, var(--accent) 12%, transparent)" : undefined,
+            }}
+          >
+            <span style={{ color: carry ? "var(--accent)" : "var(--muted)" }}>
+              <Icon name="carry" size={18} />
+            </span>
+            <span className="flex-1">
+              Переносить на следующий день
+              <span className="mt-0.5 block text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+                {carry
+                  ? "Не успели — задача сама переедет на следующий день"
+                  : "Не успели — задача попадёт в «Пропущено»"}
+              </span>
+            </span>
+            <Switch checked={carry} onChange={setCarry} label="Переносить на следующий день" />
+          </div>
+        ) : null}
       </FieldGroup>
 
       <FieldGroup label="Время">

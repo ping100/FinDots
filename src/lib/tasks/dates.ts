@@ -50,6 +50,15 @@ export function dayLabel(iso: string): string {
   return `${d} ${MONTHS[m - 1]}${suffix}`;
 }
 
+const MONTHS_SHORT = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
+
+/** Коротко для пометок у задачи: «вчера», «10 окт». */
+export function shortDay(iso: string): string {
+  if (iso === addDays(today(), -1)) return "вчера";
+  const [, m, d] = iso.split("-").map(Number);
+  return `${d} ${MONTHS_SHORT[m - 1]}`;
+}
+
 /** Понедельник той недели, в которую попадает дата. */
 export function startOfWeek(iso: string): string {
   const [y, m, d] = iso.split("-").map(Number);

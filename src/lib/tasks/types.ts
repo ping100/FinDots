@@ -31,6 +31,11 @@ export interface Task {
   sort_order: number;
   note: string | null;
   created_at: string;
+  /** Не успели — сама переезжает на следующий день. Иначе остаётся на
+      своём дне и видна в «Пропущено». */
+  carry_over: boolean;
+  /** С какого дня переезжает: «перенесено с 10 окт». */
+  carried_from: string | null;
 }
 
 /** Что тащат пальцем: карточку задачи. */

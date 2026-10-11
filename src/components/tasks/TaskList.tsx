@@ -9,12 +9,14 @@ export function TaskList({
   onToggle,
   onOpen,
   empty,
+  overdue,
 }: {
   tasks: Task[];
   categories: TaskCategory[];
   onToggle: (id: string) => void;
   onOpen: (task: Task) => void;
   empty?: string;
+  overdue?: boolean;
 }) {
   if (tasks.length === 0) {
     return empty ? (
@@ -33,6 +35,7 @@ export function TaskList({
           category={categories.find((c) => c.id === task.category_id)}
           onToggle={() => onToggle(task.id)}
           onOpen={() => onOpen(task)}
+          overdue={overdue}
         />
       ))}
     </div>

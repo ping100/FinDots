@@ -162,8 +162,9 @@ export default function TodayPage() {
 
         <div className="mt-4 space-y-5">
           {overdue.length > 0 ? (
+            // Качнётся один раз при появлении — чтобы пропущенное заметили.
             <section
-              className="rounded-2xl p-2"
+              className="animate-nudge rounded-2xl p-2"
               style={{
                 background: "color-mix(in srgb, var(--danger) 6%, transparent)",
                 border: "1px solid color-mix(in srgb, var(--danger) 22%, transparent)",

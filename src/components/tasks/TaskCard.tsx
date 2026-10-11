@@ -36,7 +36,10 @@ export function TaskCard({
       {...listeners}
       {...attributes}
       onClick={onOpen}
-      className="flex select-none items-center gap-2.5 rounded-xl px-2.5 py-1.5 transition"
+      // Перенесённая сама задача качнётся при появлении: «я тут со вчера».
+      className={`flex select-none items-center gap-2.5 rounded-xl px-2.5 py-1.5 transition ${
+        task.carried_from && !task.done && !overdue ? "animate-nudge" : ""
+      }`}
       style={{
         background: "var(--surface)",
         border: "1px solid var(--border)",

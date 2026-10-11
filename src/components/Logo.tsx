@@ -13,10 +13,12 @@
 // delay — для сборки знака, wait — для дыхания. Разные, потому что и
 // длительности разные: на сборке в полсекунды 90 мс уже видны, а на цикле
 // дыхания в 1,3 с тот же сдвиг незаметен и кружки гаснут разом.
+// slow — задержки для долгой сборки на главной: там знак — главный герой
+// экрана, и каждый кружок успевает прилететь сам по себе.
 const DOTS = [
-  { cx: 50, cy: 29.3, color: "#22c55e", dx: 0, dy: 22, delay: 0, wait: 0 },
-  { cx: 31.8, cy: 62.5, color: "#60a5fa", dx: 18.2, dy: -11.1, delay: 90, wait: 210 },
-  { cx: 68.2, cy: 62.5, color: "#f97316", dx: -18.2, dy: -11.1, delay: 180, wait: 420 },
+  { cx: 50, cy: 29.3, color: "#22c55e", dx: 0, dy: 22, delay: 0, slow: 0, wait: 0 },
+  { cx: 31.8, cy: 62.5, color: "#60a5fa", dx: 18.2, dy: -11.1, delay: 90, slow: 170, wait: 210 },
+  { cx: 68.2, cy: 62.5, color: "#f97316", dx: -18.2, dy: -11.1, delay: 180, slow: 340, wait: 420 },
 ];
 
 export function Logo({
@@ -26,12 +28,20 @@ export function Logo({
   breathing = false,
 }: {
   size?: number;
-  animated?: boolean;
+  /** true — быстрая сборка; "long" — долгая, с поворотом всего знака. */
+  animated?: boolean | "long";
   breathing?: boolean;
 }) {
   return (
     // viewBox обрезан по самим кружкам, иначе знак тонет в пустых полях
-    <svg width={size} height={size} viewBox="17.5 13.4 65 65" role="img" aria-label="Dots">
+    <svg
+      width={size}
+      height={size}
+      viewBox="17.5 13.4 65 65"
+      role="img"
+      aria-label="Dots"
+      className={animated === "long" ? "animate-logo-spin" : undefined}
+    >
       {DOTS.map((dot) => (
         <circle
           key={dot.color}
@@ -39,7 +49,9 @@ export function Logo({
           cy={dot.cy}
           r={14.3}
           fill={dot.color}
-          className={animated ? "animate-dot" : breathing ? "animate-breathe" : undefined}
+          className={
+            animated === "long" ? "animate-dot-long" : animated ? "animate-dot" : breathing ? "animate-breathe" : undefined
+          }
           style={
             animated || breathing
               ? ({
@@ -47,7 +59,7 @@ export function Logo({
                   // самого кружка, а не от угла холста
                   transformBox: "fill-box",
                   transformOrigin: "center",
-                  animationDelay: `${animated ? dot.delay : dot.wait}ms`,
+                  animationDelay: `${animated === "long" ? dot.slow : animated ? dot.delay : dot.wait}ms`,
                   "--dx": `${dot.dx}px`,
                   "--dy": `${dot.dy}px`,
                 } as React.CSSProperties)

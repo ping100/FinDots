@@ -453,3 +453,37 @@ export function IconPicker({
     </FieldGroup>
   );
 }
+
+/** Переключатель «вкл/выкл» в стиле iOS. */
+export function Switch({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  onChange: (next: boolean) => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={(e) => {
+        e.stopPropagation();
+        onChange(!checked);
+      }}
+      className="relative h-[30px] w-[50px] shrink-0 rounded-full transition-colors duration-200"
+      style={{ background: checked ? "var(--ok)" : "var(--surface-2)", border: "1px solid var(--border)" }}
+    >
+      <span
+        className="absolute top-[2px] h-[24px] w-[24px] rounded-full bg-white shadow"
+        style={{
+          left: checked ? 22 : 2,
+          transition: "left 260ms cubic-bezier(.34,1.56,.64,1)",
+        }}
+      />
+    </button>
+  );
+}

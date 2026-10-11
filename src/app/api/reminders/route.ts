@@ -8,7 +8,8 @@ export const dynamic = "force-dynamic";
 
 /**
  * Разослать напоминания, которым пришло время: о задачах (Todots) и о
- * регулярных платежах из «Каждый месяц» (Findots, за два дня до числа).
+ * регулярных платежах из «Каждый месяц» (Findots, за два дня до числа),
+ * о воде и о сне («Здоровье» в Todots).
  *
  * Зовёт сама база (pg_cron раз в минуту, и только когда есть что
  * отправить) с секретом из Vault. Вход здесь не нужен и не используется:
@@ -26,14 +27,16 @@ export async function POST(request: Request) {
     auth: { persistSession: false },
   });
 
-  const [tasksRes, billsRes] = await Promise.all([
+  const [tasksRes, billsRes, wellnessRes] = await Promise.all([
     supabase.rpc("claim_due_reminders", { p_secret: secret }),
     supabase.rpc("claim_due_bill_reminders", { p_secret: secret }),
+    supabase.rpc("claim_due_wellness_reminders", { p_secret: secret }),
   ]);
   // Рассылки независимы: сбой в напоминаниях о платежах не должен
   // оставить без напоминаний задачи — и наоборот.
-  if (tasksRes.error && billsRes.error) {
-    return NextResponse.json({ error: `${tasksRes.error.message}; ${billsRes.error.message}` }, { status: 500 });
+  const failures = [tasksRes.error, billsRes.error, wellnessRes.error].filter(Boolean);
+  if (failures.length === 3) {
+    return NextResponse.json({ error: failures.map((e) => e!.message).join("; ") }, { status: 500 });
   }
 
   const tasks = (tasksRes.data ?? []) as { endpoint: string; p256dh: string; auth: string; title: string; task_id: string }[];
@@ -47,6 +50,16 @@ export async function POST(request: Request) {
     currency: string;
     due: string;
     days_left: number;
+  }[];
+
+  const wellness = (wellnessRes.data ?? []) as {
+    endpoint: string;
+    p256dh: string;
+    auth: string;
+    kind: "water" | "sleep_prep" | "sleep";
+    glasses: number;
+    goal: number;
+    prep_min: number;
   }[];
 
   const messages = [
@@ -63,6 +76,7 @@ export async function POST(request: Request) {
         tag: `bill-${row.category_id}-${row.due}`,
       },
     })),
+    ...wellness.map((row) => ({ sub: row, push: wellnessPush(row) })),
   ];
 
   const results = await Promise.all(
@@ -76,7 +90,7 @@ export async function POST(request: Request) {
   );
 
   return NextResponse.json({
-    errors: [tasksRes.error?.message, billsRes.error?.message].filter(Boolean),
+    errors: failures.map((e) => e!.message),
     sent: results.filter((r) => r === "ok").length,
     dead: results.filter((r) => r === "dead").length,
     failed: results.filter((r) => r === "failed").length,
@@ -99,4 +113,28 @@ function money(amount: number, currency: string): string {
   const rounded = Math.round(amount * 100) / 100;
   const digits = Number.isInteger(rounded) ? 0 : 2;
   return `${rounded.toLocaleString("ru-RU", { minimumFractionDigits: digits, maximumFractionDigits: digits })} ${symbol}`;
+}
+
+/** Текст напоминаний «Здоровья». Тег один на вид: новое заменяет старое, не копится. */
+function wellnessPush(row: { kind: "water" | "sleep_prep" | "sleep"; glasses: number; goal: number; prep_min: number }) {
+  if (row.kind === "water") {
+    return {
+      title: "Пора выпить воды",
+      body:
+        row.glasses > 0
+          ? `Сегодня ${row.glasses} из ${row.goal} стаканов — ещё один?`
+          : `Начните со стакана воды — цель на сегодня ${row.goal}`,
+      url: "/tasks",
+      tag: "water",
+    };
+  }
+  if (row.kind === "sleep_prep") {
+    return {
+      title: "Скоро спать",
+      body: `Через ${row.prep_min} мин — отбой. Самое время отложить телефон`,
+      url: "/tasks",
+      tag: "sleep",
+    };
+  }
+  return { title: "Пора спать", body: "Спокойной ночи! Задачи подождут до утра", url: "/tasks", tag: "sleep" };
 }

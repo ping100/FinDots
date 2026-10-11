@@ -15,6 +15,7 @@ import { SettingsHeading } from "@/components/SettingsHeading";
 import { PrivacyLink, TermsLink } from "@/components/PrivacyLink";
 import { TEXT_SCALES } from "@/lib/textScale";
 import { PushSettings } from "@/components/PushSettings";
+import { WellnessSettings } from "@/components/tasks/WellnessSettings";
 import { disablePush } from "@/lib/pushClient";
 import { AccountCard } from "@/components/AccountCard";
 import { AppSwitch } from "@/components/AppSwitch";
@@ -67,6 +68,8 @@ export default function SettingsPage() {
 
       <SettingsHeading>Напоминания</SettingsHeading>
       <PushSettings />
+
+      <WellnessSettings />
 
       <SettingsHeading>Категории</SettingsHeading>
       {categories.filter((c) => !c.archived).length === 0 ? (

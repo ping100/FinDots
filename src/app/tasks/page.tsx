@@ -22,6 +22,7 @@ import { useAddAction } from "@/components/tasks/Shell";
 import { Calendar } from "@/components/tasks/Calendar";
 import { TaskList } from "@/components/tasks/TaskList";
 import { QuickAdd } from "@/components/tasks/QuickAdd";
+import { WellnessCard } from "@/components/tasks/WellnessCard";
 import { AppSwitchPill } from "@/components/AppSwitch";
 import { Icon } from "@/lib/icons";
 
@@ -124,6 +125,8 @@ export default function TodayPage() {
         </header>
 
         <Calendar selected={selected} onSelect={setSelected} loadedDates={loadedDates} />
+
+        {selected === today() ? <WellnessCard /> : null}
 
         {liveCategories.length > 0 ? (
           <div className="mt-3 flex flex-wrap gap-2">

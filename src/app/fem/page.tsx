@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Icon } from "@/lib/icons";
 import { addDays, today } from "@/lib/tasks/dates";
-import { FEM_GRADIENT, PHASE_COLOR, PHASE_TEXT, cycleInfo } from "@/lib/fem/cycle";
+import { FEM_GRADIENT, PHASE_COLOR, PHASE_TEXT, cycleHealth, cycleInfo, signalsFrom } from "@/lib/fem/cycle";
+import { OwnTogether } from "@/components/fem/Together";
 import { PartnerJoin } from "@/components/fem/PartnerShare";
 import { long, range, short } from "@/lib/fem/format";
 import { useFem } from "@/components/fem/DataProvider";
@@ -16,9 +17,15 @@ import { CycleRing, DayHero, DayLog, plural } from "@/components/fem/parts";
  * («начались» / «закончились»), ближайшие даты и самочувствие за сегодня.
  */
 export default function FemToday() {
-  const { settings, periods, partner, startPeriod, endPeriod } = useFem();
+  const { settings, periods, days, partner, startPeriod, endPeriod, saveDay } = useFem();
   const now = today();
-  const info = useMemo(() => cycleInfo(periods, settings!, now), [periods, settings, now]);
+  const info = useMemo(
+    () => cycleInfo(periods, settings!, now, signalsFrom(days, settings)),
+    [periods, settings, days, now],
+  );
+  const health = useMemo(() => cycleHealth(periods), [periods]);
+  const goal = settings!.goal;
+  const method = settings!.method;
   const [busy, setBusy] = useState(false);
   const phase = info.phase ? PHASE_TEXT[info.phase] : null;
   // Окно этого цикла уже прошло — показываем ближайшее, следующего.
@@ -30,6 +37,7 @@ export default function FemToday() {
       to: addDays(info.fertileEnd, shiftBy),
       ovulation: addDays(info.ovulation, shiftBy),
       now: now >= addDays(info.fertileStart, shiftBy) && now <= addDays(info.fertileEnd, shiftBy),
+      shifted: shiftBy > 0,
     };
   }, [info, now]);
 
@@ -46,7 +54,7 @@ export default function FemToday() {
       {/* Ведёте свой цикл и при этом смотрите чужой — переход сюда. */}
       {partner ? <PartnerJoin /> : null}
 
-      {info.phase ? <DayHero phase={info.phase} day={now} who="own" /> : null}
+      {info.phase ? <DayHero phase={info.phase} day={now} who="own" goal={goal} /> : null}
 
       <div className="fem-card rounded-[28px] px-4 pb-5 pt-6">
         <CycleRing info={info} size={232} />
@@ -72,7 +80,13 @@ export default function FemToday() {
           }
         >
           <Icon name={info.current ? "check" : "drop"} size={18} />
-          {info.current ? "Месячные закончились" : "Начались месячные"}
+          {info.hormonal
+            ? info.current
+              ? "Кровотечение закончилось"
+              : "Началось кровотечение"
+            : info.current
+              ? "Месячные закончились"
+              : "Начались месячные"}
         </button>
         <p className="mt-2 text-center text-[0.6875rem]" style={{ color: "var(--muted)" }}>
           Другой день — отметьте в{" "}
@@ -82,30 +96,98 @@ export default function FemToday() {
         </p>
       </div>
 
-      {info.nextStart ? (
+      {info.hormonal ? (
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <Fact
+            color={PHASE_COLOR.period}
+            label="Кровотечение отмены"
+            value={info.nextRange ? range(info.nextRange[0], info.nextRange[1]) : "по графику нет"}
+            hint={info.nextRange ? "по схеме упаковки" : "на этом методе бывает нерегулярным"}
+          />
+          <MethodFact />
+        </div>
+      ) : info.nextStart ? (
         <div className="mt-3 grid grid-cols-2 gap-2">
           <Fact
             color={PHASE_COLOR.period}
             label="Следующие месячные"
-            value={info.late > 0 ? "задержка" : `~${short(info.nextStart)}`}
+            value={info.late > 0 ? "задержка" : info.nextRange ? range(info.nextRange[0], info.nextRange[1]) : `~${short(info.nextStart)}`}
             hint={
               info.late > 0
-                ? `ожидались ${short(info.nextStart)}`
+                ? `ожидались ~${short(info.nextStart)}`
                 : info.daysToNext === 0
-                  ? "сегодня"
-                  : `через ${info.daysToNext} ${plural(info.daysToNext ?? 0, "день", "дня", "дней")}`
+                  ? "вероятнее всего сегодня"
+                  : `вероятнее ~${short(info.nextStart)}, через ${info.daysToNext} ${plural(info.daysToNext ?? 0, "день", "дня", "дней")}`
             }
           />
           {fw ? (
             <Fact
               color={PHASE_COLOR.fertile}
-              label={fw.now ? "Фертильное окно — сейчас" : "Фертильное окно"}
+              label={goal === "conceive" ? (fw.now ? "Лучшие дни — сейчас" : "Лучшие дни для зачатия") : fw.now ? "Фертильное окно — сейчас" : "Фертильное окно"}
               value={range(fw.from, fw.to)}
-              hint={`овуляция ~${short(fw.ovulation)}`}
+              hint={
+                info.ovulationBy && !fw.shifted
+                  ? `овуляция ${short(fw.ovulation)} ✓ ${info.ovulationBy === "lh" ? "по тесту" : "по температуре"}`
+                  : `овуляция ~${short(fw.ovulation)}`
+              }
             />
           ) : null}
         </div>
       ) : null}
+
+      {method === "coc" || method === "pop" ? (
+        <div className="fem-card mt-3 flex items-center gap-3 rounded-3xl px-4 py-3.5">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-xl" style={{ background: "var(--surface-2)" }}>
+            💊
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[0.9375rem] font-semibold">
+              {info.pack?.inBreak
+                ? "Перерыв — таблетки не нужны"
+                : info.pack
+                  ? `Таблетка ${info.pack.day} из ${info.pack.active}`
+                  : "Таблетка сегодня"}
+            </span>
+            <span className="block text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
+              {info.pack?.inBreak
+                ? `Новая упаковка — через ${info.pack.length - info.pack.day + 1} ${plural(info.pack.length - info.pack.day + 1, "день", "дня", "дней")}`
+                : method === "pop"
+                  ? "Мини-пили — строго в одно и то же время"
+                  : "Пропустили — смотрите инструкцию или спросите врача"}
+            </span>
+          </span>
+          {!info.pack?.inBreak ? (
+            <button
+              onClick={() => void saveDay(now, { pill: !days.get(now)?.pill })}
+              className="shrink-0 rounded-full px-3.5 py-2 text-[0.8125rem] font-semibold transition active:scale-95"
+              style={
+                days.get(now)?.pill
+                  ? { background: "var(--surface-2)", color: "var(--accent)" }
+                  : { background: FEM_GRADIENT, color: "#fff" }
+              }
+            >
+              {days.get(now)?.pill ? "Выпила ✓" : "Выпила"}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {health?.some((h) => !h.ok) ? (
+        <Link href="/fem/stats" replace className="fem-card mt-3 flex items-center gap-3 rounded-3xl px-4 py-3.5">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-xl" style={{ background: "color-mix(in srgb, #fbbf24 22%, transparent)" }}>
+            🩺
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[0.9375rem] font-semibold">Стоит показать врачу</span>
+            <span className="block text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
+              {health.find((h) => !h.ok)!.detail} — подробнее в «Итогах»
+            </span>
+          </span>
+          <Icon name="chevron-right" size={16} className="opacity-30" />
+        </Link>
+      ) : null}
+
+      <OwnTogether />
 
       <div className="fem-card mt-3 rounded-3xl p-4">
         <p className="mb-3 text-[0.9375rem] font-semibold">Как вы сегодня?</p>
@@ -113,11 +195,34 @@ export default function FemToday() {
       </div>
 
       <p className="mt-4 px-3 text-center text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
-        Прогноз — оценка по вашим прошлым циклам ({info.cycleLength} {plural(info.cycleLength, "день", "дня", "дней")}{" "}
-        в среднем). Это не способ предохранения и не медицинский совет.
+        {info.hormonal
+          ? "На гормональной контрацепции прогноз — по схеме метода. Это не медицинский совет."
+          : `Прогноз — оценка по вашим прошлым циклам (${info.cycleLength} ${plural(info.cycleLength, "день", "дня", "дней")} в среднем)${info.ovulationBy ? " и подтверждённой овуляции" : ""}. Это не способ предохранения и не медицинский совет.`}
       </p>
     </div>
   );
+}
+
+/** Вторая плашка на гормональной контрацепции — что важно по методу. */
+function MethodFact() {
+  const { settings } = useFem();
+  const s = settings!;
+  const now = today();
+  if (s.method === "injection" && s.method_start) {
+    const next = addDays(s.method_start, 84);
+    return <Fact color={PHASE_COLOR.protected} label="Следующий укол" value={short(next)} hint={next < now ? "срок прошёл — запишитесь" : "через 12 недель после прошлого"} />;
+  }
+  const label: Record<string, [string, string]> = {
+    coc: ["Таблетки", "без пропусков — надёжно"],
+    pop: ["Мини-пили", "каждый день в одно время"],
+    ring: ["Кольцо", "3 недели, затем перерыв"],
+    patch: ["Пластырь", "смена раз в неделю"],
+    implant: ["Имплант", "действует до 3 лет"],
+    iud_hormonal: ["Спираль", "действует 5–8 лет"],
+    injection: ["Укол", "раз в 12 недель"],
+  };
+  const [value, hint] = label[s.method] ?? ["Защита", ""];
+  return <Fact color={PHASE_COLOR.protected} label="Метод" value={value} hint={hint} />;
 }
 
 function Fact({ color, label, value, hint }: { color: string; label: string; value: string; hint: string }) {

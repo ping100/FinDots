@@ -25,7 +25,8 @@ import { SupportRow } from "@/components/SupportRow";
 import { ReviewRow } from "@/components/ReviewRow";
 import { DeleteAccount } from "@/components/DeleteAccount";
 import { Button, Switch, inputClass, inputStyle } from "@/components/ui";
-import { averageCycle, averagePeriod, cycleLengths } from "@/lib/fem/cycle";
+import { GOALS, METHODS, averageCycle, averagePeriod, cycleLengths, isHormonal, type Method } from "@/lib/fem/cycle";
+import { Sheet } from "@/components/ui";
 
 /**
  * Настройки FemDots: общее для всех приложений Dots (профиль, вход,
@@ -116,6 +117,23 @@ export default function FemSettingsPage() {
           ? `Прогноз уже считается по вашим отметкам: цикл ~${averageCycle(periods, s.cycle_length)} дн., месячные ~${averagePeriod(periods, s.period_length)} дн. Эти числа — запасные.`
           : "Пока отметок мало, прогноз считается по этим числам. Потом — по вашим циклам."}
       </p>
+
+      <SettingsHeading>Цель</SettingsHeading>
+      <div className="fem-card mb-4 overflow-hidden rounded-2xl">
+        {GOALS.map((g, i) => (
+          <Choose
+            key={g.value}
+            on={s.goal === g.value}
+            title={g.label}
+            hint={g.hint}
+            divided={i > 0}
+            onClick={() => void saveSettings({ goal: g.value })}
+          />
+        ))}
+      </div>
+
+      <SettingsHeading>Контрацепция и препараты</SettingsHeading>
+      <MethodSettings />
 
       <SettingsHeading>Партнёр</SettingsHeading>
       <PartnerShare />
@@ -274,6 +292,133 @@ function Choice({
     >
       {children}
     </button>
+  );
+}
+
+/** Строка выбора одного из нескольких — с галочкой справа. */
+function Choose({
+  on,
+  title,
+  hint,
+  divided,
+  onClick,
+}: {
+  on: boolean;
+  title: string;
+  hint: string;
+  divided?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      aria-pressed={on}
+      className="flex w-full items-center gap-3 px-4 py-3 text-left"
+      style={{ borderTop: divided ? "1px solid var(--border)" : undefined }}
+    >
+      <span className="min-w-0 flex-1">
+        <span className="block text-[0.9375rem]">{title}</span>
+        <span className="mt-0.5 block text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
+          {hint}
+        </span>
+      </span>
+      <span
+        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2"
+        style={{ borderColor: on ? "var(--accent)" : "var(--border)", background: on ? "var(--accent)" : "transparent", color: "#fff" }}
+      >
+        {on ? <Icon name="check" size={14} /> : null}
+      </span>
+    </button>
+  );
+}
+
+/**
+ * Метод контрацепции: гормональные убирают фертильное окно и меняют
+ * прогноз на схему упаковки; дата начала нужна, чтобы знать день упаковки,
+ * смену кольца или пластыря и срок укола.
+ */
+function MethodSettings() {
+  const { settings, saveSettings } = useFem();
+  const s = settings!;
+  const [open, setOpen] = useState(false);
+  const current = METHODS.find((m) => m.value === s.method) ?? METHODS[0];
+  const pick = (m: Method) => {
+    setOpen(false);
+    const pills = m === "coc" || m === "pop";
+    // Таблетки — сразу включаем напоминание о них.
+    void saveSettings({ method: m, ...(pills && !s.pill_on ? { pill_on: true } : {}), ...(m === "ring" || m === "patch" ? { pack_active: 21, pack_break: 7 } : {}) });
+  };
+  return (
+    <>
+      <div className="fem-card mb-1 overflow-hidden rounded-2xl">
+        <button onClick={() => setOpen(true)} className="flex w-full items-center gap-3 px-4 py-3.5 text-left">
+          <span className="min-w-0 flex-1">
+            <span className="block text-[0.9375rem]">{current.label}</span>
+            <span className="mt-0.5 block text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
+              {current.hint}
+            </span>
+          </span>
+          <Icon name="chevron-right" size={16} className="opacity-30" />
+        </button>
+        {current.start ? (
+          <div className="px-4 pb-3.5" style={{ borderTop: "1px solid var(--border)" }}>
+            <span className="mb-1.5 mt-3 block text-[0.8125rem]" style={{ color: "var(--muted)" }}>
+              {current.start}
+            </span>
+            <input
+              type="date"
+              className={inputClass}
+              style={inputStyle}
+              value={s.method_start ?? ""}
+              onChange={(e) => void saveSettings({ method_start: e.target.value || null })}
+            />
+          </div>
+        ) : null}
+        {s.method === "coc" ? (
+          <div className="px-4 pb-3.5">
+            <span className="mb-1.5 block text-[0.8125rem]" style={{ color: "var(--muted)" }}>
+              Схема упаковки
+            </span>
+            <div className="flex gap-2">
+              {(
+                [
+                  [21, 7, "21 + 7"],
+                  [24, 4, "24 + 4"],
+                  [28, 0, "Без перерыва"],
+                ] as const
+              ).map(([a, b, label]) => {
+                const on = s.pack_active === a && s.pack_break === b;
+                return (
+                  <button
+                    key={label}
+                    onClick={() => void saveSettings({ pack_active: a, pack_break: b })}
+                    className="flex-1 rounded-2xl border px-2 py-2 text-[0.8125rem] font-medium"
+                    style={{ borderColor: on ? "var(--accent)" : "var(--border)", background: on ? "var(--surface-2)" : "transparent" }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+      </div>
+      <p className="mb-4 px-1 text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
+        {isHormonal(s.method)
+          ? "На гормональной контрацепции овуляции нет — фертильное окно скрыто, а кровотечение считается по схеме метода."
+          : s.method === "iud_copper"
+            ? "Медная спираль не влияет на гормоны — цикл и прогноз как обычно."
+            : "Экстренную контрацепцию и другие препараты отмечайте в дне — в «Тест на овуляцию, температура, препараты»."}
+      </p>
+
+      <Sheet open={open} title="Что вы используете?" onClose={() => setOpen(false)}>
+        <div className="-mx-1 overflow-hidden rounded-2xl pb-2">
+          {METHODS.map((m, i) => (
+            <Choose key={m.value} on={m.value === s.method} title={m.label} hint={m.hint} divided={i > 0} onClick={() => pick(m.value)} />
+          ))}
+        </div>
+      </Sheet>
+    </>
   );
 }
 

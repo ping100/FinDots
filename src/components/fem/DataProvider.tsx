@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { applyLook } from "@/lib/look";
 import { scaleFactor } from "@/lib/textScale";
 import type { Profile } from "@/lib/types";
-import type { FemDay, FemPeriod, FemSettings } from "@/lib/fem/cycle";
+import type { FemDay, FemPeriod, FemSettings, Goal } from "@/lib/fem/cycle";
 
 /**
  * Данные FemDots: настройки, отметки месячных и дни с самочувствием.
@@ -45,6 +45,33 @@ export interface FemStore {
   leavePartner: () => Promise<void>;
   setPartnerRemind: (on: boolean) => Promise<void>;
   reloadShares: () => Promise<void>;
+
+  userId: string | null;
+  /** Сигналы между партнёрами за последние дни, новые сверху. */
+  signals: FemSignal[];
+  sendSignal: (kind: SignalKind, item?: string) => Promise<void>;
+  markSignalsSeen: () => Promise<void>;
+  /** Что ещё видит партнёр: статус, цель, напоминание про таблетку. */
+  shareOptions: ShareOptions | null;
+  setShareOptions: (next: ShareOptions) => Promise<void>;
+}
+
+export type SignalKind = "care" | "buy" | "alone" | "heart" | "ok";
+
+export interface FemSignal {
+  id: number;
+  from_id: string;
+  to_id: string;
+  kind: SignalKind;
+  item: string | null;
+  created_at: string;
+  seen_at: string | null;
+}
+
+export interface ShareOptions {
+  share_status: boolean;
+  share_goal: boolean;
+  pill_nudge: boolean;
 }
 
 /** Что видит партнёр: только чтение и только разрешённое. */
@@ -55,8 +82,15 @@ export interface PartnerView {
   remind: boolean;
   share_mood: boolean;
   share_symptoms: boolean;
+  share_status: boolean;
+  /** На гормональной контрацепции — без фертильного окна. */
+  hormonal: boolean;
+  /** «Планируем беременность» — если она разрешила показывать цель. */
+  goal: Goal | null;
+  pill_nudge: boolean;
   periods: FemPeriod[];
-  today: { mood: string | null; symptoms: string[] } | null;
+  lh_days: string[];
+  today: { mood: string | null; symptoms: string[]; status: string | null } | null;
 }
 
 /** Приглашение, которое выдала владелица. */
@@ -76,7 +110,7 @@ export function useFem(): FemStore {
   return store;
 }
 
-const EMPTY_DAY = { flow: null, symptoms: [], mood: null, note: null };
+const EMPTY_DAY = { flow: null, symptoms: [], mood: null, note: null, lh: null, temp: null, meds: [], pill: null, status: null };
 
 export function FemProvider({ children }: { children: ReactNode }) {
   const supabase = useMemo(() => createClient(), []);
@@ -89,11 +123,18 @@ export function FemProvider({ children }: { children: ReactNode }) {
   const [days, setDays] = useState<Map<string, FemDay>>(new Map());
   const [partner, setPartner] = useState<PartnerView | null>(null);
   const [share, setShare] = useState<MyShare | null>(null);
+  const [signals, setSignals] = useState<FemSignal[]>([]);
+  const [shareOptions, setShareOptionsState] = useState<ShareOptions | null>(null);
 
   const reloadShares = useCallback(async () => {
-    const [view, mine] = await Promise.all([supabase.rpc("fem_partner_view"), supabase.rpc("fem_share_mine")]);
+    const [view, mine, options] = await Promise.all([
+      supabase.rpc("fem_partner_view"),
+      supabase.rpc("fem_share_mine"),
+      supabase.rpc("fem_share_settings"),
+    ]);
     setPartner((view.data as PartnerView | null) ?? null);
     setShare(((mine.data ?? []) as MyShare[])[0] ?? null);
+    setShareOptionsState((options.data as ShareOptions | null) ?? null);
   }, [supabase]);
   const daysRef = useRef(days);
   daysRef.current = days;
@@ -116,7 +157,7 @@ export function FemProvider({ children }: { children: ReactNode }) {
         supabase.from("profiles").select("*").eq("id", user.id).single(),
         supabase.from("fem_settings").select("*").eq("user_id", user.id).maybeSingle(),
         supabase.from("fem_periods").select("id, start_date, end_date").order("start_date"),
-        supabase.from("fem_days").select("day, flow, symptoms, mood, note").order("day").limit(3000),
+        supabase.from("fem_days").select("day, flow, symptoms, mood, note, lh, temp, meds, pill, status").order("day").limit(3000),
       ]);
       const failed = [p, s, per, d].find((r) => r.error)?.error;
       if (failed) setError("Не получилось загрузить данные — проверьте интернет");
@@ -126,7 +167,9 @@ export function FemProvider({ children }: { children: ReactNode }) {
         setSettings({ ...row, pill_at: row.pill_at.slice(0, 5) });
       }
       setPeriods((per.data ?? []) as FemPeriod[]);
-      setDays(new Map(((d.data ?? []) as FemDay[]).map((x) => [x.day, x])));
+      setDays(
+        new Map(((d.data ?? []) as FemDay[]).map((x) => [x.day, { ...x, temp: x.temp == null ? null : Number(x.temp) }])),
+      );
       await shares;
       setReady(true);
     })();
@@ -164,6 +207,11 @@ export function FemProvider({ children }: { children: ReactNode }) {
         pill_at: "21:00",
         discreet: false,
         consent_at: new Date().toISOString(),
+        goal: "track",
+        method: "none",
+        method_start: null,
+        pack_active: 21,
+        pack_break: 7,
         ...settingsRef.current,
         ...patch,
       };
@@ -209,7 +257,16 @@ export function FemProvider({ children }: { children: ReactNode }) {
     async (day, patch) => {
       if (!userId) return;
       const next: FemDay = { day, ...EMPTY_DAY, ...daysRef.current.get(day), ...patch };
-      const empty = !next.flow && next.symptoms.length === 0 && !next.mood && !next.note?.trim();
+      const empty =
+        !next.flow &&
+        next.symptoms.length === 0 &&
+        !next.mood &&
+        !next.note?.trim() &&
+        !next.lh &&
+        next.temp == null &&
+        next.meds.length === 0 &&
+        !next.pill &&
+        !next.status;
       setDays((prev) => {
         const map = new Map(prev);
         if (empty) map.delete(day);
@@ -290,14 +347,67 @@ export function FemProvider({ children }: { children: ReactNode }) {
     [fail, supabase],
   );
 
+  const loadSignals = useCallback(async () => {
+    const since = new Date(Date.now() - 3 * 86400000).toISOString();
+    const res = await supabase
+      .from("fem_signals")
+      .select("id, from_id, to_id, kind, item, created_at, seen_at")
+      .gte("created_at", since)
+      .order("created_at", { ascending: false })
+      .limit(30);
+    if (!res.error) setSignals((res.data ?? []) as FemSignal[]);
+  }, [supabase]);
+
+  // Сигналы пары: при входе и раз в 30 секунд, пока экран открыт.
+  const paired = !!partner || !!share?.partner_name;
+  useEffect(() => {
+    if (!ready || !paired) return;
+    void loadSignals();
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") void loadSignals();
+    }, 30_000);
+    return () => clearInterval(timer);
+  }, [ready, paired, loadSignals]);
+
+  const sendSignal: FemStore["sendSignal"] = useCallback(
+    async (kind, item) => {
+      const res = await supabase.rpc("fem_signal_send", { p_kind: kind, p_item: item ?? null });
+      if (res.error) throw new Error(res.error.message);
+      await loadSignals();
+    },
+    [loadSignals, supabase],
+  );
+
+  const markSignalsSeen: FemStore["markSignalsSeen"] = useCallback(async () => {
+    if (!signals.some((x) => x.to_id === userId && !x.seen_at)) return;
+    const now = new Date().toISOString();
+    setSignals((prev) => prev.map((x) => (x.to_id === userId && !x.seen_at ? { ...x, seen_at: now } : x)));
+    await supabase.rpc("fem_signals_seen");
+  }, [signals, supabase, userId]);
+
+  const setShareOptions: FemStore["setShareOptions"] = useCallback(
+    async (next) => {
+      setShareOptionsState(next);
+      const res = await supabase.rpc("fem_share_options", {
+        p_status: next.share_status,
+        p_goal: next.share_goal,
+        p_pill: next.pill_nudge,
+      });
+      fail(res.error?.message);
+    },
+    [fail, supabase],
+  );
+
   const value = useMemo<FemStore>(
     () => ({
       ready, error, profile, settings, periods, days, saveSettings, saveProfile, startPeriod, endPeriod, deletePeriod, saveDay, deleteAll,
       partner, share, createShare, updateShare, revokeShare, acceptCode, leavePartner, setPartnerRemind, reloadShares,
+      userId, signals, sendSignal, markSignalsSeen, shareOptions, setShareOptions,
     }),
     [
       ready, error, profile, settings, periods, days, saveSettings, saveProfile, startPeriod, endPeriod, deletePeriod, saveDay, deleteAll,
       partner, share, createShare, updateShare, revokeShare, acceptCode, leavePartner, setPartnerRemind, reloadShares,
+      userId, signals, sendSignal, markSignalsSeen, shareOptions, setShareOptions,
     ],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

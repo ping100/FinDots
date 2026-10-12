@@ -5,7 +5,7 @@ import { createServerClient } from "@supabase/ssr";
 // проверка обновления на экране логина молча упиралась бы в редирект.
 // /api/models — открытый каталог моделей OpenRouter, личного в нём ничего
 // нет, а ответ кэшируется на час, так что скрывать его не за чем.
-// /api/reminders и /api/support-reply зовёт база, а не человек: там своя
+// /api/reminders, /api/support-reply и /api/fem-signal зовёт база, а не человек: там своя
 // проверка — по секрету.
 const PUBLIC_PATHS = [
   "/login",
@@ -16,6 +16,7 @@ const PUBLIC_PATHS = [
   "/api/models",
   "/api/reminders",
   "/api/support-reply",
+  "/api/fem-signal",
 ];
 
 export async function proxy(request: NextRequest) {

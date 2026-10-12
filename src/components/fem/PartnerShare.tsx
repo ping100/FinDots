@@ -15,7 +15,8 @@ const linkFor = (code: string) =>
  * подключён, решить, что ему показывать, и отключить в любой момент.
  */
 export function PartnerShare() {
-  const { share, createShare, updateShare, revokeShare } = useFem();
+  const { share, createShare, updateShare, revokeShare, shareOptions, setShareOptions, settings } = useFem();
+  const pills = settings?.method === "coc" || settings?.method === "pop";
   const [mood, setMood] = useState(share?.share_mood ?? false);
   const [symptoms, setSymptoms] = useState(share?.share_symptoms ?? false);
   const [busy, setBusy] = useState(false);
@@ -42,6 +43,33 @@ export function PartnerShare() {
         }}
         divided
       />
+      {share && shareOptions ? (
+        <>
+          <Toggle
+            title="Показывать статус дня"
+            hint="«Обними меня», «Устала» — вы выбираете на главной"
+            on={shareOptions.share_status}
+            onChange={(v) => void setShareOptions({ ...shareOptions, share_status: v })}
+            divided
+          />
+          <Toggle
+            title="Показывать «Планируем беременность»"
+            hint="Партнёр увидит лучшие дни для зачатия"
+            on={shareOptions.share_goal}
+            onChange={(v) => void setShareOptions({ ...shareOptions, share_goal: v })}
+            divided
+          />
+          {pills ? (
+            <Toggle
+              title="Напомнить партнёру про таблетку"
+              hint="Если через 2 часа после времени приёма она не отмечена"
+              on={shareOptions.pill_nudge}
+              onChange={(v) => void setShareOptions({ ...shareOptions, pill_nudge: v })}
+              divided
+            />
+          ) : null}
+        </>
+      ) : null}
     </div>
   );
 
@@ -72,6 +100,15 @@ export function PartnerShare() {
   }
 
   const link = linkFor(share.code);
+  // Главное — просто код: скопировала, вставила в любой мессенджер.
+  const copyCode = async () => {
+    try {
+      await navigator.clipboard.writeText(share.code);
+      setNote("Код скопирован — вставьте его в сообщение партнёру");
+    } catch {
+      setNote("Не получилось скопировать — продиктуйте код");
+    }
+  };
   const send = async () => {
     setNote(null);
     const text = `Приглашаю в FemDots — так ты будешь видеть мой цикл: ${link}`;
@@ -104,18 +141,31 @@ export function PartnerShare() {
         <>
           <p className="text-[0.9375rem] font-semibold">Приглашение готово</p>
           <p className="mt-1 text-[0.8125rem] leading-snug" style={{ color: "var(--muted)" }}>
-            Отправьте ссылку партнёру. Он откроет её под своей учётной записью Dots — или введёт код в FemDots.
-          </p>
-          <p className="mt-3 rounded-2xl py-3 text-center text-[1.5rem] font-bold tracking-[0.25em] tabular-nums" style={{ background: "var(--surface-2)" }}>
-            {share.code}
+            Скопируйте код и отправьте партнёру. Он введёт его в FemDots: «Кто вы?» → «Я мужчина».
           </p>
           <button
-            onClick={send}
+            onClick={copyCode}
+            aria-label="Скопировать код"
+            className="mt-3 block w-full rounded-2xl py-3 text-center text-[1.5rem] font-bold tracking-[0.25em] tabular-nums transition active:scale-[0.98]"
+            style={{ background: "var(--surface-2)" }}
+          >
+            {share.code}
+          </button>
+          <button
+            onClick={copyCode}
             className="mt-2 flex w-full items-center justify-center gap-2 rounded-2xl py-3 text-[0.9375rem] font-semibold text-white"
             style={{ background: FEM_GRADIENT }}
           >
-            <Icon name="share" size={17} />
-            Отправить ссылку
+            <Icon name="note" size={17} />
+            Скопировать код
+          </button>
+          <button
+            onClick={send}
+            className="mt-1.5 flex w-full items-center justify-center gap-1.5 py-1.5 text-[0.8125rem]"
+            style={{ color: "var(--muted)" }}
+          >
+            <Icon name="share" size={14} />
+            или отправить ссылкой
           </button>
           {note ? (
             <p className="mt-1.5 text-center text-[0.75rem]" style={{ color: "var(--muted)" }}>

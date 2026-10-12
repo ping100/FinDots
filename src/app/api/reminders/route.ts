@@ -27,18 +27,27 @@ export async function POST(request: Request) {
     auth: { persistSession: false },
   });
 
-  const [tasksRes, billsRes, wellnessRes, summaryRes, femRes, femPartnerRes] = await Promise.all([
+  const [tasksRes, billsRes, wellnessRes, summaryRes, femRes, femPartnerRes, pillNudgeRes] = await Promise.all([
     supabase.rpc("claim_due_reminders", { p_secret: secret }),
     supabase.rpc("claim_due_bill_reminders", { p_secret: secret }),
     supabase.rpc("claim_due_wellness_reminders", { p_secret: secret }),
     supabase.rpc("claim_due_task_summaries", { p_secret: secret }),
     supabase.rpc("claim_due_fem_reminders", { p_secret: secret }),
     supabase.rpc("claim_due_fem_partner_reminders", { p_secret: secret }),
+    supabase.rpc("claim_fem_pill_nudges", { p_secret: secret }),
   ]);
   // Рассылки независимы: сбой в напоминаниях о платежах не должен
   // оставить без напоминаний задачи — и наоборот.
-  const failures = [tasksRes.error, billsRes.error, wellnessRes.error, summaryRes.error, femRes.error, femPartnerRes.error].filter(Boolean);
-  if (failures.length === 6) {
+  const failures = [
+    tasksRes.error,
+    billsRes.error,
+    wellnessRes.error,
+    summaryRes.error,
+    femRes.error,
+    femPartnerRes.error,
+    pillNudgeRes.error,
+  ].filter(Boolean);
+  if (failures.length === 7) {
     return NextResponse.json({ error: failures.map((e) => e!.message).join("; ") }, { status: 500 });
   }
 
@@ -79,7 +88,7 @@ export async function POST(request: Request) {
     endpoint: string;
     p256dh: string;
     auth: string;
-    kind: "period" | "fertile" | "pill";
+    kind: FemKind;
     mark: string;
     days_left: number;
     until_day: string | null;
@@ -94,6 +103,8 @@ export async function POST(request: Request) {
     mark: string;
     days_left: number;
   }[];
+
+  const pillNudges = (pillNudgeRes.data ?? []) as { endpoint: string; p256dh: string; auth: string; owner_name: string }[];
 
   const messages = [
     ...tasks.map((row) => ({
@@ -120,6 +131,15 @@ export async function POST(request: Request) {
         body: `${row.owner_name}: ${row.days_left <= 0 ? "сегодня" : row.days_left === 1 ? "завтра" : `через ${row.days_left} дня`} начнутся особые дни — немного больше заботы и тепла 💗`,
         url: "/fem",
         tag: "fem-partner",
+      },
+    })),
+    ...pillNudges.map((row) => ({
+      sub: row,
+      push: {
+        title: "💗 FemDots",
+        body: `${row.owner_name} ещё не отметила таблетку — мягко напомните ей`,
+        url: "/fem",
+        tag: "fem-pill-nudge",
       },
     })),
   ];
@@ -228,7 +248,18 @@ function dayLong(iso: string): string {
  * FemDots. В скрытом режиме на экране блокировки — ни слова о цикле:
  * телефон могут увидеть другие.
  */
-function femPush(row: { kind: "period" | "fertile" | "pill"; mark: string; days_left: number; until_day: string | null; discreet: boolean }) {
+type FemKind = "period" | "fertile" | "pill" | "ring_out" | "ring_in" | "patch_change" | "patch_off" | "patch_on" | "injection";
+
+/** Кольцо, пластырь, укол — что сделать сегодня. */
+const METHOD_PUSH: Partial<Record<FemKind, { title: string; body: string }>> = {
+  ring_out: { title: "💍 Время снять кольцо", body: "Начинается неделя перерыва" },
+  ring_in: { title: "💍 Новое кольцо", body: "Неделя перерыва закончилась — время вставить новое кольцо" },
+  patch_change: { title: "🩹 Смените пластырь", body: "Сегодня день смены пластыря" },
+  patch_off: { title: "🩹 Неделя без пластыря", body: "Сегодня снимите пластырь — начинается перерыв" },
+  patch_on: { title: "🩹 Новый пластырь", body: "Перерыв закончился — наклейте новый пластырь" },
+};
+
+function femPush(row: { kind: FemKind; mark: string; days_left: number; until_day: string | null; discreet: boolean }) {
   const tag = `fem-${row.kind}`;
   if (row.discreet) {
     return {
@@ -255,5 +286,11 @@ function femPush(row: { kind: "period" | "fertile" | "pill"; mark: string; days_
       tag,
     };
   }
-  return { title: "💊 Время таблетки", body: "Не забудьте принять таблетку", url: "/fem", tag };
+  const method = METHOD_PUSH[row.kind];
+  if (method) return { ...method, url: "/fem", tag };
+  if (row.kind === "injection") {
+    const when = row.days_left > 0 ? `через ${row.days_left} дн., ${dayLong(row.mark)}` : row.days_left === 0 ? "сегодня" : `с ${dayLong(row.mark)}`;
+    return { title: "💉 Пора на укол", body: `Следующий укол — ${when}. Запишитесь заранее`, url: "/fem", tag };
+  }
+  return { title: "💊 Время таблетки", body: "Не забудьте принять таблетку и отметить её в FemDots", url: "/fem", tag };
 }

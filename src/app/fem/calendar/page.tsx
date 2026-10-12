@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { addDays, today } from "@/lib/tasks/dates";
-import { FEM_GRADIENT, PHASE_COLOR, buildMarks, cycleInfo, daysBetween, type FemPeriod } from "@/lib/fem/cycle";
+import { FEM_GRADIENT, PHASE_COLOR, buildMarks, cycleInfo, signalsFrom, daysBetween, type FemPeriod } from "@/lib/fem/cycle";
 import { long } from "@/lib/fem/format";
 import { useFem } from "@/components/fem/DataProvider";
 import { FemHeader } from "@/components/fem/Shell";
@@ -32,7 +32,10 @@ const TEAL = "#14b8a6";
 export default function FemCalendar() {
   const { settings, periods, days, startPeriod, endPeriod, deletePeriod } = useFem();
   const now = today();
-  const info = useMemo(() => cycleInfo(periods, settings!, now), [periods, settings, now]);
+  const info = useMemo(
+    () => cycleInfo(periods, settings!, now, signalsFrom(days, settings)),
+    [periods, settings, days, now],
+  );
   const marks = useMemo(() => buildMarks(periods, info, now), [periods, info, now]);
   const [picked, setPicked] = useState<string | null>(null);
   const current = useRef<HTMLDivElement | null>(null);

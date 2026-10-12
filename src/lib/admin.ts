@@ -32,8 +32,6 @@ export interface AdminUser {
   /** Разрешён ли ИИ-разбор — ключ теперь общий, это просто переключатель. */
   access_ai: boolean;
   access_fem: boolean;
-  /** Пользуется FemDots — только да/нет, сами данные о цикле админу не видны. */
-  fem_on: boolean;
 }
 
 export interface AdminOverview {
@@ -48,7 +46,6 @@ export interface AdminOverview {
     active_30d: number;
     money_users: number;
     tasks_users: number;
-    fem_users: number;
     transactions: number;
     tasks: number;
   };

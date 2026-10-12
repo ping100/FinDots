@@ -1,4 +1,4 @@
-import type { Phase } from "./cycle";
+import type { Goal, Phase } from "./cycle";
 
 /**
  * Фраза дня — главная строка на экране FemDots. Тёплая и человеческая, а
@@ -56,6 +56,14 @@ const OWN: Phrases = {
       "Прислушайтесь к себе — и не торопите выводы",
     ],
   },
+  protected: {
+    lead: "Вы под защитой",
+    lines: [
+      "Ровный день — можно планировать что угодно",
+      "Позаботьтесь о себе: вода, сон и немного движения",
+      "Хороший день, чтобы порадовать себя",
+    ],
+  },
 };
 
 /** Для партнёра — о ней и о том, как быть рядом. */
@@ -104,6 +112,25 @@ const PARTNER: Phrases = {
       "Сейчас важнее всего спокойствие рядом",
     ],
   },
+  protected: {
+    lead: "Ровный день",
+    lines: [
+      "Придумайте что-то приятное вместе",
+      "Простое «как ты?» — уже забота",
+    ],
+  },
+};
+
+/** Цель меняет фразу в фертильные дни: для «планируем» — радость, для «избегаем» — осторожность. */
+const GOAL_LINES: Record<Exclude<Goal, "track">, { own: { lead: string; line: string }; partner: { lead: string; line: string } }> = {
+  conceive: {
+    own: { lead: "Лучшие дни для зачатия", line: "Сегодня высокие шансы — удачи вам обоим 💗" },
+    partner: { lead: "Лучшие дни для зачатия", line: "Сегодня высокие шансы — самое время быть вместе 💗" },
+  },
+  avoid: {
+    own: { lead: "Высокий шанс беременности", line: "Если не планируете — сегодня нужна надёжная защита" },
+    partner: { lead: "Высокий шанс беременности", line: "Если не планируете — сегодня нужна надёжная защита" },
+  },
 };
 
 /** Номер дня с 1970 года — чтобы выбор был одинаковым весь день. */
@@ -111,7 +138,13 @@ function dayIndex(day: string): number {
   return Math.floor(Date.parse(`${day}T00:00:00Z`) / 86_400_000);
 }
 
-export function phraseOf(phase: Phase, day: string, who: "own" | "partner"): { lead: string; line: string } {
+export function phraseOf(
+  phase: Phase,
+  day: string,
+  who: "own" | "partner",
+  goal: Goal | null = "track",
+): { lead: string; line: string } {
+  if (goal && goal !== "track" && (phase === "fertile" || phase === "ovulation")) return GOAL_LINES[goal][who];
   const set = (who === "own" ? OWN : PARTNER)[phase];
   // Тире не переносится в начало строки — держится за слово перед ним.
   const line = set.lines[dayIndex(day) % set.lines.length].replace(/ — /g, "\u00a0— ");
@@ -121,6 +154,8 @@ export function phraseOf(phase: Phase, day: string, who: "own" | "partner"): { l
 /** Шанс забеременеть по прогнозу — словами, без процентов: это оценка. */
 export function chanceOf(phase: Phase): { label: string; level: 0 | 1 | 2 | 3 } {
   switch (phase) {
+    case "protected":
+      return { label: "Низкий", level: 0 };
     case "ovulation":
       return { label: "Очень высокий", level: 3 };
     case "fertile":

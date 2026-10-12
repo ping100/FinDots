@@ -10,6 +10,7 @@ import { Sheet, Switch } from "@/components/ui";
 import { useFem } from "./DataProvider";
 import { FemHeader } from "./Shell";
 import { CycleRing, DayHero, plural } from "./parts";
+import { PartnerTogether } from "./Together";
 
 /** Фаза — глазами партнёра: что происходит и как поддержать. */
 const PARTNER_PHASE: Record<Phase, { title: string; about: string; tips: string[] }> = {
@@ -38,6 +39,11 @@ const PARTNER_PHASE: Record<Phase, { title: string; about: string; tips: string[
     about: "Организм готовится к новому циклу. Возможны ПМС: усталость, раздражительность, тяга к сладкому.",
     tips: ["Возможны ПМС, усталость и перепады настроения", "Чуть больше внимания и заботы", "Что-нибудь вкусное к чаю точно не помешает"],
   },
+  protected: {
+    title: "Ровный период",
+    about: "Она на гормональной контрацепции: овуляции нет, гормоны держатся ровно, кровотечение — по схеме.",
+    tips: ["Простое «как ты?» — уже забота", "Придумайте что-то приятное вместе"],
+  },
   late: {
     title: "Задержка",
     about: "Месячные не начались в ожидаемый день. Небольшие сдвиги — обычное дело.",
@@ -57,7 +63,13 @@ export function PartnerScreen() {
   const info = useMemo(
     () =>
       partner
-        ? cycleInfo(partner.periods, { cycle_length: partner.cycle_length, period_length: partner.period_length }, now)
+        ? cycleInfo(
+            partner.periods,
+            { cycle_length: partner.cycle_length, period_length: partner.period_length },
+            now,
+            // Способ контрацепции партнёру не виден — только «гормональная или нет».
+            { lhDays: partner.lh_days ?? [], method: partner.hormonal ? "pop" : "none" },
+          )
         : null,
     [partner, now],
   );
@@ -74,7 +86,15 @@ export function PartnerScreen() {
     <div className="mx-auto w-full max-w-md px-4 pb-16">
       <FemHeader title={`Цикл: ${name}`} sub="Партнёрский режим" />
 
-      {info.phase ? <DayHero phase={info.phase} day={now} who="partner" /> : null}
+      {info.phase ? <DayHero phase={info.phase} day={now} who="partner" goal={partner.goal} /> : null}
+
+      <PartnerTogether name={name} status={partner.share_status ? (partner.today?.status ?? null) : null} />
+
+      {partner.goal === "conceive" ? (
+        <p className="fem-card mb-4 rounded-3xl px-4 py-3 text-[0.8125rem] leading-snug">
+          💗 <b>Вы планируете беременность.</b> Лучшие дни подсвечены ниже — напомним, когда они начнутся.
+        </p>
+      ) : null}
 
       {phase && info.phase ? (
         <>
@@ -86,7 +106,7 @@ export function PartnerScreen() {
               bg="linear-gradient(150deg, #f472b6, #a855f7)"
               icon="calendar"
               label="Её день"
-              value={`День ${info.cycleDay}`}
+              value={info.cycleDay ? `День ${info.cycleDay}` : "—"}
               caption={phase.title}
               onClick={() => setSheet("day")}
               index={0}
@@ -147,7 +167,15 @@ export function PartnerScreen() {
           <Fact
             color={PHASE_COLOR.period}
             label="Месячные"
-            value={info.current ? "сейчас" : info.late > 0 ? "задержка" : `~${short(info.nextStart)}`}
+            value={
+              info.current
+                ? "сейчас"
+                : info.late > 0
+                  ? "задержка"
+                  : info.nextRange
+                    ? range(info.nextRange[0], info.nextRange[1])
+                    : `~${short(info.nextStart)}`
+            }
             hint={
               info.current
                 ? `${info.cycleDay}-й день`
@@ -158,7 +186,7 @@ export function PartnerScreen() {
           />
           <Fact
             color={PHASE_COLOR.fertile}
-            label="Фертильное окно"
+            label={partner.goal === "conceive" ? "Лучшие дни" : "Фертильное окно"}
             value={range(addDays(info.fertileStart!, shift), addDays(info.fertileEnd!, shift))}
             hint={`овуляция ~${short(addDays(info.ovulation!, shift))}`}
           />
@@ -171,6 +199,7 @@ export function PartnerScreen() {
             <span className="block text-[0.9375rem]">Напоминать мне</span>
             <span className="mt-0.5 block text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
               За 2 дня до месячных — чтобы быть внимательнее
+              {partner.pill_nudge ? ". И если она забудет таблетку" : ""}
             </span>
           </span>
           <Switch checked={partner.remind} onChange={(v) => void setPartnerRemind(v)} label="Напоминать мне" />

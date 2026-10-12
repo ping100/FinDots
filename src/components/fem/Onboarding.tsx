@@ -87,7 +87,7 @@ export function Onboarding() {
             <p className="font-semibold">Где взять код</p>
             <ol className="mt-1.5 list-decimal space-y-1 pl-4" style={{ color: "var(--muted)" }}>
               <li>Девушка открывает FemDots → Настройки → «Пригласить партнёра».</li>
-              <li>Присылает вам ссылку — откройте её. Или продиктует код из 8 знаков.</li>
+              <li>Копирует код из 8 знаков и присылает вам — вставьте его в поле выше.</li>
             </ol>
             <p className="mt-2" style={{ color: "var(--muted)" }}>
               Вы будете видеть только то, чем она поделится. Отметить что-то за неё нельзя.

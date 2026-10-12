@@ -6,7 +6,8 @@ import { useEffect, useState } from "react";
  * Валюты, которые можно показывать в строке курса (панель Findots и
  * главная). Курс по ним всегда официальный — /api/rates, Нацбанк РК.
  */
-export const RATE_CHOICES: { code: string; symbol: string; name: string }[] = [
+/** per — за сколько единиц показывать курс: мелкие валюты — за 1000, как в обменниках. */
+export const RATE_CHOICES: { code: string; symbol: string; name: string; per?: number }[] = [
   { code: "USD", symbol: "$", name: "Доллар" },
   { code: "EUR", symbol: "€", name: "Евро" },
   { code: "RUB", symbol: "₽", name: "Рубль" },
@@ -14,8 +15,10 @@ export const RATE_CHOICES: { code: string; symbol: string; name: string }[] = [
   { code: "GBP", symbol: "£", name: "Фунт" },
   { code: "TRY", symbol: "₺", name: "Лира" },
   { code: "AED", symbol: "AED", name: "Дирхам" },
+  { code: "THB", symbol: "฿", name: "Бат" },
+  { code: "VND", symbol: "₫", name: "Донг", per: 1000 },
   { code: "KGS", symbol: "сом", name: "Сом" },
-  { code: "UZS", symbol: "сум", name: "Узб. сум" },
+  { code: "UZS", symbol: "сум", name: "Узб. сум", per: 1000 },
   { code: "KZT", symbol: "₸", name: "Тенге" },
 ];
 export const DEFAULT_SHOWN = ["USD", "RUB"];
@@ -23,9 +26,19 @@ export const MAX_SHOWN = 3;
 
 export const symbolFor = (code: string) => RATE_CHOICES.find((c) => c.code === code)?.symbol ?? code;
 
+/** За сколько единиц показывать: 1, а у донга и сума — 1000. */
+export const perFor = (code: string) => RATE_CHOICES.find((c) => c.code === code)?.per ?? 1;
+
+/** Подпись перед курсом: «$» или «1000 ₫». */
+export const labelFor = (code: string) => {
+  const per = perFor(code);
+  return per > 1 ? `${per} ${symbolFor(code)}` : symbolFor(code);
+};
+
 export type Official = { kzt: Record<string, number>; change: Record<string, number>; at: number };
 
-const KEY = "dots.rates.official";
+// v2 — с батом и донгом: в старой записи их нет.
+const KEY = "dots.rates.official.v2";
 const FRESH_MS = 30 * 60_000;
 
 /**

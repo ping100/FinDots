@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { formatMoney, symbolOf } from "@/lib/money";
-import { DEFAULT_SHOWN, crossRate, formatRate, symbolFor, useOfficialRates } from "@/lib/officialRates";
+import { DEFAULT_SHOWN, crossRate, formatRate, labelFor, perFor, useOfficialRates } from "@/lib/officialRates";
 import type { CurrencyCode } from "@/lib/types";
 import { SERIES } from "./charts";
 import { toISODate } from "@/lib/savings";
@@ -384,7 +384,7 @@ function RatesLine({
       // Свой курс — только если автообновление выключено и он вообще задан.
       const own = !auto ? rates.find((r) => r.code === code)?.rate_to_base : undefined;
       const value = own ?? (official ? crossRate(official, code, base) : null);
-      return { code, value };
+      return { code, value: value != null ? value * perFor(code) : null };
     })
     .filter((x): x is { code: string; value: number } => !!x.value);
   if (items.length === 0) return null;
@@ -397,7 +397,7 @@ function RatesLine({
         {items.map(({ code, value }, i) => (
           <span key={code}>
             {i > 0 ? " · " : ""}
-            {symbolFor(code)} <span style={{ color: "var(--text)" }}>{formatRate(value)}</span> {symbolOf(base)}
+            {labelFor(code)} <span style={{ color: "var(--text)" }}>{formatRate(value)}</span> {symbolOf(base)}
           </span>
         ))}
       </span>

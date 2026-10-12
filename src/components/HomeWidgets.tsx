@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Icon } from "@/lib/icons";
 import { createClient } from "@/lib/supabase/client";
-import { DEFAULT_SHOWN, crossRate, formatRate, symbolFor, useOfficialRates } from "@/lib/officialRates";
+import { DEFAULT_SHOWN, crossRate, formatRate, labelFor, perFor, useOfficialRates } from "@/lib/officialRates";
 
 /**
  * Две плашки на развилке: погода и курс валют. Маленькие и тихие — это
@@ -160,9 +160,9 @@ export function HomeWidgets({ delay = 0 }: { delay?: number }) {
         .filter((code) => code !== shown.base)
         .map((code) => ({
           code,
-          value: crossRate(official, code, shown.base),
+          value: (crossRate(official, code, shown.base) ?? 0) * perFor(code),
           // Изменение за день есть только у курса к тенге.
-          change: shown.base === "KZT" ? official.change[code] : undefined,
+          change: shown.base === "KZT" ? (official.change[code] ?? 0) * perFor(code) : undefined,
         }))
         .filter((x): x is { code: string; value: number; change: number | undefined } => !!x.value)
     : [];
@@ -201,7 +201,7 @@ export function HomeWidgets({ delay = 0 }: { delay?: number }) {
           {rates.map((r, i) => (
             <span key={r.code} className="flex items-center gap-2.5">
               {i > 0 ? <span className="h-3.5 w-px" style={{ background: "var(--border)" }} /> : null}
-              <Rate sign={symbolFor(r.code)} value={r.value} change={r.change} />
+              <Rate sign={labelFor(r.code)} value={r.value} change={r.change} />
             </span>
           ))}
         </span>

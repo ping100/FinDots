@@ -13,7 +13,7 @@ export const runtime = "nodejs";
  * Пересчёт в основную валюту человека (если она не тенге) — на клиенте:
  * здесь одна таблица на всех.
  */
-const WANTED = ["USD", "RUB", "EUR", "CNY", "KGS", "UZS", "GBP", "TRY", "AED"];
+const WANTED = ["USD", "RUB", "EUR", "CNY", "KGS", "UZS", "GBP", "TRY", "AED", "THB", "VND"];
 
 export async function GET() {
   const nbk = await fromNationalBank().catch(() => null);

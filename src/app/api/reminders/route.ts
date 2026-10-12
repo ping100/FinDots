@@ -27,16 +27,17 @@ export async function POST(request: Request) {
     auth: { persistSession: false },
   });
 
-  const [tasksRes, billsRes, wellnessRes, summaryRes] = await Promise.all([
+  const [tasksRes, billsRes, wellnessRes, summaryRes, femRes] = await Promise.all([
     supabase.rpc("claim_due_reminders", { p_secret: secret }),
     supabase.rpc("claim_due_bill_reminders", { p_secret: secret }),
     supabase.rpc("claim_due_wellness_reminders", { p_secret: secret }),
     supabase.rpc("claim_due_task_summaries", { p_secret: secret }),
+    supabase.rpc("claim_due_fem_reminders", { p_secret: secret }),
   ]);
   // Рассылки независимы: сбой в напоминаниях о платежах не должен
   // оставить без напоминаний задачи — и наоборот.
-  const failures = [tasksRes.error, billsRes.error, wellnessRes.error, summaryRes.error].filter(Boolean);
-  if (failures.length === 4) {
+  const failures = [tasksRes.error, billsRes.error, wellnessRes.error, summaryRes.error, femRes.error].filter(Boolean);
+  if (failures.length === 5) {
     return NextResponse.json({ error: failures.map((e) => e!.message).join("; ") }, { status: 500 });
   }
 
@@ -73,6 +74,17 @@ export async function POST(request: Request) {
     first_time: string | null;
   }[];
 
+  const fem = (femRes.data ?? []) as {
+    endpoint: string;
+    p256dh: string;
+    auth: string;
+    kind: "period" | "fertile" | "pill";
+    mark: string;
+    days_left: number;
+    until_day: string | null;
+    discreet: boolean;
+  }[];
+
   const messages = [
     ...tasks.map((row) => ({
       sub: row,
@@ -89,6 +101,7 @@ export async function POST(request: Request) {
     })),
     ...wellness.map((row) => ({ sub: row, push: wellnessPush(row) })),
     ...summaries.map((row) => ({ sub: row, push: summaryPush(row) })),
+    ...fem.map((row) => ({ sub: row, push: femPush(row) })),
   ];
 
   const results = await Promise.all(
@@ -184,4 +197,43 @@ function plural(n: number, one: string, few: string, many: string) {
   if (m10 === 1 && m100 !== 11) return one;
   if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
   return many;
+}
+
+/** «14 октября» из «2026-10-14». */
+function dayLong(iso: string): string {
+  return new Date(`${iso}T12:00:00Z`).toLocaleDateString("ru-RU", { day: "numeric", month: "long", timeZone: "UTC" });
+}
+
+/**
+ * FemDots. В скрытом режиме на экране блокировки — ни слова о цикле:
+ * телефон могут увидеть другие.
+ */
+function femPush(row: { kind: "period" | "fertile" | "pill"; mark: string; days_left: number; until_day: string | null; discreet: boolean }) {
+  const tag = `fem-${row.kind}`;
+  if (row.discreet) {
+    return {
+      title: row.kind === "pill" ? "🌸 FemDots: напоминание" : "🌸 FemDots",
+      body: "Загляните в календарь",
+      url: "/fem",
+      tag,
+    };
+  }
+  if (row.kind === "period") {
+    const when = row.days_left <= 0 ? "сегодня" : row.days_left === 1 ? "завтра" : `через ${row.days_left} дня`;
+    return {
+      title: "🌸 Скоро месячные",
+      body: `Ожидаются ${when} — около ${dayLong(row.mark)}. Возьмите с собой всё нужное`,
+      url: "/fem",
+      tag,
+    };
+  }
+  if (row.kind === "fertile") {
+    return {
+      title: "🌿 Началось фертильное окно",
+      body: row.until_day ? `Примерно до ${dayLong(row.until_day)} — самые высокие шансы забеременеть` : "Самые высокие шансы забеременеть",
+      url: "/fem",
+      tag,
+    };
+  }
+  return { title: "💊 Время таблетки", body: "Не забудьте принять таблетку", url: "/fem", tag };
 }

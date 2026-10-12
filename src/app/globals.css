@@ -398,3 +398,13 @@ input[type="date"]::-webkit-date-and-time-value {
 .animate-complete {
   animation: complete-out 0.85s ease-in both;
 }
+
+/* FemDots: дуги кольца цикла проявляются по очереди. */
+@keyframes ring-in {
+  from {
+    opacity: 0;
+  }
+}
+.animate-grow-ring {
+  animation: ring-in 0.5s ease-out both;
+}

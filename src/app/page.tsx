@@ -1,37 +1,17 @@
 import Link from "next/link";
 import { Logo } from "@/components/Logo";
-import { HomeCard } from "@/components/HomeCard";
-import { HomeAdminCard } from "@/components/HomeAdminCard";
+import { HomeApps } from "@/components/HomeApps";
 import { Greeting } from "@/components/Greeting";
 import { HomeWidgets } from "@/components/HomeWidgets";
 
 /**
- * Развилка: одна учётная запись, два приложения.
+ * Развилка: одна учётная запись, несколько приложений Dots.
  *
  * Страница нарочно лёгкая — ни данных, ни провайдеров. Человек попадает
- * сюда сразу после входа, и тянуть ради двух кнопок кошельки с операциями
+ * сюда сразу после входа, и тянуть ради пары кнопок кошельки с операциями
  * незачем. Всё, что ей нужно, уже проверено: без входа сюда не пускает
- * проверка в proxy.
+ * проверка в proxy. Какие приложения показывать — шестерёнка (HomeApps).
  */
-const APPS = [
-  {
-    href: "/money",
-    name: "Findots",
-    what: "Деньги",
-    hint: "Сколько есть, сколько ушло и сколько можно потратить сегодня",
-    icon: "wallet",
-    color: "#22c55e",
-  },
-  {
-    href: "/tasks",
-    name: "Todots",
-    what: "Задачи",
-    hint: "Что сделать сегодня, что переносится и что горит",
-    icon: "list",
-    color: "#60a5fa",
-  },
-];
-
 export default async function Home({
   searchParams,
 }: {
@@ -73,26 +53,13 @@ export default async function Home({
         </p>
       ) : null}
 
-      <div className="space-y-3">
-        {APPS.map((app, index) => (
-          <HomeCard
-            key={app.href}
-            href={app.href}
-            title={app.what}
-            hint={app.hint}
-            icon={app.icon}
-            color={app.color}
-            delay={850 + index * 70}
-          />
-        ))}
-        <HomeAdminCard delay={990} />
-      </div>
+      <HomeApps delay={850} />
 
       <p
         className="animate-lift mt-6 text-center text-xs leading-snug"
         style={{ color: "var(--muted)", animationDelay: "1060ms" }}
       >
-        Учётная запись одна на оба — вошли один раз и пользуетесь обоими.
+        Учётная запись одна на все приложения — вошли один раз и пользуетесь всеми.
       </p>
 
       <Link

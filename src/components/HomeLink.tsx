@@ -18,7 +18,7 @@ export function HomeLink() {
       <span className="min-w-0 flex-1">
         <span className="block text-[0.9375rem]">На главную Dots</span>
         <span className="mt-0.5 block text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
-          Выбор между Findots и Todots
+          Findots, Todots и FemDots
         </span>
       </span>
       <Icon name="chevron-right" size={16} className="opacity-30" />

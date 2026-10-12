@@ -70,6 +70,13 @@ function signalPush(row: { kind: string; item: string | null; from_name: string;
       return { title: `🌙 ${name}`, body: "Хочу немного побыть одна — это не про тебя 💗" };
     case "heart":
       return { title: `❤️ ${name}`, body: "Думаю о тебе" };
+    case "custom": {
+      // Своя просьба: «смайлик|текст».
+      const i = (row.item ?? "").indexOf("|");
+      const emoji = i > 0 ? row.item!.slice(0, i) : "💌";
+      const text = i > 0 ? row.item!.slice(i + 1) : row.item ?? "Просьба";
+      return { title: `${emoji} ${name}`, body: text };
+    }
     default:
       return { title: `🏃 ${name}`, body: "Уже бегу!" };
   }

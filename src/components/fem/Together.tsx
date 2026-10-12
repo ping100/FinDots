@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { today } from "@/lib/tasks/dates";
 import { FEM_GRADIENT } from "@/lib/fem/cycle";
-import { BUY_ITEMS, STATUSES, ago, signalText, statusOf } from "@/lib/fem/together";
+import { BUY_ITEMS, EMOJI_CHOICES, STATUSES, ago, packCustom, signalText, statusOf } from "@/lib/fem/together";
 import { Sheet } from "@/components/ui";
 import { useFem, type FemSignal, type SignalKind } from "./DataProvider";
 
@@ -121,8 +121,11 @@ function Note({ note }: { note: { text: string; bad?: boolean } | null }) {
  * и то, что он ответил. Видна, только когда партнёр подключён.
  */
 export function OwnTogether() {
-  const { share, signals, userId, days, saveDay, markSignalsSeen } = useFem();
+  const { share, signals, userId, days, saveDay, markSignalsSeen, settings, saveSettings } = useFem();
   const [buy, setBuy] = useState(false);
+  const [editing, setEditing] = useState<"status" | "ask" | null>(null);
+  const customStatuses = settings?.custom_statuses ?? [];
+  const customAsks = settings?.custom_asks ?? [];
   const { send, note, busy } = useSend();
   const now = today();
   const name = share?.partner_name;
@@ -167,7 +170,10 @@ export function OwnTogether() {
         Статус на сегодня — {name} увидит его
       </p>
       <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {STATUSES.map((st) => {
+        {[
+          ...STATUSES,
+          ...customStatuses.map((c) => ({ value: `c:${packCustom(c.emoji, c.label)}`, emoji: c.emoji, label: c.label })),
+        ].map((st) => {
           const on = status === st.value;
           return (
             <button
@@ -185,6 +191,13 @@ export function OwnTogether() {
             </button>
           );
         })}
+        <button
+          onClick={() => setEditing("status")}
+          className="flex shrink-0 items-center gap-1 rounded-full border border-dashed px-3 py-1.5 text-[0.8125rem] transition active:scale-95"
+          style={{ borderColor: "var(--accent)", color: "var(--accent)" }}
+        >
+          ＋ Свой
+        </button>
       </div>
 
       <p className="mb-1.5 mt-3 text-xs font-semibold" style={{ color: "var(--muted)" }}>
@@ -194,8 +207,39 @@ export function OwnTogether() {
         <Ask emoji="💗" label="Нужна забота" disabled={busy} onClick={() => void send("care", undefined, `Отправлено ${name} 💗`)} />
         <Ask emoji="🛍" label="Купи по дороге" disabled={busy} onClick={() => setBuy(true)} />
         <Ask emoji="🌙" label="Побыть одной" disabled={busy} onClick={() => void send("alone", undefined, `${name} узнает, что вам нужно время`)} />
+        {customAsks.map((c) => (
+          <Ask
+            key={c.emoji + c.label}
+            emoji={c.emoji}
+            label={c.label}
+            disabled={busy}
+            onClick={() => void send("custom", packCustom(c.emoji, c.label), `Отправлено ${name}: ${c.label}`)}
+          />
+        ))}
+        <button
+          onClick={() => setEditing("ask")}
+          className="flex flex-col items-center justify-center gap-1 rounded-2xl border border-dashed px-1 py-3 text-center text-[0.75rem] font-medium transition active:scale-95"
+          style={{ borderColor: "var(--accent)", color: "var(--accent)" }}
+        >
+          <span className="text-xl leading-none">＋</span>
+          Своя просьба
+        </button>
       </div>
       <Note note={note} />
+
+      <Sheet
+        open={editing !== null}
+        title={editing === "ask" ? "Свои просьбы" : "Свои статусы"}
+        onClose={() => setEditing(null)}
+      >
+        {editing ? (
+          <CustomEditor
+            kind={editing}
+            items={editing === "ask" ? customAsks : customStatuses}
+            onSave={(next) => void saveSettings(editing === "ask" ? { custom_asks: next } : { custom_statuses: next })}
+          />
+        ) : null}
+      </Sheet>
 
       <Sheet open={buy} title="Что купить?" onClose={() => setBuy(false)}>
         <div className="grid grid-cols-2 gap-2 pb-3">
@@ -353,6 +397,95 @@ export function PartnerTogether({ name, status }: { name: string; status: string
         ❤️ Думаю о тебе
       </button>
       <Note note={note} />
+    </div>
+  );
+}
+
+/**
+ * Свои статусы или просьбы: выбрать смайлик, написать пару слов — и они
+ * появятся рядом с готовыми. Тут же — удалить ненужные.
+ */
+function CustomEditor({
+  kind,
+  items,
+  onSave,
+}: {
+  kind: "status" | "ask";
+  items: { emoji: string; label: string }[];
+  onSave: (next: { emoji: string; label: string }[]) => void;
+}) {
+  const [emoji, setEmoji] = useState(EMOJI_CHOICES[0]);
+  const [label, setLabel] = useState("");
+  const full = items.length >= 12;
+  const add = () => {
+    const text = label.trim();
+    if (!text || full) return;
+    onSave([...items, { emoji, label: text }]);
+    setLabel("");
+  };
+  return (
+    <div className="space-y-3 pb-3">
+      <p className="text-[0.8125rem] leading-snug" style={{ color: "var(--muted)" }}>
+        {kind === "ask"
+          ? "Своя просьба появится рядом с готовыми и придёт партнёру уведомлением, например «🍕 Закажи пиццу»."
+          : "Свой статус появится рядом с готовыми, партнёр увидит его на своём экране, например «🛁 Ванна и тишина»."}
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {EMOJI_CHOICES.map((e) => (
+          <button
+            key={e}
+            onClick={() => setEmoji(e)}
+            aria-pressed={emoji === e}
+            className="flex h-10 w-10 items-center justify-center rounded-full text-xl transition active:scale-90"
+            style={{ background: emoji === e ? "var(--surface-2)" : "transparent", outline: emoji === e ? "2px solid var(--accent)" : "none" }}
+          >
+            {e}
+          </button>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-xl" style={{ background: "var(--surface-2)" }}>
+          {emoji}
+        </span>
+        <input
+          className="min-w-0 flex-1 rounded-2xl border px-3.5 text-[0.9375rem] outline-none focus:border-[var(--accent)]"
+          style={{ background: "var(--surface-2)", borderColor: "var(--border)" }}
+          value={label}
+          maxLength={28}
+          placeholder={kind === "ask" ? "Закажи пиццу" : "Ванна и тишина"}
+          onChange={(e) => setLabel(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && add()}
+        />
+      </div>
+      <button
+        onClick={add}
+        disabled={!label.trim() || full}
+        className="w-full rounded-2xl py-3 text-sm font-semibold text-white disabled:opacity-50"
+        style={{ background: FEM_GRADIENT }}
+      >
+        {full ? "Не больше 12 — удалите ненужные" : "Добавить"}
+      </button>
+      {items.length ? (
+        <div className="space-y-1.5 pt-1">
+          <p className="text-xs font-semibold" style={{ color: "var(--muted)" }}>
+            {kind === "ask" ? "Ваши просьбы" : "Ваши статусы"}
+          </p>
+          {items.map((it, i) => (
+            <div key={it.emoji + it.label + i} className="flex items-center gap-2.5 rounded-2xl px-3 py-2" style={{ background: "var(--surface-2)" }}>
+              <span className="text-lg">{it.emoji}</span>
+              <span className="min-w-0 flex-1 truncate text-sm">{it.label}</span>
+              <button
+                onClick={() => onSave(items.filter((_, k) => k !== i))}
+                aria-label={`Удалить «${it.label}»`}
+                className="p-1 text-[0.8125rem]"
+                style={{ color: "var(--danger)" }}
+              >
+                Удалить
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -63,7 +63,7 @@ export interface FemStore {
   setIntimacy: (day: string, value: Intim | null) => Promise<void>;
 }
 
-export type SignalKind = "care" | "buy" | "alone" | "heart" | "ok";
+export type SignalKind = "care" | "buy" | "alone" | "heart" | "ok" | "custom";
 
 export interface FemSignal {
   id: number;
@@ -271,6 +271,8 @@ export function FemProvider({ children }: { children: ReactNode }) {
         pack_break: 7,
         pregnant_since: null,
         ai_consent_at: null,
+        custom_statuses: [],
+        custom_asks: [],
         ...settingsRef.current,
         ...patch,
       };

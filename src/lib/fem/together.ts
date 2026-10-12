@@ -18,7 +18,24 @@ export const BUY_ITEMS: { value: string; emoji: string; label: string }[] = [
   { value: "flowers", emoji: "💐", label: "Цветы" },
 ];
 
-export const statusOf = (value: string | null | undefined) => STATUSES.find((s) => s.value === value) ?? null;
+/** Свой статус или просьба хранятся как «смайлик|текст» (статус — с приставкой «c:»). */
+export const packCustom = (emoji: string, label: string) => `${emoji}|${label}`;
+export function unpackCustom(raw: string | null | undefined): { emoji: string; label: string } | null {
+  if (!raw) return null;
+  const i = raw.indexOf("|");
+  return i > 0 ? { emoji: raw.slice(0, i), label: raw.slice(i + 1) } : null;
+}
+
+export const statusOf = (value: string | null | undefined): { value: string; emoji: string; label: string } | null => {
+  if (value?.startsWith("c:")) {
+    const c = unpackCustom(value.slice(2));
+    return c ? { value, ...c } : null;
+  }
+  return STATUSES.find((s) => s.value === value) ?? null;
+};
+
+/** Смайлики на выбор для своих статусов и просьб. */
+export const EMOJI_CHOICES = ["💗", "🤗", "😴", "🍫", "☕", "🍕", "🎬", "🛁", "🌧️", "🌸", "🥺", "😤", "🔥", "🧸", "💐", "🚶‍♀️"];
 export const itemOf = (value: string | null | undefined) => BUY_ITEMS.find((s) => s.value === value) ?? null;
 
 /** Подпись сигнала — для карточек в приложении. */
@@ -34,6 +51,10 @@ export function signalText(kind: string, item: string | null): { emoji: string; 
       return { emoji: "🌙", text: "Хочу немного побыть одна" };
     case "heart":
       return { emoji: "❤️", text: "Думаю о тебе" };
+    case "custom": {
+      const c = unpackCustom(item);
+      return { emoji: c?.emoji ?? "💌", text: c?.label ?? "Просьба" };
+    }
     default:
       return { emoji: "🏃", text: "Уже бегу!" };
   }

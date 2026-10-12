@@ -47,6 +47,9 @@ export interface FemSettings {
   pregnant_since: string | null;
   /** Согласие на разбор цикла нейросетью (обезличенная сводка в OpenRouter). */
   ai_consent_at: string | null;
+  /** Свои статусы и просьбы — к готовым. */
+  custom_statuses: { emoji: string; label: string }[];
+  custom_asks: { emoji: string; label: string }[];
   remind_period: boolean;
   remind_fertile: boolean;
   pill_on: boolean;

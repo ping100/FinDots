@@ -53,13 +53,15 @@ export default async function Home({
           Dots
         </h1>
         <Greeting />
+        {/* Сначала — что снаружи (погода, курс), потом вопрос «куда»: он
+            ведёт к кнопкам разделов прямо под ним. */}
+        <HomeWidgets delay={780} />
         <p
-          className="animate-lift mt-1.5 text-sm leading-snug"
-          style={{ color: "var(--muted)", animationDelay: "780ms" }}
+          className="animate-lift mt-5 text-sm leading-snug"
+          style={{ color: "var(--muted)", animationDelay: "840ms" }}
         >
           Куда пойдём?
         </p>
-        <HomeWidgets delay={820} />
       </div>
 
       {deniedName ? (

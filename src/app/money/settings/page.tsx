@@ -147,7 +147,7 @@ export default function SettingsPage() {
         Подробнее — в инструкции.
       </button>
       <SupportRow />
-      <ReviewRow />
+      <ReviewRow app="money" />
 
       <SettingsHeading>Приложения</SettingsHeading>
       <HomeLink />

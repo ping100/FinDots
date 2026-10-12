@@ -23,6 +23,8 @@ export interface FemStore {
   days: Map<string, FemDay>;
 
   saveSettings: (patch: Partial<FemSettings>) => Promise<void>;
+  /** Имя, тема, размер шрифта — общий профиль Dots. */
+  saveProfile: (patch: Partial<Profile>) => Promise<void>;
   /** Начались месячные в этот день (end — если уже известно, когда закончились). */
   startPeriod: (day: string, end?: string | null) => Promise<void>;
   /** Закончились — последний день месячных. */
@@ -139,6 +141,16 @@ export function FemProvider({ children }: { children: ReactNode }) {
     if (message) setError("Не получилось сохранить — проверьте интернет");
     else setError(null);
   }, []);
+
+  const saveProfile: FemStore["saveProfile"] = useCallback(
+    async (patch) => {
+      if (!userId) return;
+      setProfile((prev) => (prev ? { ...prev, ...patch } : prev));
+      const res = await supabase.from("profiles").update(patch).eq("id", userId);
+      fail(res.error?.message);
+    },
+    [fail, supabase, userId],
+  );
 
   const saveSettings: FemStore["saveSettings"] = useCallback(
     async (patch) => {
@@ -280,11 +292,11 @@ export function FemProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<FemStore>(
     () => ({
-      ready, error, profile, settings, periods, days, saveSettings, startPeriod, endPeriod, deletePeriod, saveDay, deleteAll,
+      ready, error, profile, settings, periods, days, saveSettings, saveProfile, startPeriod, endPeriod, deletePeriod, saveDay, deleteAll,
       partner, share, createShare, updateShare, revokeShare, acceptCode, leavePartner, setPartnerRemind, reloadShares,
     }),
     [
-      ready, error, profile, settings, periods, days, saveSettings, startPeriod, endPeriod, deletePeriod, saveDay, deleteAll,
+      ready, error, profile, settings, periods, days, saveSettings, saveProfile, startPeriod, endPeriod, deletePeriod, saveDay, deleteAll,
       partner, share, createShare, updateShare, revokeShare, acceptCode, leavePartner, setPartnerRemind, reloadShares,
     ],
   );

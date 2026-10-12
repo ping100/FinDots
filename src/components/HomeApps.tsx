@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { Icon } from "@/lib/icons";
 import { createClient } from "@/lib/supabase/client";
 import { HomeCard } from "./HomeCard";
@@ -83,6 +83,9 @@ export function HomeApps({ delay }: { delay: number }) {
   };
 
   const shown = APPS.filter((a) => enabled.includes(a.id));
+  // Что было на экране с самого начала (одинаково на сервере и в браузере).
+  const initial = useRef<Set<string> | null>(null);
+  if (!initial.current) initial.current = new Set(shown.map((a) => a.id));
 
   return (
     <>
@@ -101,17 +104,28 @@ export function HomeApps({ delay }: { delay: number }) {
       </button>
 
       <div className="space-y-3">
-        {shown.map((app, index) => (
-          <HomeCard
-            key={app.href}
-            href={app.href}
-            title={app.what}
-            hint={app.hint}
-            icon={app.icon}
-            color={app.color}
-            delay={delay + index * 70}
-          />
-        ))}
+        {shown.map((app, index) => {
+          // Появилась позже первого показа (из памяти телефона, из профиля
+          // или включили шестерёнкой) — раздвигает место плавно.
+          const late = !initial.current!.has(app.id);
+          const card = (
+            <HomeCard
+              href={app.href}
+              title={app.what}
+              hint={app.hint}
+              icon={app.icon}
+              color={app.color}
+              delay={late ? 0 : delay + index * 70}
+            />
+          );
+          return late ? (
+            <div key={app.href} className="animate-expand">
+              {card}
+            </div>
+          ) : (
+            <Fragment key={app.href}>{card}</Fragment>
+          );
+        })}
         <HomeAdminCard delay={delay + shown.length * 70} />
       </div>
 

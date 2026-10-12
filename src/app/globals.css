@@ -469,3 +469,25 @@ input[type="date"]::-webkit-date-and-time-value {
 .animate-fem-glow {
   animation: fem-glow 4.5s ease-in-out infinite;
 }
+
+/* Карточка, появившаяся позже остальных (админка, включённое приложение):
+   сначала раздвигает место, потом проявляется — список не прыгает. */
+@keyframes expand-in {
+  from {
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    grid-template-rows: 1fr;
+    opacity: 1;
+    transform: none;
+  }
+}
+.animate-expand {
+  display: grid;
+  animation: expand-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.animate-expand > * {
+  min-height: 0;
+}

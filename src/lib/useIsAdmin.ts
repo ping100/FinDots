@@ -12,11 +12,19 @@ import { createClient } from "@/lib/supabase/client";
  */
 let asked: Promise<boolean> | null = null;
 
+/** Прошлый ответ на этом телефоне: карточку админки показываем сразу, не дожидаясь базы. */
+const CACHE = "dots.admin";
+
 export function useIsAdmin(): boolean | null {
   const [admin, setAdmin] = useState<boolean | null>(null);
 
   useEffect(() => {
     let alive = true;
+    try {
+      if (localStorage.getItem(CACHE) === "1") setAdmin(true);
+    } catch {
+      // Нет памяти — дождёмся ответа базы.
+    }
     asked ??= (async () => {
       const supabase = createClient();
       // Компонент теперь монтируется и на входе, и на публичных страницах —
@@ -32,6 +40,12 @@ export function useIsAdmin(): boolean | null {
     // до перезагрузки.
     asked.then((value) => {
       if (alive) setAdmin(value);
+      try {
+        if (value) localStorage.setItem(CACHE, "1");
+        else localStorage.removeItem(CACHE);
+      } catch {
+        // Не запомнили — в следующий раз просто спросим базу.
+      }
       if (!value) asked = null;
     });
     return () => {

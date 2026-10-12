@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Icon } from "@/lib/icons";
 import { useIsAdmin } from "@/lib/useIsAdmin";
-import { REVIEW_MAX, deleteOwnReview, loadOwnReview, submitReview, type Review } from "@/lib/reviews";
+import { REVIEW_APPS, REVIEW_MAX, deleteOwnReview, loadOwnReview, submitReview, type Review, type ReviewApp } from "@/lib/reviews";
 import { Button, Sheet } from "./ui";
 import { SettingsHeading } from "./SettingsHeading";
 
@@ -23,13 +23,13 @@ function Stars({ rating, size = 32 }: { rating: number; size?: number }) {
  * «Оценить приложение» в настройках: оценка 1–5 и необязательный текст.
  * Уходит прямо администратору — он видит его в админке, в «Отзывах».
  *
- * Один отзыв на человека (unique по user_id в базе), и строка рендерится
- * в обоих приложениях — если отзыв уже оставлен (хоть из money, хоть из
- * tasks), здесь сразу видно, что он есть, а не пустая форма заново.
+ * У каждого приложения свой отзыв (unique по user_id + app в базе): если
+ * отзыв об этом приложении уже оставлен, здесь сразу видно, что он есть,
+ * а не пустая форма заново. В админке отзывы разложены по приложениям.
  *
  * Админу строка не показывается: отзыв о приложении сам себе не пишут.
  */
-export function ReviewRow({ heading }: { heading?: string }) {
+export function ReviewRow({ app, heading }: { app: ReviewApp; heading?: string }) {
   const admin = useIsAdmin();
   const [open, setOpen] = useState(false);
   const [existing, setExisting] = useState<Review | null | undefined>(undefined);
@@ -42,15 +42,16 @@ export function ReviewRow({ heading }: { heading?: string }) {
   useEffect(() => {
     if (admin !== false) return;
     let alive = true;
-    void loadOwnReview().then((review) => {
+    void loadOwnReview(app).then((review) => {
       if (alive) setExisting(review);
     });
     return () => {
       alive = false;
     };
-  }, [admin]);
+  }, [admin, app]);
 
   if (admin !== false) return null;
+  const name = REVIEW_APPS.find((a) => a.id === app)?.label ?? "приложение";
 
   const close = () => {
     setOpen(false);
@@ -64,17 +65,17 @@ export function ReviewRow({ heading }: { heading?: string }) {
     if (busy || rating === 0) return;
     setBusy(true);
     setProblem(null);
-    const error = await submitReview(rating, body);
+    const error = await submitReview(app, rating, body);
     setBusy(false);
     if (error) setProblem(error);
-    else setExisting(await loadOwnReview());
+    else setExisting(await loadOwnReview(app));
   };
 
   const removeOwn = async () => {
     if (busy) return;
     setBusy(true);
     setProblem(null);
-    const error = await deleteOwnReview();
+    const error = await deleteOwnReview(app);
     setBusy(false);
     if (error) setProblem(error);
     else {
@@ -89,7 +90,7 @@ export function ReviewRow({ heading }: { heading?: string }) {
       <div className="mb-4 overflow-hidden rounded-2xl" style={{ background: "var(--surface)" }}>
         <button onClick={() => setOpen(true)} className="flex w-full items-center gap-3 px-4 py-3.5 text-left">
           <span className="flex-1">
-            <span className="block text-[0.9375rem]">Оценить приложение</span>
+            <span className="block text-[0.9375rem]">Оценить {name}</span>
             <span className="mt-0.5 block text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
               {existing ? `Вы поставили ${existing.rating} из 5` : "Оценка и пара слов — сразу администратору"}
             </span>
@@ -97,7 +98,7 @@ export function ReviewRow({ heading }: { heading?: string }) {
           <Icon name="chevron-right" size={16} className="opacity-30" />
         </button>
 
-        <Sheet open={open} title="Оценить приложение" onClose={close}>
+        <Sheet open={open} title={`Оценить ${name}`} onClose={close}>
           {existing && confirmDelete ? (
             <div className="space-y-3 pb-2">
               <p className="text-sm leading-snug">Отзыв удалится насовсем. Отменить нельзя.</p>
@@ -121,7 +122,7 @@ export function ReviewRow({ heading }: { heading?: string }) {
                   {existing.body}
                 </p>
               ) : null}
-              <p className="text-sm">Спасибо, вы уже оценили приложение.</p>
+              <p className="text-sm">Спасибо, вы уже оценили {name}.</p>
               <Button variant="ghost" onClick={close}>
                 Закрыть
               </Button>

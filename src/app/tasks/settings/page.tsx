@@ -164,7 +164,7 @@ export default function SettingsPage() {
         <TermsLink from="/tasks/settings" />
       </Group>
       <SupportRow />
-      <ReviewRow />
+      <ReviewRow app="tasks" />
 
       <SettingsHeading>Приложения</SettingsHeading>
       <HomeLink />

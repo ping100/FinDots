@@ -1,39 +1,48 @@
 import { createClient } from "@/lib/supabase/client";
 
-/** Один отзыв: оценка 1–5 и необязательный текст. */
+/** Приложение Dots, о котором отзыв. */
+export type ReviewApp = "money" | "tasks" | "fem";
+
+export const REVIEW_APPS: { id: ReviewApp; label: string; icon: string; color: string }[] = [
+  { id: "money", label: "Findots", icon: "wallet", color: "#22c55e" },
+  { id: "tasks", label: "Todots", icon: "list", color: "#60a5fa" },
+  { id: "fem", label: "FemDots", icon: "flower", color: "#ec4899" },
+];
+
+/** Один отзыв: оценка 1–5 и необязательный текст. app = null — оставлен до разделения по приложениям. */
 export interface Review {
   id: number;
   user_id: string;
+  app: ReviewApp | null;
   rating: number;
   body: string | null;
   created_at: string;
 }
 
+const COLUMNS = "id, user_id, app, rating, body, created_at";
+
 export const REVIEW_MAX = 2000;
 
 /** Отправить отзыв. Возвращает текст ошибки или null при успехе. */
-export async function submitReview(rating: number, body: string): Promise<string | null> {
+export async function submitReview(app: ReviewApp, rating: number, body: string): Promise<string | null> {
   const text = body.trim();
   const { error } = await createClient()
     .from("reviews")
-    .insert({ rating, body: text || null });
+    .insert({ app, rating, body: text || null });
   return error ? error.message : null;
 }
 
-/**
- * Свой отзыв, если уже оставлен. Один на человека (unique по user_id) и
- * общий для money и tasks — оба приложения читают одну и ту же строку,
- * так что отзыв не «пропадает» при переходе между настройками.
- */
-export async function loadOwnReview(): Promise<Review | null> {
+/** Свой отзыв об этом приложении, если уже оставлен (unique по user_id + app). */
+export async function loadOwnReview(app: ReviewApp): Promise<Review | null> {
   const {
     data: { user },
   } = await createClient().auth.getUser();
   if (!user) return null;
   const { data } = await createClient()
     .from("reviews")
-    .select("id, user_id, rating, body, created_at")
+    .select(COLUMNS)
     .eq("user_id", user.id)
+    .eq("app", app)
     .maybeSingle();
   return (data as Review | null) ?? null;
 }
@@ -42,7 +51,7 @@ export async function loadOwnReview(): Promise<Review | null> {
 export async function loadReviews(): Promise<Review[]> {
   const { data } = await createClient()
     .from("reviews")
-    .select("id, user_id, rating, body, created_at")
+    .select(COLUMNS)
     .order("created_at", { ascending: false });
   return (data ?? []) as Review[];
 }
@@ -53,8 +62,8 @@ export async function deleteReview(id: number): Promise<string | null> {
   return error ? error.message : null;
 }
 
-/** Удалить свой отзыв — сам человек, из настроек. */
-export async function deleteOwnReview(): Promise<string | null> {
-  const { error } = await createClient().rpc("delete_own_review");
+/** Удалить свой отзыв об этом приложении — сам человек, из настроек. */
+export async function deleteOwnReview(app: ReviewApp): Promise<string | null> {
+  const { error } = await createClient().rpc("delete_own_app_review", { p_app: app });
   return error ? error.message : null;
 }

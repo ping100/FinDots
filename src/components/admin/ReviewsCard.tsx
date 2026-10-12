@@ -4,20 +4,27 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Icon } from "@/lib/icons";
 import { createClient } from "@/lib/supabase/client";
+import { REVIEW_APPS } from "@/lib/reviews";
 
 interface Summary {
   count: number;
-  average: number | null;
+  /** Средняя по каждому приложению, у которого есть отзывы. */
+  apps: { label: string; average: number }[];
 }
 
 async function loadSummary(): Promise<Summary> {
-  const { data } = await createClient().from("reviews").select("rating");
-  const ratings = (data ?? []).map((r) => r.rating as number);
-  if (ratings.length === 0) return { count: 0, average: null };
-  return { count: ratings.length, average: ratings.reduce((a, b) => a + b, 0) / ratings.length };
+  const { data } = await createClient().from("reviews").select("rating, app");
+  const rows = (data ?? []) as { rating: number; app: string | null }[];
+  const apps = REVIEW_APPS.flatMap((app) => {
+    const ratings = rows.filter((r) => r.app === app.id).map((r) => r.rating);
+    return ratings.length ? [{ label: app.label, average: ratings.reduce((a, b) => a + b, 0) / ratings.length }] : [];
+  });
+  return { count: rows.length, apps };
 }
 
-/** Вход в отзывы на главной админки — со средней оценкой. */
+const fmt = (n: number) => n.toLocaleString("ru-RU", { maximumFractionDigits: 1 });
+
+/** Вход в отзывы на главной админки — со средней оценкой каждого приложения. */
 export function ReviewsCard() {
   const [summary, setSummary] = useState<Summary | null>(null);
 
@@ -44,7 +51,9 @@ export function ReviewsCard() {
             ? "…"
             : summary.count === 0
               ? "Пока нет"
-              : `${summary.average!.toLocaleString("ru-RU", { maximumFractionDigits: 1 })} из 5 · ${summary.count}`}
+              : summary.apps.length
+                ? `${summary.apps.map((a) => `${a.label} ${fmt(a.average)}`).join(" · ")} · всего ${summary.count}`
+                : `Всего ${summary.count}`}
         </span>
       </span>
       <Icon name="chevron-right" size={16} className="opacity-30" />

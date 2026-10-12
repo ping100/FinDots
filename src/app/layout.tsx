@@ -5,6 +5,7 @@ import { ConsentGate } from "@/components/ConsentGate";
 import { NoEdgeSwipe } from "@/components/NoEdgeSwipe";
 import { Presence } from "@/components/Presence";
 import { ReturnHome } from "@/components/ReturnHome";
+import { ViewportHeal } from "@/components/ViewportHeal";
 import { ThemeSync } from "@/components/ThemeSync";
 import { LOOK_SCRIPT } from "@/lib/look";
 import "./globals.css";
@@ -81,6 +82,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <NoEdgeSwipe />
         <Presence />
         <ReturnHome />
+        <ViewportHeal />
         <ThemeSync />
         <ConsentGate />
       </body>

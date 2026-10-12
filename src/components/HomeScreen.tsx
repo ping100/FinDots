@@ -383,11 +383,9 @@ export function HomeScreen() {
             меню справа, и при простом justify-between месяц съезжал бы из
             центра. */}
         <header className="grid grid-cols-[1fr_auto_1fr] items-center py-2">
-          {/* Раньше здесь был кружок с буквой имени, ведущий в настройки, —
-              но настройки и так в нижней панели. Место нужнее переходу в
-              задачи: иначе до них добираться через настройки. */}
+          {/* Кнопка «Dots» — на развилку, к остальным приложениям. */}
           <div className="justify-self-start">
-            <AppSwitchPill from="money" />
+            <AppSwitchPill />
           </div>
           <button
             onClick={() => setMonthPicker(true)}

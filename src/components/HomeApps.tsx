@@ -47,33 +47,49 @@ const DEFAULT = ["money", "tasks"];
  * будет тот же; в памяти телефона — копия, чтобы карточки не мигали.
  */
 export function HomeApps({ delay }: { delay: number }) {
-  const [enabled, setEnabled] = useState<string[]>(DEFAULT);
+  // null — ещё не знаем, какие включены: не рисуем ничего, чтобы плитки не
+  // появлялись вразнобой (сначала две по умолчанию, потом третья).
+  const [enabled, setEnabled] = useState<string[] | null>(null);
+  // Когда показать первую плитку: задержка считается от открытия страницы.
+  const mountedAt = useRef(0);
+  const [start, setStart] = useState(0);
   const [userId, setUserId] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
+    mountedAt.current = performance.now();
+    const show = (apps: string[]) =>
+      setEnabled((prev) => {
+        if (prev === null) setStart(Math.max(0, delay - (performance.now() - mountedAt.current)));
+        return apps;
+      });
     try {
       const cached = JSON.parse(localStorage.getItem(KEY) ?? "null");
-      if (Array.isArray(cached) && cached.length) setEnabled(cached);
+      if (Array.isArray(cached) && cached.length) show(cached);
     } catch {
       // Нет памяти — покажем как в профиле, когда он придёт.
     }
+    // Профиль не ответил за полторы секунды — показываем по умолчанию.
+    const fallback = setTimeout(() => setEnabled((prev) => prev ?? DEFAULT), 1500);
     const supabase = createClient();
     void supabase.auth.getSession().then(async ({ data }) => {
       const id = data.session?.user.id;
-      if (!id) return;
+      if (!id) {
+        show(DEFAULT);
+        return;
+      }
       setUserId(id);
       const res = await supabase.from("profiles").select("apps_enabled").eq("id", id).maybeSingle();
       const apps = (res.data as { apps_enabled?: string[] } | null)?.apps_enabled;
-      if (apps?.length) {
-        setEnabled(apps);
-        remember(apps);
-      }
+      show(apps?.length ? apps : DEFAULT);
+      if (apps?.length) remember(apps);
     });
-  }, []);
+    return () => clearTimeout(fallback);
+  }, [delay]);
 
   const toggle = async (id: string, on: boolean) => {
-    const next = on ? [...enabled.filter((x) => x !== id), id] : enabled.filter((x) => x !== id);
+    const cur = enabled ?? DEFAULT;
+    const next = on ? [...cur.filter((x) => x !== id), id] : cur.filter((x) => x !== id);
     if (next.length === 0) return;
     // Порядок — как в списке APPS, а не как включали.
     const ordered = APPS.map((a) => a.id as string).filter((x) => next.includes(x));
@@ -82,10 +98,11 @@ export function HomeApps({ delay }: { delay: number }) {
     if (userId) await createClient().from("profiles").update({ apps_enabled: ordered }).eq("id", userId);
   };
 
-  const shown = APPS.filter((a) => enabled.includes(a.id));
-  // Что было на экране с самого начала (одинаково на сервере и в браузере).
+  const shown = enabled ? APPS.filter((a) => enabled.includes(a.id)) : [];
+  // Что было на экране при первом показе — включённые потом шестерёнкой
+  // раздвигают место плавно.
   const initial = useRef<Set<string> | null>(null);
-  if (!initial.current) initial.current = new Set(shown.map((a) => a.id));
+  if (!initial.current && enabled) initial.current = new Set(shown.map((a) => a.id));
 
   return (
     <>
@@ -103,11 +120,10 @@ export function HomeApps({ delay }: { delay: number }) {
         <Icon name="gear" size={19} />
       </button>
 
-      <div className="space-y-3">
+      {/* Место под плитки держим заранее, чтобы низ страницы не прыгал. */}
+      <div className="space-y-3" style={{ minHeight: enabled ? undefined : 2 * 84 + 12 }}>
         {shown.map((app, index) => {
-          // Появилась позже первого показа (из памяти телефона, из профиля
-          // или включили шестерёнкой) — раздвигает место плавно.
-          const late = !initial.current!.has(app.id);
+          const late = !initial.current?.has(app.id);
           const card = (
             <HomeCard
               href={app.href}
@@ -115,7 +131,7 @@ export function HomeApps({ delay }: { delay: number }) {
               hint={app.hint}
               icon={app.icon}
               color={app.color}
-              delay={late ? 0 : delay + index * 70}
+              delay={late ? 0 : start + index * 110}
             />
           );
           return late ? (
@@ -126,7 +142,7 @@ export function HomeApps({ delay }: { delay: number }) {
             <Fragment key={app.href}>{card}</Fragment>
           );
         })}
-        <HomeAdminCard delay={delay + shown.length * 70} />
+        {enabled ? <HomeAdminCard delay={start + shown.length * 110} /> : null}
       </div>
 
       <Sheet open={open} title="Приложения" onClose={() => setOpen(false)}>
@@ -135,8 +151,8 @@ export function HomeApps({ delay }: { delay: number }) {
         </p>
         <div className="mb-3 overflow-hidden rounded-2xl" style={{ background: "var(--surface-2)" }}>
           {APPS.map((app, i) => {
-            const on = enabled.includes(app.id);
-            const last = on && enabled.length === 1;
+            const on = (enabled ?? DEFAULT).includes(app.id);
+            const last = on && (enabled ?? DEFAULT).length === 1;
             return (
               <div
                 key={app.id}

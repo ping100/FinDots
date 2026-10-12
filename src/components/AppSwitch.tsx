@@ -76,21 +76,15 @@ export function AppSwitch({ from }: { from: "money" | "tasks" }) {
   );
 }
 
-/**
- * Та же дверь, но компактная — для шапки. Карточка в настройках спрятана
- * за двумя нажатиями, и её не находят: переходить хочется с главного
- * экрана, одним касанием.
- */
-export function AppSwitchPill({ from }: { from: "money" | "tasks" }) {
-  const other = OTHER[from];
-  // Соседнее выключено — та же кнопка ведёт на развилку Dots.
-  const app = useOtherEnabled(from)
-    ? other
-    : { href: "/", title: "Dots", icon: "home", color: "#64748b" };
+/** Компактная кнопка «Dots» для шапки: одним касанием — на развилку. */
+export function AppSwitchPill() {
+  // Шапка ведёт на развилку Dots — оттуда видно все приложения, включая
+  // FemDots, а не только одно соседнее.
+  const app = { href: "/", title: "Dots", icon: "home", color: "#64748b" };
   return (
     <Link
       href={app.href}
-      aria-label={app.href === "/" ? "На главную Dots" : `Перейти в ${app.title.toLowerCase()}`}
+      aria-label="На главную Dots"
       className="flex h-10 items-center gap-1.5 rounded-full pl-1.5 pr-3.5 text-[0.8125rem] font-medium transition active:scale-95"
       style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
     >

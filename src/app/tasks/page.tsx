@@ -190,7 +190,7 @@ export default function TodayPage() {
             <h1 className="text-xl font-semibold">{dayLabel(selected)}</h1>
             <DayProgress done={dayTasks.filter((t) => t.done).length} total={dayTasks.length} />
           </div>
-          <AppSwitchPill from="tasks" />
+          <AppSwitchPill />
         </header>
 
         <Calendar selected={selected} onSelect={setSelected} loadedDates={loadedDates} />

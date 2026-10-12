@@ -491,3 +491,62 @@ input[type="date"]::-webkit-date-and-time-value {
 .animate-expand > * {
   min-height: 0;
 }
+
+/* ───────────── Плитки приложений на главной: появление с «вау» ─────────────
+   Карточка вылетает снизу с наклоном и лёгкой пружиной, значок выпрыгивает
+   с поворотом, по карточке пробегает блик цвета приложения. Задержка — --d. */
+@keyframes tile-in {
+  0% {
+    opacity: 0;
+    transform: perspective(700px) translateY(34px) rotateX(18deg) scale(0.92);
+    filter: blur(6px);
+  }
+  60% {
+    opacity: 1;
+    transform: perspective(700px) translateY(-5px) rotateX(-2deg) scale(1.015);
+    filter: blur(0);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+.animate-tile {
+  animation: tile-in 0.75s cubic-bezier(0.2, 0.8, 0.25, 1) var(--d, 0ms) both;
+}
+@keyframes tile-icon-in {
+  0% { transform: scale(0) rotate(-35deg); }
+  60% { transform: scale(1.18) rotate(8deg); }
+  100% { transform: none; }
+}
+.animate-tile-icon {
+  animation: tile-icon-in 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) calc(var(--d, 0ms) + 220ms) both;
+}
+@keyframes tile-shine {
+  from { transform: translateX(-120%) skewX(-18deg); opacity: 1; }
+  to { transform: translateX(260%) skewX(-18deg); opacity: 1; }
+}
+.tile-shine::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 45%;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--glow, #fff) 22%, transparent),
+    rgba(255, 255, 255, 0.35),
+    transparent
+  );
+  opacity: 0;
+  animation: tile-shine 0.9s ease-out calc(var(--d, 0ms) + 420ms) 1 both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-tile,
+  .animate-tile-icon,
+  .tile-shine::after {
+    animation: none;
+  }
+}

@@ -1,7 +1,12 @@
 import Link from "next/link";
 import { Icon } from "@/lib/icons";
 
-/** Карточка на развилке: цветной значок, название, одна строка о главном. */
+/**
+ * Карточка на развилке: цветной значок, название, одна строка о главном.
+ * Появляется эффектно: вылетает снизу с лёгким наклоном и пружиной, значок
+ * «выпрыгивает» с поворотом, по карточке пробегает блик. Задержка — через
+ * переменную --d, чтобы значок и блик шли следом за своей карточкой.
+ */
 export function HomeCard({
   href,
   title,
@@ -20,16 +25,19 @@ export function HomeCard({
   return (
     <Link
       href={href}
-      className="animate-lift flex items-center gap-4 rounded-3xl p-4 transition active:scale-[0.98]"
-      style={{
-        background: "var(--surface)",
-        border: "1px solid var(--border)",
-        animationDelay: `${delay}ms`,
-      }}
+      className="animate-tile tile-shine relative flex items-center gap-4 overflow-hidden rounded-3xl p-4 transition active:scale-[0.98]"
+      style={
+        {
+          background: "var(--surface)",
+          border: "1px solid var(--border)",
+          "--d": `${delay}ms`,
+          "--glow": color,
+        } as React.CSSProperties
+      }
     >
       <span
-        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white"
-        style={{ background: color }}
+        className="animate-tile-icon flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white"
+        style={{ background: color, boxShadow: `0 8px 18px -8px ${color}` }}
       >
         <Icon name={icon} size={24} />
       </span>

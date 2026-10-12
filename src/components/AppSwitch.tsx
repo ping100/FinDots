@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Icon } from "@/lib/icons";
 
@@ -25,8 +28,28 @@ const OTHER = {
   },
 } as const;
 
+/**
+ * Включено ли соседнее приложение на развилке (шестерёнка на главной).
+ * Берём копию выбора из памяти телефона — её пишет развилка; нет копии —
+ * считаем, что включено, как по умолчанию.
+ */
+function useOtherEnabled(from: "money" | "tasks"): boolean {
+  const [on, setOn] = useState(true);
+  useEffect(() => {
+    try {
+      const apps = JSON.parse(localStorage.getItem("dots.home.apps") ?? "null");
+      if (Array.isArray(apps) && apps.length) setOn(apps.includes(from === "money" ? "tasks" : "money"));
+    } catch {
+      // Нет памяти — оставляем дверь открытой.
+    }
+  }, [from]);
+  return on;
+}
+
 export function AppSwitch({ from }: { from: "money" | "tasks" }) {
   const app = OTHER[from];
+  // Выключил соседнее приложение — в настройках остаётся «На главную Dots».
+  if (!useOtherEnabled(from)) return null;
   return (
     <Link
       href={app.href}
@@ -59,11 +82,15 @@ export function AppSwitch({ from }: { from: "money" | "tasks" }) {
  * экрана, одним касанием.
  */
 export function AppSwitchPill({ from }: { from: "money" | "tasks" }) {
-  const app = OTHER[from];
+  const other = OTHER[from];
+  // Соседнее выключено — та же кнопка ведёт на развилку Dots.
+  const app = useOtherEnabled(from)
+    ? other
+    : { href: "/", title: "Dots", icon: "home", color: "#64748b" };
   return (
     <Link
       href={app.href}
-      aria-label={`Перейти в ${app.title.toLowerCase()}`}
+      aria-label={app.href === "/" ? "На главную Dots" : `Перейти в ${app.title.toLowerCase()}`}
       className="flex h-10 items-center gap-1.5 rounded-full pl-1.5 pr-3.5 text-[0.8125rem] font-medium transition active:scale-95"
       style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
     >

@@ -215,16 +215,22 @@ export function UserCard({
           <p className="mt-2 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
             появился {sinceLabel(user.created_at)}
             {user.providers.includes("email") ? "" : " · без пароля, только через Google"}
-            {user.access_money && user.access_tasks
-              ? ""
-              : user.access_money
-                ? " · доступ только к деньгам"
-                : user.access_tasks
-                  ? " · доступ только к задачам"
-                  : " · доступ закрыт полностью"}
+            {closedApps(user)}
           </p>
         </>
       ) : null}
     </div>
   );
+}
+
+/** « · закрыт доступ к Findots и FemDots» — какие приложения админ закрыл. */
+function closedApps(user: AdminUser): string {
+  const closed = [
+    !user.access_money && "Findots",
+    !user.access_tasks && "Todots",
+    !(user.access_fem ?? true) && "FemDots",
+  ].filter(Boolean) as string[];
+  if (closed.length === 0) return "";
+  if (closed.length === 3) return " · доступ закрыт полностью";
+  return ` · закрыт доступ к ${closed.join(" и ")}`;
 }

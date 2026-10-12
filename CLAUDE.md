@@ -6,10 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-**Dots** — two apps sharing one Supabase account: **Findots** (`/money`, finances
-tracked by dragging icon "bubbles" between blocks — no manual entry) and
-**Todots** (`/tasks`, day-based task list with drag-to-reschedule). `/` is the
-switcher between them; each app's header links to the other.
+**Dots** — three apps sharing one Supabase account: **Findots** (`/money`, finances
+tracked by dragging icon "bubbles" between blocks — no manual entry),
+**Todots** (`/tasks`, day-based task list with drag-to-reschedule) and
+**FemDots** (`/fem`, menstrual cycle tracker with a read-only partner mode).
+`/` is the switcher between them; the gear there toggles which apps are shown
+(`profiles.apps_enabled`, default `{money,tasks}`). The Findots/Todots headers
+link to each other (or home, if the other app is switched off).
 
 Stack: Next.js 16 (App Router, TypeScript) · Tailwind CSS 4 · dnd-kit ·
 Supabase (Postgres + Auth, RLS) · Vercel. Live at https://dotsapp.vercel.app
@@ -48,6 +51,24 @@ update alongside the Supabase write. `src/app/money/layout.tsx` and
 between the two providers except the Supabase auth session and the `profiles`
 row (display name, theme, text scale are common; money fields like
 `base_currency` live on the same row but tasks ignores them).
+
+### FemDots
+
+`src/components/fem/DataProvider.tsx` (`useFem()`) loads `fem_settings`,
+`fem_periods`, `fem_days`; cycle math (phases, predictions, fertile window)
+is pure client code in `src/lib/fem/cycle.ts`. Partner mode lives in
+`fem_shares` (no RLS policies — only SECURITY DEFINER RPCs `fem_share_*`,
+`fem_partner_*`; the partner reads via `fem_partner_view()` and never touches
+the owner's tables). Health data is visible only to its owner — admin views
+must not read FemDots tables beyond yes/no aggregates.
+
+### Profile column grants
+
+`profiles` has no table-level UPDATE for `authenticated` — only per-column
+grants (migration 0028). **Every new user-editable profile column needs its
+own `grant update (col) on public.profiles to authenticated`**, otherwise
+writes fail silently in the UI. `access_*` columns are admin-only (set via
+`admin_set_app_access`). Reviews are per app (`reviews.app`).
 
 ### Money data model: transactions + views, no stored balances
 

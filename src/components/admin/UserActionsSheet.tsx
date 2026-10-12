@@ -83,15 +83,16 @@ export function UserActionsSheet({
   // Действия вызываются только по клику внутри листа, а лист виден только
   // пока user не null, — но для TS это не очевидно, поэтому каждая ловит
   // отсутствие пользователя явным ранним выходом.
-  const setAccess = (money: boolean, tasks: boolean, ai: boolean) => {
+  const setAccess = (money: boolean, tasks: boolean, ai: boolean, fem: boolean) => {
     if (!user) return;
     const id = user.id;
     return run("access", async () => {
-      const { error } = await supabase.rpc("admin_set_access", {
+      const { error } = await supabase.rpc("admin_set_app_access", {
         p_user_id: id,
         p_money: money,
         p_tasks: tasks,
         p_ai: ai,
+        p_fem: fem,
       });
       if (error) throw new Error(error.message);
     });
@@ -228,19 +229,25 @@ export function UserActionsSheet({
                 label="Findots"
                 on={user.access_money}
                 disabled={busy === "access"}
-                onClick={() => setAccess(!user.access_money, user.access_tasks, user.access_ai)}
+                onClick={() => setAccess(!user.access_money, user.access_tasks, user.access_ai, user.access_fem)}
               />
               <AccessChip
                 label="Todots"
                 on={user.access_tasks}
                 disabled={busy === "access"}
-                onClick={() => setAccess(user.access_money, !user.access_tasks, user.access_ai)}
+                onClick={() => setAccess(user.access_money, !user.access_tasks, user.access_ai, user.access_fem)}
+              />
+              <AccessChip
+                label="FemDots"
+                on={user.access_fem}
+                disabled={busy === "access"}
+                onClick={() => setAccess(user.access_money, user.access_tasks, user.access_ai, !user.access_fem)}
               />
               <AccessChip
                 label="ИИ"
                 on={user.access_ai}
                 disabled={busy === "access"}
-                onClick={() => setAccess(user.access_money, user.access_tasks, !user.access_ai)}
+                onClick={() => setAccess(user.access_money, user.access_tasks, !user.access_ai, user.access_fem)}
               />
             </div>
           </div>

@@ -18,7 +18,7 @@ export default async function Home({
   searchParams: Promise<{ denied?: string }>;
 }) {
   const { denied } = await searchParams;
-  const deniedName = denied === "money" ? "Деньги" : denied === "tasks" ? "Задачи" : null;
+  const deniedName = { money: "Деньги", tasks: "Задачи", fem: "Цикл" }[denied ?? ""] ?? null;
 
   return (
     <div className="auth-glow mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center px-6 py-8">

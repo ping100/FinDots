@@ -1,14 +1,87 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { today } from "@/lib/tasks/dates";
 import { FEM_GRADIENT } from "@/lib/fem/cycle";
 import { BUY_ITEMS, STATUSES, ago, signalText, statusOf } from "@/lib/fem/together";
 import { Sheet } from "@/components/ui";
 import { useFem, type FemSignal, type SignalKind } from "./DataProvider";
 
-const DAY = 86_400_000;
-const fresh = (s: FemSignal, ms = DAY) => Date.now() - Date.parse(s.created_at) < ms;
+/** Просьбы и сердечки живут 12 часов — дальше гаснут сами. */
+const LIFE = 12 * 3_600_000;
+const fresh = (s: FemSignal) => Date.now() - Date.parse(s.created_at) < LIFE && !s.dismissed_at;
+
+/** Одинаковые сигналы — одной карточкой: последний и сколько их было. */
+function grouped(list: FemSignal[]): { key: string; last: FemSignal; ids: number[]; count: number }[] {
+  const map = new Map<string, { key: string; last: FemSignal; ids: number[]; count: number }>();
+  for (const sig of list) {
+    const key = `${sig.kind}:${sig.item ?? ""}`;
+    const g = map.get(key);
+    if (!g) map.set(key, { key, last: sig, ids: [sig.id], count: 1 });
+    else {
+      g.ids.push(sig.id);
+      g.count++;
+      if (Date.parse(sig.created_at) > Date.parse(g.last.created_at)) g.last = sig;
+    }
+  }
+  return [...map.values()].sort((a, b) => Date.parse(b.last.created_at) - Date.parse(a.last.created_at));
+}
+
+/**
+ * Карточку можно смахнуть влево — она уезжает и пропадает. Вертикальная
+ * прокрутка не мешает: свайп ловим, только если палец идёт вбок.
+ */
+export function Swipeable({ onDismiss, leaving, children }: { onDismiss: () => void; leaving?: boolean; children: React.ReactNode }) {
+  const start = useRef<{ x: number; y: number; id: number } | null>(null);
+  const [dx, setDx] = useState(0);
+  const [gone, setGone] = useState(false);
+  const horizontal = useRef<boolean | null>(null);
+  // Свежий колбэк без перезапуска таймера на каждой отрисовке.
+  const dismiss = useRef(onDismiss);
+  dismiss.current = onDismiss;
+  useEffect(() => {
+    if (!leaving) return;
+    setGone(true);
+    const t = setTimeout(() => dismiss.current(), 260);
+    return () => clearTimeout(t);
+  }, [leaving]);
+  const out = gone || leaving;
+  return (
+    <div
+      onPointerDown={(e) => {
+        start.current = { x: e.clientX, y: e.clientY, id: e.pointerId };
+        horizontal.current = null;
+      }}
+      onPointerMove={(e) => {
+        const st = start.current;
+        if (!st || st.id !== e.pointerId) return;
+        const mx = e.clientX - st.x;
+        const my = e.clientY - st.y;
+        if (horizontal.current === null && Math.abs(mx) + Math.abs(my) > 8) horizontal.current = Math.abs(mx) > Math.abs(my);
+        if (horizontal.current) setDx(Math.min(0, mx));
+      }}
+      onPointerUp={() => {
+        start.current = null;
+        if (dx < -90) {
+          setGone(true);
+          setTimeout(() => dismiss.current(), 260);
+        } else setDx(0);
+      }}
+      onPointerCancel={() => {
+        start.current = null;
+        setDx(0);
+      }}
+      style={{
+        touchAction: "pan-y",
+        transform: out ? "translateX(-110%)" : `translateX(${dx}px)`,
+        opacity: out ? 0 : 1 - Math.min(0.6, -dx / 300),
+        transition: start.current ? "none" : "transform 250ms ease, opacity 250ms ease",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
 
 /** Отправить сигнал и коротко показать «Отправлено» или ошибку. */
 function useSend() {
@@ -53,12 +126,14 @@ export function OwnTogether() {
   const { send, note, busy } = useSend();
   const now = today();
   const name = share?.partner_name;
-  const incoming = signals.filter((s) => s.to_id === userId && fresh(s)).slice(0, 3);
+  const { dismissSignals } = useFem();
+  const incomingAll = signals.filter((s) => s.to_id === userId && fresh(s));
+  const incoming = grouped(incomingAll).slice(0, 3);
   const status = days.get(now)?.status ?? null;
 
   useEffect(() => {
-    if (incoming.some((s) => !s.seen_at)) void markSignalsSeen();
-  }, [incoming, markSignalsSeen]);
+    if (incomingAll.some((s) => !s.seen_at)) void markSignalsSeen();
+  }, [incomingAll, markSignalsSeen]);
 
   if (!name) return null;
 
@@ -68,18 +143,21 @@ export function OwnTogether() {
 
       {incoming.length ? (
         <div className="mt-2.5 space-y-1.5">
-          {incoming.map((s) => {
-            const t = signalText(s.kind, s.item);
+          {incoming.map((g) => {
+            const t = signalText(g.last.kind, g.last.item);
             return (
-              <div key={s.id} className="flex items-center gap-2.5 rounded-2xl px-3 py-2" style={{ background: "var(--surface-2)" }}>
-                <span className="text-lg">{t.emoji}</span>
-                <span className="min-w-0 flex-1 text-sm">
-                  <b>{name}:</b> {t.text}
-                </span>
-                <span className="shrink-0 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-                  {ago(s.created_at)}
-                </span>
-              </div>
+              <Swipeable key={g.key} onDismiss={() => void dismissSignals(g.ids)}>
+                <div className="flex items-center gap-2.5 rounded-2xl px-3 py-2" style={{ background: "var(--surface-2)" }}>
+                  <span className="text-lg">{t.emoji}</span>
+                  <span className="min-w-0 flex-1 text-sm">
+                    <b>{name}:</b> {t.text}
+                    {g.count > 1 ? <span style={{ color: "var(--muted)" }}> ×{g.count}</span> : null}
+                  </span>
+                  <span className="shrink-0 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+                    {ago(g.last.created_at)}
+                  </span>
+                </div>
+              </Swipeable>
             );
           })}
         </div>
@@ -160,56 +238,110 @@ function Ask({ emoji, label, onClick, disabled }: { emoji: string; label: string
  * «Думаю о тебе ❤️».
  */
 export function PartnerTogether({ name, status }: { name: string; status: string | null }) {
-  const { signals, userId, markSignalsSeen } = useFem();
+  const { signals, userId, markSignalsSeen, dismissSignals } = useFem();
   const { send, note, busy } = useSend();
-  const asks = signals.filter((s) => s.to_id === userId && fresh(s) && s.kind !== "heart" && s.kind !== "ok").slice(0, 3);
-  // Ответил ли уже на просьбу — «ok» после неё.
+  const now = today();
+  // Ответил ли уже на эту просьбу — «ok» с её ключом после неё (старые «ok»
+  // без ключа отвечали на всё сразу).
   const answered = (s: FemSignal) =>
-    signals.some((x) => x.from_id === userId && x.kind === "ok" && Date.parse(x.created_at) > Date.parse(s.created_at));
-  const st = statusOf(status);
+    signals.some(
+      (x) =>
+        x.from_id === userId &&
+        x.kind === "ok" &&
+        (!x.item || x.item === `${s.kind}:${s.item ?? ""}`) &&
+        Date.parse(x.created_at) > Date.parse(s.created_at),
+    );
+  // Только что ответил — карточка пару секунд показывает «Ответили ✓» и уходит.
+  const [done, setDone] = useState<Set<string>>(new Set());
+  const [leaving, setLeaving] = useState<Set<string>>(new Set());
+  const keyOf = (s: FemSignal) => `${s.kind}:${s.item ?? ""}`;
+  const pending = signals.filter((s) => s.to_id === userId && fresh(s) && s.kind !== "heart" && s.kind !== "ok");
+  const asks = grouped(pending.filter((s) => !answered(s) || done.has(keyOf(s)))).slice(0, 3);
+  // Статус дня тоже можно смахнуть — до конца дня (память телефона).
+  const [statusHidden, setStatusHidden] = useState(false);
+  useEffect(() => {
+    try {
+      setStatusHidden(localStorage.getItem("fem.status.hidden") === `${now}:${status}`);
+    } catch {
+      // Нет памяти — просто показываем.
+    }
+  }, [now, status]);
+  const st = statusHidden ? null : statusOf(status);
 
   useEffect(() => {
-    if (asks.some((s) => !s.seen_at)) void markSignalsSeen();
-  }, [asks, markSignalsSeen]);
+    if (pending.some((s) => !s.seen_at)) void markSignalsSeen();
+  }, [pending, markSignalsSeen]);
+
+  // Отвеченные раньше (до перезахода) — убираем тихо.
+  useEffect(() => {
+    const old = pending.filter((s) => answered(s) && !done.has(keyOf(s))).map((s) => s.id);
+    if (old.length) void dismissSignals(old);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signals]);
+
+  const reply = async (g: { key: string; ids: number[] }) => {
+    // key — «care:» или «buy:chocolate»: ответ привязан к этой просьбе.
+    setDone((prev) => new Set(prev).add(g.key));
+    await send("ok", g.key, `${name} знает, что вы уже бежите`);
+    setTimeout(() => setLeaving((prev) => new Set(prev).add(g.key)), 1500);
+  };
 
   return (
     <div className="mb-4 space-y-2.5">
-      {asks.map((s) => {
-        const t = signalText(s.kind, s.item);
-        const done = answered(s);
+      {asks.map((g) => {
+        const t = signalText(g.last.kind, g.last.item);
+        const isDone = done.has(g.key);
         return (
-          <div key={s.id} className="fem-card animate-lift flex items-center gap-3 rounded-3xl px-4 py-3">
-            <span className="text-2xl">{t.emoji}</span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-[0.9375rem] font-semibold leading-snug">{t.text}</span>
-              <span className="block text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-                {name} · {ago(s.created_at)}
+          <Swipeable key={g.key} leaving={leaving.has(g.key)} onDismiss={() => void dismissSignals(g.ids)}>
+            <div className="fem-card animate-lift flex items-center gap-3 rounded-3xl px-4 py-3">
+              <span className="text-2xl">{t.emoji}</span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[0.9375rem] font-semibold leading-snug">
+                  {t.text}
+                  {g.count > 1 ? <span className="font-normal" style={{ color: "var(--muted)" }}> ×{g.count}</span> : null}
+                </span>
+                <span className="block text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+                  {name} · {ago(g.last.created_at)}
+                  {g.last.kind === "alone" ? " · смахните, когда прочтёте" : ""}
+                </span>
               </span>
-            </span>
-            {s.kind !== "alone" ? (
-              <button
-                onClick={() => void send("ok", undefined, `${name} знает, что вы уже бежите`)}
-                disabled={busy || done}
-                className="shrink-0 rounded-full px-3 py-2 text-[0.8125rem] font-semibold text-white disabled:opacity-60"
-                style={{ background: done ? "var(--muted)" : FEM_GRADIENT }}
-              >
-                {done ? "Ответили ✓" : "Уже бегу 🏃"}
-              </button>
-            ) : null}
-          </div>
+              {g.last.kind !== "alone" ? (
+                <button
+                  onClick={() => void reply(g)}
+                  disabled={busy || isDone}
+                  className="shrink-0 rounded-full px-3 py-2 text-[0.8125rem] font-semibold text-white disabled:opacity-80"
+                  style={{ background: isDone ? "#14b8a6" : FEM_GRADIENT }}
+                >
+                  {isDone ? "Ответили ✓" : "Уже бегу 🏃"}
+                </button>
+              ) : null}
+            </div>
+          </Swipeable>
         );
       })}
 
       {st ? (
-        <div className="fem-card flex items-center gap-3 rounded-3xl px-4 py-3">
-          <span className="text-2xl">{st.emoji}</span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-              {name} сегодня
+        <Swipeable
+          key={`status-${status}`}
+          onDismiss={() => {
+            setStatusHidden(true);
+            try {
+              localStorage.setItem("fem.status.hidden", `${now}:${status}`);
+            } catch {
+              // Не запомнили — после перезахода статус покажется снова.
+            }
+          }}
+        >
+          <div className="fem-card flex items-center gap-3 rounded-3xl px-4 py-3">
+            <span className="text-2xl">{st.emoji}</span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+                {name} сегодня
+              </span>
+              <span className="block text-[0.9375rem] font-semibold">{st.label}</span>
             </span>
-            <span className="block text-[0.9375rem] font-semibold">{st.label}</span>
-          </span>
-        </div>
+          </div>
+        </Swipeable>
       ) : null}
 
       <button

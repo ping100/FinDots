@@ -51,6 +51,8 @@ export interface FemStore {
   signals: FemSignal[];
   sendSignal: (kind: SignalKind, item?: string) => Promise<void>;
   markSignalsSeen: () => Promise<void>;
+  /** Смахнуть / закрыть отвеченные: больше не показывать. */
+  dismissSignals: (ids: number[]) => Promise<void>;
   /** Что ещё видит партнёр: статус, цель, напоминание про таблетку. */
   shareOptions: ShareOptions | null;
   setShareOptions: (next: ShareOptions) => Promise<void>;
@@ -71,6 +73,7 @@ export interface FemSignal {
   item: string | null;
   created_at: string;
   seen_at: string | null;
+  dismissed_at: string | null;
 }
 
 export interface ShareOptions {
@@ -411,7 +414,7 @@ export function FemProvider({ children }: { children: ReactNode }) {
     const since = new Date(Date.now() - 3 * 86400000).toISOString();
     const res = await supabase
       .from("fem_signals")
-      .select("id, from_id, to_id, kind, item, created_at, seen_at")
+      .select("id, from_id, to_id, kind, item, created_at, seen_at, dismissed_at")
       .gte("created_at", since)
       .order("created_at", { ascending: false })
       .limit(30);
@@ -444,6 +447,16 @@ export function FemProvider({ children }: { children: ReactNode }) {
     setSignals((prev) => prev.map((x) => (x.to_id === userId && !x.seen_at ? { ...x, seen_at: now } : x)));
     await supabase.rpc("fem_signals_seen");
   }, [signals, supabase, userId]);
+
+  const dismissSignals: FemStore["dismissSignals"] = useCallback(
+    async (ids) => {
+      if (ids.length === 0) return;
+      const now = new Date().toISOString();
+      setSignals((prev) => prev.map((x) => (ids.includes(x.id) ? { ...x, dismissed_at: now, seen_at: x.seen_at ?? now } : x)));
+      await supabase.rpc("fem_signals_dismiss", { p_ids: ids });
+    },
+    [supabase],
+  );
 
   const setShareOptions: FemStore["setShareOptions"] = useCallback(
     async (next) => {
@@ -482,13 +495,13 @@ export function FemProvider({ children }: { children: ReactNode }) {
     () => ({
       ready, error, profile, settings, periods, days, saveSettings, saveProfile, startPeriod, endPeriod, deletePeriod, saveDay, deleteAll,
       partner, share, createShare, updateShare, revokeShare, acceptCode, leavePartner, setPartnerRemind, reloadShares,
-      userId, signals, sendSignal, markSignalsSeen, shareOptions, setShareOptions,
+      userId, signals, sendSignal, markSignalsSeen, dismissSignals, shareOptions, setShareOptions,
       intimacy, setIntimacy,
     }),
     [
       ready, error, profile, settings, periods, days, saveSettings, saveProfile, startPeriod, endPeriod, deletePeriod, saveDay, deleteAll,
       partner, share, createShare, updateShare, revokeShare, acceptCode, leavePartner, setPartnerRemind, reloadShares,
-      userId, signals, sendSignal, markSignalsSeen, shareOptions, setShareOptions,
+      userId, signals, sendSignal, markSignalsSeen, dismissSignals, shareOptions, setShareOptions,
       intimacy, setIntimacy,
     ],
   );

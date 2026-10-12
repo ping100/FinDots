@@ -11,7 +11,9 @@ import {
   daysBetween,
   type CycleInfo,
   type FemDay,
+  type Phase,
 } from "@/lib/fem/cycle";
+import { phraseOf } from "@/lib/fem/phrases";
 import { inputClass, inputStyle } from "@/components/ui";
 import { useFem } from "./DataProvider";
 
@@ -286,6 +288,28 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
         {title}
       </span>
       <div className="flex flex-wrap gap-1.5">{children}</div>
+    </div>
+  );
+}
+
+/**
+ * Фраза дня крупно — первое, что видно на экране: что значит сегодняшний
+ * день, простыми словами. Над ней мелко — фаза цикла.
+ */
+export function DayHero({ phase, day, who }: { phase: Phase; day: string; who: "own" | "partner" }) {
+  const { lead, line } = phraseOf(phase, day, who);
+  return (
+    <div className="px-2 pb-6 pt-3 text-center">
+      <p className="animate-lift flex items-center justify-center gap-2 text-[0.8125rem] font-medium" style={{ color: "var(--muted)" }}>
+        <span className="h-2 w-2 rounded-full" style={{ background: PHASE_COLOR[phase] }} />
+        {lead}
+      </p>
+      <h2
+        className="animate-lift mx-auto mt-2 max-w-[20rem] text-balance text-[1.625rem] font-bold leading-[1.15] tracking-tight"
+        style={{ animationDelay: "80ms" }}
+      >
+        {line}
+      </h2>
     </div>
   );
 }

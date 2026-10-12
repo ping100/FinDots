@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/lib/icons";
 import { THEMES, THEME_AUTO_HINT } from "@/lib/look";
@@ -62,6 +63,36 @@ export default function FemSettingsPage() {
     <div className="mx-auto w-full max-w-md px-4 pb-32">
       <FemHeader title="Настройки" sub="FemDots" />
 
+      {/* Данные о здоровье — самое личное: первым делом успокаиваем. */}
+      <div className="fem-card relative mb-4 overflow-hidden rounded-3xl p-4">
+        <span
+          className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full"
+          style={{ background: "radial-gradient(circle, rgba(20,184,166,0.22), transparent 70%)" }}
+        />
+        <div className="flex gap-3.5">
+          <span
+            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-white"
+            style={{ background: "linear-gradient(150deg, #2dd4bf, #0f766e)", boxShadow: "0 10px 22px -10px rgba(13,148,136,0.7)" }}
+          >
+            <Icon name="shield" size={28} />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-[1rem] font-semibold">Ваши данные под защитой</span>
+            <span className="mt-1 block text-[0.8125rem] leading-snug" style={{ color: "var(--muted)" }}>
+              Цикл и самочувствие видите только вы — даже администратор Dots к ним доступа не имеет. Партнёр видит
+              лишь то, чем вы поделитесь. Удалить всё можно в любой момент.
+            </span>
+          </span>
+        </div>
+        <Link
+          href={`/privacy?from=${encodeURIComponent("/fem/settings")}#fem`}
+          className="mt-3.5 block rounded-full py-2.5 text-center text-sm font-semibold"
+          style={{ background: "var(--surface-2)" }}
+        >
+          Подробнее
+        </Link>
+      </div>
+
       <SettingsHeading>Профиль</SettingsHeading>
       <div className="fem-card mb-4 overflow-hidden rounded-2xl">
         <AccountCard
@@ -114,7 +145,7 @@ export default function FemSettingsPage() {
       <SettingsHeading>Данные</SettingsHeading>
       <div className="fem-card mb-4 rounded-2xl p-4">
         <p className="mb-3 text-[0.8125rem] leading-snug" style={{ color: "var(--muted)" }}>
-          Данные о цикле и самочувствии видите только вы — даже администратор Dots к ним доступа не имеет.
+          Отметки месячных, самочувствие и настройки FemDots. Учётная запись и другие приложения останутся.
         </p>
         <Button
           variant={confirming ? "danger" : "ghost"}

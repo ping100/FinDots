@@ -1,9 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Icon } from "@/lib/icons";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { addDays, today } from "@/lib/tasks/dates";
-import { PHASE_COLOR, buildMarks, cycleInfo, daysBetween, type FemPeriod } from "@/lib/fem/cycle";
+import { FEM_GRADIENT, PHASE_COLOR, buildMarks, cycleInfo, daysBetween, type FemPeriod } from "@/lib/fem/cycle";
 import { long } from "@/lib/fem/format";
 import { useFem } from "@/components/fem/DataProvider";
 import { FemHeader } from "@/components/fem/Shell";
@@ -19,25 +18,42 @@ const MONTHS = [
 const iso = (y: number, m: number, d: number) =>
   `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 
+/** Сколько месяцев ленты назад и вперёд от текущего. */
+const BACK = 12;
+const AHEAD = 4;
+const TEAL = "#14b8a6";
+
 /**
- * Календарь цикла: каждый день — кружок. Залитые розовые — отмеченные
- * месячные, пунктир — прогноз, бирюзовые — фертильное окно, с обводкой —
- * овуляция. Точка под числом — в этот день отмечено самочувствие.
+ * Календарь цикла лентой: месяцы идут подряд, листаются пальцем вниз.
+ * Залитые розовые — отмеченные месячные, розовый пунктир — их прогноз,
+ * бирюзовые цифры — фертильное окно, бирюзовый пунктир — овуляция.
+ * Точка под числом — в этот день отмечено самочувствие.
  */
 export default function FemCalendar() {
   const { settings, periods, days, startPeriod, endPeriod, deletePeriod } = useFem();
   const now = today();
   const info = useMemo(() => cycleInfo(periods, settings!, now), [periods, settings, now]);
   const marks = useMemo(() => buildMarks(periods, info, now), [periods, info, now]);
-  const [shift, setShift] = useState(0);
   const [picked, setPicked] = useState<string | null>(null);
+  const current = useRef<HTMLDivElement | null>(null);
+  const [away, setAway] = useState(false);
 
   const base = new Date();
-  const first = new Date(base.getFullYear(), base.getMonth() + shift, 1);
-  const y = first.getFullYear();
-  const m = first.getMonth();
-  const count = new Date(y, m + 1, 0).getDate();
-  const lead = (first.getDay() + 6) % 7;
+  const months = Array.from({ length: BACK + AHEAD + 1 }, (_, i) => {
+    const first = new Date(base.getFullYear(), base.getMonth() - BACK + i, 1);
+    return { y: first.getFullYear(), m: first.getMonth(), shift: i - BACK };
+  });
+
+  // Открываемся на текущем месяце; ушли от него — появляется «Сегодня».
+  useEffect(() => {
+    const el = current.current;
+    if (!el) return;
+    el.scrollIntoView({ block: "start" });
+    window.scrollBy(0, -96);
+    const io = new IntersectionObserver(([e]) => setAway(!e.isIntersecting), { rootMargin: "-80px 0px -120px 0px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
 
   const periodOf = (day: string): FemPeriod | undefined =>
     periods.find((p) => day >= p.start_date && day <= (p.end_date ?? (p.id === info.current?.id ? now : p.start_date)));
@@ -49,84 +65,99 @@ export default function FemCalendar() {
     <div className="mx-auto w-full max-w-md px-4 pb-32">
       <FemHeader title="Календарь" sub="Отмеченное и прогноз" />
 
-      <div className="fem-card rounded-3xl p-3">
-        <div className="mb-2 flex items-center justify-between px-1">
-          <button onClick={() => setShift((s) => s - 1)} aria-label="Раньше" className="p-1" style={{ color: "var(--accent)" }}>
-            <Icon name="chevron-left" size={22} />
-          </button>
-          <span className="text-[0.9375rem] font-semibold">
-            {MONTHS[m]} {y !== base.getFullYear() ? y : ""}
-          </span>
-          <button onClick={() => setShift((s) => s + 1)} aria-label="Позже" className="p-1" style={{ color: "var(--accent)" }}>
-            <Icon name="chevron-right" size={22} />
-          </button>
-        </div>
-
-        <div className="grid grid-cols-7 gap-y-1">
+      {/* Дни недели и подсказка цветов — всегда на виду, пока листаешь. */}
+      <div
+        className="sticky z-10 -mx-4 mb-1 px-4 pb-2 pt-1 backdrop-blur-md"
+        style={{ top: "env(safe-area-inset-top)", background: "color-mix(in srgb, var(--bg) 82%, transparent)" }}
+      >
+        <div className="grid grid-cols-7">
           {HEADS.map((h) => (
-            <span key={h} className="pb-1 text-center text-[0.625rem]" style={{ color: "var(--muted)" }}>
+            <span key={h} className="text-center text-[0.6875rem] font-medium" style={{ color: "var(--muted)" }}>
               {h}
             </span>
           ))}
-          {Array.from({ length: lead }, (_, i) => (
-            <span key={`l${i}`} />
-          ))}
-          {Array.from({ length: count }, (_, i) => {
-            const d = iso(y, m, i + 1);
-            const mark = marks.get(d);
-            const logged = days.has(d);
-            const isToday = d === now;
-            let bg = "transparent";
-            let color = "var(--text)";
-            let border = "none";
-            if (mark?.period) {
-              bg = PHASE_COLOR.period;
-              color = "#fff";
-            } else if (mark?.predicted) {
-              border = `1.5px dashed ${PHASE_COLOR.period}`;
-              color = PHASE_COLOR.period;
-            } else if (mark?.ovulation) {
-              bg = PHASE_COLOR.ovulation;
-              color = "#fff";
-            } else if (mark?.fertile) {
-              bg = `color-mix(in srgb, ${PHASE_COLOR.fertile} 28%, transparent)`;
-            }
-            return (
-              <button
-                key={d}
-                onClick={() => setPicked(d)}
-                aria-label={long(d)}
-                className="flex h-11 flex-col items-center justify-center transition active:scale-90"
-              >
-                <span
-                  className="flex h-9 w-9 items-center justify-center rounded-full text-[0.8125rem] tabular-nums"
-                  style={{
-                    background: bg,
-                    color,
-                    border,
-                    fontWeight: isToday ? 800 : 500,
-                    boxShadow: isToday ? "0 0 0 2px var(--surface), 0 0 0 3.5px var(--text)" : undefined,
-                  }}
-                >
-                  {i + 1}
-                </span>
-                <span className="mt-0.5 h-1 w-1 rounded-full" style={{ background: logged ? "var(--accent)" : "transparent" }} />
-              </button>
-            );
-          })}
         </div>
-
-        <div className="mt-2 flex flex-wrap justify-center gap-x-3 gap-y-1 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+        <div className="mt-1.5 flex flex-wrap justify-center gap-x-3 gap-y-1 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
           <Legend style={{ background: PHASE_COLOR.period }} label="Месячные" />
-          <Legend style={{ border: `1.5px dashed ${PHASE_COLOR.period}` }} label="Прогноз" />
-          <Legend style={{ background: `color-mix(in srgb, ${PHASE_COLOR.fertile} 40%, transparent)` }} label="Фертильные" />
-          <Legend style={{ background: PHASE_COLOR.ovulation }} label="Овуляция" />
+          <Legend style={{ border: `1.5px dotted ${PHASE_COLOR.period}` }} label="Прогноз" />
+          <Legend style={{ background: TEAL }} label="Фертильные" />
+          <Legend style={{ border: `1.5px dotted ${TEAL}` }} label="Овуляция" />
         </div>
       </div>
 
-      <p className="mt-3 px-2 text-center text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+      {months.map(({ y, m, shift }) => {
+        const count = new Date(y, m + 1, 0).getDate();
+        const lead = (new Date(y, m, 1).getDay() + 6) % 7;
+        return (
+          <section key={`${y}-${m}`} ref={shift === 0 ? current : undefined} className="fem-card mb-3 rounded-3xl px-2 pb-2 pt-3">
+            <h2 className="mb-1 text-center text-[0.9375rem] font-semibold">
+              {MONTHS[m]} {y !== base.getFullYear() ? y : ""}
+            </h2>
+            <div className="grid grid-cols-7">
+              {Array.from({ length: lead }, (_, i) => (
+                <span key={`l${i}`} />
+              ))}
+              {Array.from({ length: count }, (_, i) => {
+                const d = iso(y, m, i + 1);
+                const mark = marks.get(d);
+                const isToday = d === now;
+                let bg = isToday ? "var(--surface-2)" : "transparent";
+                let color = "var(--text)";
+                let border = "none";
+                if (mark?.period) {
+                  bg = PHASE_COLOR.period;
+                  color = "#fff";
+                } else if (mark?.predicted) {
+                  border = `2px dotted ${PHASE_COLOR.period}`;
+                  color = PHASE_COLOR.period;
+                } else if (mark?.ovulation) {
+                  border = `2px dotted ${TEAL}`;
+                  color = TEAL;
+                } else if (mark?.fertile) {
+                  color = TEAL;
+                }
+                return (
+                  <button
+                    key={d}
+                    onClick={() => setPicked(d)}
+                    aria-label={long(d)}
+                    className="relative flex h-[3.25rem] flex-col items-center justify-center transition active:scale-90"
+                  >
+                    {isToday ? (
+                      <span className="absolute top-0 text-[0.5rem] font-bold uppercase tracking-wide" style={{ color: "var(--muted)" }}>
+                        сегодня
+                      </span>
+                    ) : null}
+                    <span
+                      className="flex h-9 w-9 items-center justify-center rounded-full text-[0.9375rem] tabular-nums"
+                      style={{ background: bg, color, border, fontWeight: isToday ? 800 : 500 }}
+                    >
+                      {i + 1}
+                    </span>
+                    <span className="mt-0.5 h-1 w-1 rounded-full" style={{ background: days.has(d) ? "var(--accent)" : "transparent" }} />
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        );
+      })}
+
+      <p className="mt-1 px-2 text-center text-[0.6875rem]" style={{ color: "var(--muted)" }}>
         Нажмите на день, чтобы отметить месячные или самочувствие
       </p>
+
+      {away ? (
+        <button
+          onClick={() => {
+            current.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+          }}
+          className="animate-lift fixed bottom-28 left-1/2 z-20 -translate-x-1/2 rounded-full px-4 py-2 text-sm font-semibold text-white"
+          style={{ background: FEM_GRADIENT, boxShadow: "0 10px 24px -10px rgba(236,72,153,0.7)" }}
+        >
+          Сегодня
+        </button>
+      ) : null}
 
       <Sheet open={!!picked} title={picked ? long(picked) : ""} onClose={() => setPicked(null)}>
         {picked ? (

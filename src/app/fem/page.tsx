@@ -9,10 +9,10 @@ import { PartnerJoin } from "@/components/fem/PartnerShare";
 import { long, range, short } from "@/lib/fem/format";
 import { useFem } from "@/components/fem/DataProvider";
 import { FemHeader } from "@/components/fem/Shell";
-import { CycleRing, DayLog, plural } from "@/components/fem/parts";
+import { CycleRing, DayHero, DayLog, plural } from "@/components/fem/parts";
 
 /**
- * Главный экран FemDots: кольцо цикла, фаза, одна главная кнопка
+ * Главный экран FemDots: фраза дня, кольцо цикла, одна главная кнопка
  * («начались» / «закончились»), ближайшие даты и самочувствие за сегодня.
  */
 export default function FemToday() {
@@ -46,22 +46,19 @@ export default function FemToday() {
       {/* Ведёте свой цикл и при этом смотрите чужой — переход сюда. */}
       {partner ? <PartnerJoin /> : null}
 
+      {info.phase ? <DayHero phase={info.phase} day={now} who="own" /> : null}
+
       <div className="fem-card rounded-[28px] px-4 pb-5 pt-6">
-        <CycleRing info={info} />
+        <CycleRing info={info} size={232} />
 
         {phase && info.phase ? (
-          <div
-            className="mt-4 flex items-start gap-2.5 rounded-2xl px-3.5 py-3"
-            style={{ background: `color-mix(in srgb, ${PHASE_COLOR[info.phase]} 16%, var(--surface))` }}
-          >
-            <span className="mt-1 h-3 w-3 shrink-0 rounded-full" style={{ background: PHASE_COLOR[info.phase] }} />
-            <span>
-              <span className="block text-sm font-semibold">{phase.title}</span>
-              <span className="block text-[0.75rem] leading-snug" style={{ color: "var(--muted)" }}>
-                {phase.hint}
-              </span>
-            </span>
-          </div>
+          // Термин — мелко, под кольцом: главное уже сказано фразой дня.
+          <p className="mt-3 text-center text-[0.75rem] leading-snug" style={{ color: "var(--muted)" }}>
+            <span className="font-semibold" style={{ color: "var(--text)" }}>
+              {phase.title}
+            </span>{" "}
+            · {phase.hint}
+          </p>
         ) : null}
 
         <button

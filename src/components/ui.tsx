@@ -208,6 +208,7 @@ export function Bubble({
   badge,
   muted,
   wiggle,
+  converted,
 }: {
   icon: string;
   color: string;
@@ -222,6 +223,8 @@ export function Bubble({
   muted?: boolean;
   /** Пока тащат другой кружок: сюда можно бросить. */
   wiggle?: boolean;
+  /** Валютный кошелёк: «≈ 45 393 ₸» в основной валюте под суммой. */
+  converted?: string;
 }) {
   return (
     <div
@@ -279,6 +282,14 @@ export function Bubble({
       >
         {amount ?? "\u00a0"}
       </span>
+      {converted ? (
+        <span
+          className="-mt-0.5 w-full whitespace-nowrap text-center tabular-nums"
+          style={{ color: "var(--muted)", fontSize: amountFontSize(converted.replace("≈ ", "")) === "0.6875rem" ? "0.594rem" : "0.531rem" }}
+        >
+          {converted}
+        </span>
+      ) : null}
     </div>
   );
 }

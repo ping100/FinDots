@@ -66,6 +66,14 @@ type DropData =
  */
 const DropHint = createContext<(target: DropData) => boolean>(() => false);
 
+/** Кошелёк не в основной валюте — его сумма в основной: «≈ 45 393 ₸». */
+function useConverted(wallet: Wallet, balance: number): string | undefined {
+  const { profile, toBase } = useStore();
+  const base = profile?.base_currency ?? "KZT";
+  if (wallet.currency === base) return undefined;
+  return `≈ ${formatMoney(Math.round(toBase(balance, wallet.currency)), base)}`;
+}
+
 /** Дрожит, если сюда можно бросить, и замирает под пальцем. */
 function useWiggle(target: DropData, isOver: boolean): boolean {
   return useContext(DropHint)(target) && !isOver;
@@ -1083,6 +1091,7 @@ function WalletBubble({
   size: number;
   onTap: () => void;
 }) {
+  const converted = useConverted(wallet, balance);
   const { attributes, listeners, setNodeRef: dragRef, isDragging } = useDraggable({
     id: `wallet:${wallet.id}`,
     data: {
@@ -1120,6 +1129,7 @@ function WalletBubble({
         dimmed={isDragging}
         highlighted={isOver}
         wiggle={wiggle}
+        converted={converted}
       />
     </button>
   );
@@ -1141,6 +1151,7 @@ function SavingsBubble({
   ripe: boolean;
   onTap: () => void;
 }) {
+  const converted = useConverted(wallet, balance);
   const { attributes, listeners, setNodeRef: dragRef, isDragging } = useDraggable({
     id: `wallet:${wallet.id}`,
     data: {
@@ -1182,6 +1193,7 @@ function SavingsBubble({
         dimmed={isDragging}
         highlighted={isOver}
         wiggle={wiggle}
+        converted={converted}
       />
       {goal ? (
         <span

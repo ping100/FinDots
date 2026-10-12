@@ -7,7 +7,7 @@ import { PHASE_COLOR, buildMarks, type CycleInfo } from "@/lib/fem/cycle";
 import { long } from "@/lib/fem/format";
 import { Sheet } from "@/components/ui";
 import { useFem } from "./DataProvider";
-import { IntimacyHeart, IntimacyPicker, heartOf } from "./parts";
+import { HEART_LABEL, IntimacyHeart, heartOf, heartsOf } from "./parts";
 
 const HEADS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 const MONTHS = [
@@ -20,11 +20,11 @@ const iso = (y: number, m: number, d: number) =>
 
 /**
  * Календарь её цикла глазами партнёра: месячные, прогноз, фертильные дни
- * и сердечки близости. Отметить близость может и он — сердечко появится
- * у обоих. Подробности её дневника сюда не попадают.
+ * и сердечки близости — только для просмотра, сердечки приходят из её
+ * отметок. Подробности её дневника сюда не попадают.
  */
 export function PartnerCalendar({ info }: { info: CycleInfo }) {
-  const { partner, setPartnerIntimacy } = useFem();
+  const { partner } = useFem();
   const now = today();
   const [shift, setShift] = useState(0);
   const [picked, setPicked] = useState<string | null>(null);
@@ -88,7 +88,7 @@ export function PartnerCalendar({ info }: { info: CycleInfo }) {
           return (
             <button
               key={d}
-              onClick={() => d <= now && setPicked(d)}
+              onClick={() => heart && setPicked(d)}
               aria-label={long(d)}
               className="flex h-11 items-center justify-center transition active:scale-90"
             >
@@ -108,25 +108,18 @@ export function PartnerCalendar({ info }: { info: CycleInfo }) {
         })}
       </div>
       <p className="mt-1 text-center text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-        Нажмите на день, чтобы отметить близость — сердечко появится у обоих
+        Сердечки — близость, которую отметила {partner.owner_name}
       </p>
 
       <Sheet open={!!picked} title={picked ? long(picked) : ""} onClose={() => setPicked(null)}>
         {picked ? (
-          <div className="pb-3">
-            <p className="mb-2.5 text-[0.8125rem]" style={{ color: "var(--muted)" }}>
-              Близость в этот день — сердечко появится у вас обоих
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <IntimacyPicker value={pickedValue} onChange={(v) => void setPartnerIntimacy(picked, v)} />
-            </div>
-            <button
-              onClick={() => setPicked(null)}
-              className="mt-4 w-full rounded-2xl py-3 text-[0.9375rem] font-semibold"
-              style={{ background: "var(--surface-2)" }}
-            >
-              Готово
-            </button>
+          <div className="space-y-2 pb-3">
+            {heartsOf(pickedValue).map((k) => (
+              <p key={k} className="flex items-center gap-2.5 rounded-2xl px-3.5 py-2.5 text-sm" style={{ background: "var(--surface-2)" }}>
+                <IntimacyHeart kind={k} size={18} />
+                {HEART_LABEL[k]}
+              </p>
+            ))}
           </div>
         ) : null}
       </Sheet>

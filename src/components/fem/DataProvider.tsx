@@ -59,8 +59,6 @@ export interface FemStore {
   intimacy: Map<string, Intim>;
   /** Отметить / снять близость (null — снять). */
   setIntimacy: (day: string, value: Intim | null) => Promise<void>;
-  /** То же со стороны партнёра — в её календаре. */
-  setPartnerIntimacy: (day: string, value: Intim | null) => Promise<void>;
 }
 
 export type SignalKind = "care" | "buy" | "alone" | "heart" | "ok";
@@ -465,41 +463,18 @@ export function FemProvider({ children }: { children: ReactNode }) {
     [fail, supabase, userId],
   );
 
-  const setPartnerIntimacy: FemStore["setPartnerIntimacy"] = useCallback(
-    async (day, v) => {
-      setPartner((prev) =>
-        prev
-          ? {
-              ...prev,
-              intimacy: [
-                ...(prev.intimacy ?? []).filter((x) => x.day !== day),
-                ...(v ? [{ day, ...v }] : []),
-              ].sort((a, b) => a.day.localeCompare(b.day)),
-            }
-          : prev,
-      );
-      const res = await supabase.rpc("fem_partner_intimacy_set", {
-        p_day: day,
-        p_kinds: v?.kinds ?? [],
-        p_protected: v?.protected ?? null,
-      });
-      fail(res.error?.message);
-    },
-    [fail, supabase],
-  );
-
   const value = useMemo<FemStore>(
     () => ({
       ready, error, profile, settings, periods, days, saveSettings, saveProfile, startPeriod, endPeriod, deletePeriod, saveDay, deleteAll,
       partner, share, createShare, updateShare, revokeShare, acceptCode, leavePartner, setPartnerRemind, reloadShares,
       userId, signals, sendSignal, markSignalsSeen, shareOptions, setShareOptions,
-      intimacy, setIntimacy, setPartnerIntimacy,
+      intimacy, setIntimacy,
     }),
     [
       ready, error, profile, settings, periods, days, saveSettings, saveProfile, startPeriod, endPeriod, deletePeriod, saveDay, deleteAll,
       partner, share, createShare, updateShare, revokeShare, acceptCode, leavePartner, setPartnerRemind, reloadShares,
       userId, signals, sendSignal, markSignalsSeen, shareOptions, setShareOptions,
-      intimacy, setIntimacy, setPartnerIntimacy,
+      intimacy, setIntimacy,
     ],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

@@ -121,3 +121,7 @@ as $$
     left join public.fem_settings fs on fs.user_id = s.owner_id
    where s.partner_id = auth.uid() and s.active;
 $$;
+
+-- Близость отмечает только она; партнёр лишь видит сердечки в календаре.
+revoke execute on function public.fem_partner_intimacy(date, boolean, boolean) from authenticated;
+revoke execute on function public.fem_partner_intimacy_set(date, text[], boolean) from authenticated;

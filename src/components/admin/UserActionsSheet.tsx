@@ -224,7 +224,8 @@ export function UserActionsSheet({
             <p className="mb-1.5 text-[0.8125rem]" style={{ color: "var(--muted)" }}>
               Доступ к приложениям
             </p>
-            <div className="flex gap-2">
+            {/* Сетка 2×2: четыре кнопки в ряд на телефоне не помещаются. */}
+            <div className="grid grid-cols-2 gap-2">
               <AccessChip
                 label="Findots"
                 on={user.access_money}
@@ -378,14 +379,17 @@ function AccessChip({
       onClick={onClick}
       disabled={disabled}
       aria-pressed={on}
-      className="flex-1 rounded-2xl border px-3 py-2.5 text-sm font-medium disabled:opacity-50"
+      className="rounded-2xl border px-3 py-2.5 text-left disabled:opacity-50"
       style={{
         borderColor: on ? "var(--accent)" : "var(--border)",
         background: on ? "var(--surface-2)" : "transparent",
         color: on ? "var(--text)" : "var(--muted)",
       }}
     >
-      {label} {on ? "включён" : "выключен"}
+      <span className="block text-sm font-medium">{label}</span>
+      <span className="block text-[0.75rem]" style={{ color: on ? "var(--accent)" : "var(--muted)" }}>
+        {on ? "включён" : "выключен"}
+      </span>
     </button>
   );
 }

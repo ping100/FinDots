@@ -79,7 +79,7 @@ export default function FemSettingsPage() {
             <Icon name="shield" size={28} />
           </span>
           <span className="min-w-0">
-            <span className="block text-[1rem] font-semibold">Ваши данные под защитой</span>
+            <span className="block text-[1rem] font-semibold">Ваш цикл — только ваш</span>
             <span className="mt-1 block text-[0.8125rem] leading-snug" style={{ color: "var(--muted)" }}>
               Цикл и самочувствие видите только вы — даже администратор Dots к ним доступа не имеет. Партнёр видит
               лишь то, чем вы поделитесь. Удалить всё можно в любой момент.

@@ -17,25 +17,13 @@ import { reviewLastCycle } from "@/lib/fem/review";
 import { short } from "@/lib/fem/format";
 import { Sheet } from "@/components/ui";
 import { useFem } from "./DataProvider";
-import { plural } from "./parts";
+import { IntimacyHeart, heartOf, plural } from "./parts";
 
 const OK = "#14b8a6";
 const WARN = "#f59e0b";
 
-/** Значок «Норма» / «Не норма» — с цветом и словом, не только цветом. */
-function Badge({ ok, text }: { ok: boolean; text: string }) {
-  return (
-    <span className="flex shrink-0 items-center gap-1.5 text-[0.6875rem] font-bold uppercase tracking-wide">
-      <span className="flex h-5 w-5 items-center justify-center rounded-full text-white" style={{ background: ok ? OK : WARN }}>
-        {ok ? <Icon name="check" size={12} /> : "!"}
-      </span>
-      {text}
-    </span>
-  );
-}
-
 /**
- * «Мои циклы» — как во Flo: прошлый цикл, прошлые месячные и разброс,
+ * «Цикл в цифрах»: прошлый цикл, прошлые месячные и разброс,
  * у каждого — норма или нет, по нажатию ⓘ — что считается нормой (FIGO).
  */
 export function MyCycles() {
@@ -59,7 +47,7 @@ export function MyCycles() {
   const rows = [
     {
       key: "cycle",
-      label: "Длина предыдущего цикла",
+      label: "Прошлый цикл",
       value: `${length} ${plural(length, "день", "дня", "дней")}`,
       ok: length >= 24 && length <= 38,
       badge: length >= 24 && length <= 38 ? "Норма" : "Не норма",
@@ -69,7 +57,7 @@ export function MyCycles() {
       ? [
           {
             key: "period",
-            label: "Длина предыдущих месячных",
+            label: "Прошлые месячные",
             value: `${periodDays} ${plural(periodDays, "день", "дня", "дней")}`,
             ok: periodDays <= 8,
             badge: periodDays <= 8 ? "Норма" : "Не норма",
@@ -81,7 +69,7 @@ export function MyCycles() {
       ? [
           {
             key: "spread",
-            label: "Колебания длины цикла",
+            label: "Разброс между циклами",
             value: `${Math.min(...recent)}–${Math.max(...recent)} дней`,
             ok: spread <= 9,
             badge: spread <= 9 ? "Регулярный" : "Нерегулярный",
@@ -92,37 +80,64 @@ export function MyCycles() {
   ];
 
   return (
-    <div className="fem-card mt-3 overflow-hidden rounded-3xl">
-      <p className="px-4 pt-4 text-[0.9375rem] font-semibold">Мои циклы</p>
-      {rows.map((r, i) => (
-        <div key={r.key} className="px-4 py-3" style={{ borderTop: i ? "1px solid var(--border)" : undefined }}>
-          <div className="flex items-center justify-between gap-3">
-            <span className="min-w-0">
-              <span className="flex items-center gap-1.5 text-[0.75rem]" style={{ color: "var(--muted)" }}>
-                {r.label}
-                <button onClick={() => setInfo(info === r.key ? null : r.key)} aria-label="Что это значит" className="opacity-60">
-                  <Icon name="question" size={14} />
-                </button>
-              </span>
-              <span className="block text-[1.125rem] font-bold tabular-nums">{r.value}</span>
+    <div className="fem-card mt-3 rounded-3xl p-4">
+      <p className="mb-2.5 text-[0.9375rem] font-semibold">Цикл в цифрах</p>
+      <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${rows.length}, minmax(0, 1fr))` }}>
+        {rows.map((r) => (
+          <button
+            key={r.key}
+            onClick={() => setInfo(info === r.key ? null : r.key)}
+            aria-expanded={info === r.key}
+            className="flex flex-col items-center rounded-2xl px-1.5 py-3 text-center transition active:scale-95"
+            style={{
+              background: info === r.key ? "var(--surface)" : "var(--surface-2)",
+              outline: info === r.key ? `2px solid ${r.ok ? OK : WARN}` : "none",
+            }}
+          >
+            <span className="text-[0.625rem] leading-tight" style={{ color: "var(--muted)" }}>
+              {r.label}
             </span>
-            <Badge ok={r.ok} text={r.badge} />
-          </div>
-          {info === r.key ? (
-            <p className="animate-lift mt-2 rounded-2xl px-3 py-2 text-[0.75rem] leading-snug" style={{ background: "var(--surface-2)" }}>
-              {r.about}
-            </p>
-          ) : null}
-        </div>
-      ))}
+            <span className="mt-1 text-[1rem] font-bold leading-tight tabular-nums">{r.value}</span>
+            <span
+              className="mt-1.5 flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.5625rem] font-bold uppercase tracking-wide text-white"
+              style={{ background: r.ok ? OK : WARN }}
+            >
+              {r.ok ? "✓" : "!"} {r.badge}
+            </span>
+          </button>
+        ))}
+      </div>
+      {info ? (
+        <p className="animate-lift mt-2.5 rounded-2xl px-3 py-2 text-[0.75rem] leading-snug" style={{ background: "var(--surface-2)" }}>
+          {rows.find((r) => r.key === info)?.about}
+        </p>
+      ) : (
+        <p className="mt-2 text-center text-[0.625rem]" style={{ color: "var(--muted)" }}>
+          Нажмите на плитку — расскажу, что считается нормой
+        </p>
+      )}
     </div>
   );
 }
 
-/** Кружок дня в полоске цикла. */
-function Dot({ color }: { color: string }) {
-  return <span className="h-[9px] w-[9px] rounded-full" style={{ background: color }} />;
+/** Кружок дня в ленте: размер — сила выделений, обводка — сегодня. */
+function Dot({ color, size = 9, ring, today }: { color: string; size?: number; ring?: boolean; today?: boolean }) {
+  return (
+    <span className="flex h-3 w-3 items-center justify-center">
+      <span
+        className={`rounded-full ${today ? "animate-fem-glow" : ""}`}
+        style={{
+          width: size,
+          height: size,
+          background: color,
+          boxShadow: ring ? "0 0 0 2px var(--surface), 0 0 0 3.5px " + OK : today ? "0 0 0 2px var(--surface), 0 0 0 3.5px #ec4899" : undefined,
+        }}
+      />
+    </span>
+  );
 }
+
+const FLOW_SIZE: Record<string, number> = { spotting: 5, light: 7, medium: 9, heavy: 11 };
 
 /**
  * История циклов: каждый — полоска кружков по дням. Красные — месячные,
@@ -130,7 +145,7 @@ function Dot({ color }: { color: string }) {
  * Нажатие — что было в этом цикле.
  */
 export function CycleHistory() {
-  const { periods, days, settings } = useFem();
+  const { periods, days, settings, intimacy } = useFem();
   const now = today();
   const [all, setAll] = useState(false);
   const [open, setOpen] = useState<{ from: string; to: string; title: string } | null>(null);
@@ -154,6 +169,22 @@ export function CycleHistory() {
   if (cycles.length === 0 || info.pregnancy) return null;
   const shown = all ? cycles : cycles.slice(0, 3);
 
+  /** Как нарисовать день: цвет, размер (сила выделений), овуляция, сердечко. */
+  const dayOf = (c: (typeof cycles)[number], k: number) => {
+    const d = addDays(c.from, k);
+    const color = colorOf(c, k);
+    const flow = days.get(d)?.flow;
+    const kinds = intimacy.get(d);
+    return {
+      d,
+      color,
+      size: color === PHASE_COLOR.period ? (flow ? FLOW_SIZE[flow] : 9) : color === OK ? 10 : 7,
+      ring: color === OK,
+      today: d === now,
+      heart: kinds ? heartOf(kinds) : null,
+    };
+  };
+
   const colorOf = (c: (typeof cycles)[number], k: number) => {
     const d = addDays(c.from, k);
     const end = c.period.end_date ?? (c.current && info.current ? now : addDays(c.from, info.periodLength - 1));
@@ -170,48 +201,69 @@ export function CycleHistory() {
   return (
     <div className="fem-card mt-3 overflow-hidden rounded-3xl">
       <div className="flex items-center justify-between px-4 pt-4">
-        <p className="text-[0.9375rem] font-semibold">История циклов</p>
+        <p className="text-[0.9375rem] font-semibold">Лента циклов</p>
         {cycles.length > 3 ? (
           <button onClick={() => setAll(!all)} className="flex items-center gap-1 text-[0.8125rem]" style={{ color: "var(--muted)" }}>
-            {all ? "Свернуть" : "Смотреть все"}
+            {all ? "Свернуть" : `Все ${cycles.length}`}
             <Icon name={all ? "chevron-down" : "chevron-right"} size={14} />
           </button>
         ) : null}
       </div>
       {shown.map((c, i) => {
         const title = c.current
-          ? `Текущий цикл: ${c.length} ${plural(c.length, "день", "дня", "дней")}`
+          ? `Сейчас · ${c.length}-й день`
           : `${c.length} ${plural(c.length, "день", "дня", "дней")}`;
+        const bad = !c.current && (c.length < 24 || c.length > 38);
         return (
           <button
             key={c.from}
             onClick={() => setOpen({ from: c.from, to: c.to, title })}
-            className="block w-full px-4 py-3 text-left"
+            className="flex w-full items-start gap-3 px-4 py-3 text-left"
             style={{ borderTop: i ? "1px solid var(--border)" : undefined }}
           >
-            <span className="flex items-center justify-between">
-              <span>
-                <span className="block text-[0.9375rem] font-semibold">{title}</span>
-                <span className="block text-[0.75rem]" style={{ color: "var(--muted)" }}>
-                  {c.current ? `Начался ${short(c.from)}` : `${short(c.from)} – ${short(c.to)}`}
-                </span>
-              </span>
-              <Icon name="chevron-right" size={16} className="opacity-30" />
+            {/* Длина цикла — пузырём, как кружки в остальных Dots. */}
+            <span
+              className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-full leading-none"
+              style={
+                c.current
+                  ? { background: FEM_GRADIENT, color: "#fff" }
+                  : bad
+                    ? { background: "color-mix(in srgb, #f59e0b 22%, var(--surface))", color: "#b45309" }
+                    : { background: "var(--surface-2)" }
+              }
+            >
+              <span className="text-[1rem] font-bold tabular-nums">{c.length}</span>
+              <span className="text-[0.5625rem] opacity-80">{plural(c.length, "день", "дня", "дней")}</span>
             </span>
-            <span className="mt-2 flex flex-wrap gap-[3px]">
-              {Array.from({ length: c.length }, (_, k) => (
-                <Dot key={k} color={colorOf(c, k)} />
-              ))}
+            <span className="min-w-0 flex-1">
+              <span className="flex items-center justify-between">
+                <span className="text-[0.8125rem] font-semibold">
+                  {c.current ? `Идёт сейчас · с ${short(c.from)}` : `${short(c.from)} – ${short(c.to)}`}
+                </span>
+                <Icon name="chevron-right" size={14} className="opacity-30" />
+              </span>
+              <span className="mt-1.5 flex flex-wrap items-center gap-[2px]">
+                {Array.from({ length: c.length }, (_, k) => {
+                  const x = dayOf(c, k);
+                  return x.heart ? (
+                    <span key={k} className="flex h-3 w-3 items-center justify-center">
+                      <IntimacyHeart kind={x.heart} size={12} />
+                    </span>
+                  ) : (
+                    <Dot key={k} color={x.color} size={x.size} ring={x.ring} today={x.today} />
+                  );
+                })}
+              </span>
             </span>
           </button>
         );
       })}
       <div className="flex flex-wrap gap-x-3 gap-y-1 px-4 pb-3 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-        <span className="flex items-center gap-1"><Dot color={PHASE_COLOR.period} />Месячные</span>
+        <span className="flex items-center gap-1"><Dot color={PHASE_COLOR.period} />Месячные (крупнее — обильнее)</span>
         {info.hormonal ? null : (
           <>
             <span className="flex items-center gap-1"><Dot color={PHASE_COLOR.fertile} />Фертильные</span>
-            <span className="flex items-center gap-1"><Dot color={OK} />Овуляция</span>
+            <span className="flex items-center gap-1"><Dot color={OK} size={8} ring />Овуляция</span>
           </>
         )}
       </div>
@@ -299,7 +351,7 @@ export function CycleDynamics() {
     .join(" ");
   return (
     <div className="fem-card mt-3 rounded-3xl p-4">
-      <p className="text-[0.9375rem] font-semibold">Динамика цикла</p>
+      <p className="text-[0.9375rem] font-semibold">Как меняется цикл</p>
       <p className="mb-2 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
         Длина каждого цикла · серая полоса — норма 24–38 дней
       </p>

@@ -520,7 +520,7 @@ export function DayLog({ day, showFlow = true }: { day: string; showFlow?: boole
               );
             })}
           </Group>
-          <Group title="Другое">
+          <Group title="Что ещё было в этот день">
             {OTHER_TAGS.map((t) => (
               <Pill key={t.value} on={entry.tags.includes(t.value)} onClick={() => toggleTag(t.value)}>
                 <span>{t.emoji}</span>
@@ -528,7 +528,7 @@ export function DayLog({ day, showFlow = true }: { day: string; showFlow?: boole
               </Pill>
             ))}
           </Group>
-          <Group title="Физическая активность">
+          <Group title="Движение">
             {ACTIVITY.map((t) => (
               <Pill key={t.value} on={entry.tags.includes(t.value)} onClick={() => toggleTag(t.value)}>
                 <span>{t.emoji}</span>

@@ -81,7 +81,10 @@ export function reviewLastCycle(periods: FemPeriod[], days: FemDay[], settings: 
       ? `Цикл длился ${length} дн. — как обычно.`
       : `Цикл длился ${length} дн. — на ${Math.abs(diff)} дн. ${diff > 0 ? "дольше" : "короче"} вашего среднего (${average}).`,
   );
-  if (periodDays) notes.push(`Месячные шли ${periodDays} дн.${periodDays > 8 ? " — дольше нормы (до 8)." : "."}`);
+  if (periodDays) {
+    const word = periodDays % 10 === 1 && periodDays !== 11 ? "день" : periodDays % 10 >= 2 && periodDays % 10 <= 4 && (periodDays < 12 || periodDays > 14) ? "дня" : "дней";
+    notes.push(`Месячные шли ${periodDays} ${word}${periodDays > 8 ? " — дольше нормы (до 8)." : "."}`);
+  }
   if (ovulation) {
     const luteal = daysBetween(ovulation, last.start_date);
     notes.push(

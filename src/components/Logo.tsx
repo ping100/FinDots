@@ -41,6 +41,9 @@ export function Logo({
       role="img"
       aria-label="Dots"
       className={animated === "long" ? "animate-logo-spin" : undefined}
+      // Рамка обрезана вплотную по кружкам, а при сборке они перелетают
+      // размером и разъезжаются — без этого края кружков срезались бы.
+      style={{ overflow: "visible" }}
     >
       {DOTS.map((dot) => (
         <circle

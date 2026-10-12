@@ -8,6 +8,7 @@ import {
   MEDS,
   MOODS,
   PHASE_COLOR,
+  PHASE_TEXT,
   SYMPTOMS,
   daysBetween,
   type CycleInfo,
@@ -16,6 +17,8 @@ import {
   type Phase,
 } from "@/lib/fem/cycle";
 import { phraseOf } from "@/lib/fem/phrases";
+import { range, short } from "@/lib/fem/format";
+import { addDays, today } from "@/lib/tasks/dates";
 import { inputClass, inputStyle } from "@/components/ui";
 import { useFem } from "./DataProvider";
 
@@ -70,10 +73,23 @@ function StepButton({ onClick, children }: { onClick: () => void; children: Reac
   );
 }
 
+/** Что за дуга кольца — простыми словами, для подсказки по нажатию. */
+const SEGMENT: Record<string, { title: string; hint: string }> = {
+  period: { title: "Месячные", hint: PHASE_TEXT.period.hint },
+  follicular: { title: "Энергии больше", hint: PHASE_TEXT.follicular.hint },
+  fertile: { title: "Фертильное окно", hint: "Шанс забеременеть выше всего" },
+  ovulation: { title: "Овуляция", hint: PHASE_TEXT.ovulation.hint },
+  luteal: { title: "Перед месячными", hint: PHASE_TEXT.luteal.hint },
+  pills: { title: "Дни с гормоном", hint: "Овуляции нет — вы под защитой" },
+  break: { title: "Перерыв", hint: "Здесь начинается кровотечение отмены" },
+  protected: { title: "Под защитой", hint: PHASE_TEXT.protected.hint },
+};
+
 /**
  * Кольцо цикла — главный образ FemDots. Круг — это весь цикл, дуги — фазы
  * (месячные, фертильное окно, овуляция), белая точка — сегодня. В центре
- * — главное: сколько до месячных, какой день или задержка.
+ * — главное: сколько до месячных, какой день или задержка. Нажатие на дугу
+ * показывает в центре, что это за фаза и на какие дни она приходится.
  */
 export function CycleRing({ info, size = 256 }: { info: CycleInfo; size?: number }) {
   // На таблетках / кольце / пластыре круг — это упаковка: дни с гормоном и перерыв.
@@ -91,24 +107,39 @@ export function CycleRing({ info, size = 256 }: { info: CycleInfo; size?: number
   // День цикла (1…N) → доля окружности, начало — сверху.
   const at = (day: number) => (day - 1) / N;
 
-  const segments: { from: number; to: number; color: string }[] = [];
+  const segments: { from: number; to: number; color: string; kind: string }[] = [];
   if (pack) {
-    segments.push({ from: 1, to: pack.active, color: PHASE_COLOR.protected });
-    if (pack.length > pack.active) segments.push({ from: pack.active + 1, to: pack.length, color: PHASE_COLOR.period });
+    segments.push({ from: 1, to: pack.active, color: PHASE_COLOR.protected, kind: "pills" });
+    if (pack.length > pack.active) segments.push({ from: pack.active + 1, to: pack.length, color: PHASE_COLOR.period, kind: "break" });
   } else if (info.hormonal) {
-    segments.push({ from: 1, to: N, color: PHASE_COLOR.protected });
+    segments.push({ from: 1, to: N, color: PHASE_COLOR.protected, kind: "protected" });
   } else if (info.lastStart && info.fertileStart && info.ovulation && info.fertileEnd) {
     const fs = daysBetween(info.lastStart, info.fertileStart) + 1;
     const fe = daysBetween(info.lastStart, info.fertileEnd) + 1;
     const ov = daysBetween(info.lastStart, info.ovulation) + 1;
     const pl = Math.min(info.periodLength, fs - 1);
-    segments.push({ from: 1, to: pl, color: PHASE_COLOR.period });
-    if (fs - 1 > pl) segments.push({ from: pl + 1, to: fs - 1, color: PHASE_COLOR.follicular });
-    if (ov - 1 >= fs) segments.push({ from: fs, to: ov - 1, color: PHASE_COLOR.fertile });
-    segments.push({ from: ov, to: ov, color: PHASE_COLOR.ovulation });
-    if (fe > ov) segments.push({ from: ov + 1, to: fe, color: PHASE_COLOR.fertile });
-    if (N > fe) segments.push({ from: fe + 1, to: N, color: PHASE_COLOR.luteal });
+    segments.push({ from: 1, to: pl, color: PHASE_COLOR.period, kind: "period" });
+    if (fs - 1 > pl) segments.push({ from: pl + 1, to: fs - 1, color: PHASE_COLOR.follicular, kind: "follicular" });
+    if (ov - 1 >= fs) segments.push({ from: fs, to: ov - 1, color: PHASE_COLOR.fertile, kind: "fertile" });
+    segments.push({ from: ov, to: ov, color: PHASE_COLOR.ovulation, kind: "ovulation" });
+    if (fe > ov) segments.push({ from: ov + 1, to: fe, color: PHASE_COLOR.fertile, kind: "fertile" });
+    if (N > fe) segments.push({ from: fe + 1, to: N, color: PHASE_COLOR.luteal, kind: "luteal" });
   }
+
+  // Выбранная дуга: в центре — её название и даты; сама гаснет через 5 с.
+  const [picked, setPicked] = useState<number | null>(null);
+  useEffect(() => {
+    if (picked === null) return;
+    const t = setTimeout(() => setPicked(null), 5000);
+    return () => clearTimeout(t);
+  }, [picked]);
+  // День кольца → дата: от начала цикла или, на упаковке, от сегодняшнего дня упаковки.
+  const now = today();
+  const dateOf = (k: number) =>
+    pack ? addDays(now, k - pack.day) : info.lastStart ? addDays(info.lastStart, k - 1) : null;
+  const sel = picked !== null ? segments[picked] : null;
+  const selFrom = sel ? dateOf(sel.from) : null;
+  const selTo = sel ? dateOf(sel.to) : null;
 
   const day = pack ? pack.day : info.hormonal ? null : info.cycleDay ? Math.min(info.cycleDay, N) : null;
   const angle = day ? at(day) * 2 * Math.PI + Math.PI / N : 0;
@@ -145,7 +176,7 @@ export function CycleRing({ info, size = 256 }: { info: CycleInfo; size?: number
 
   return (
     <div className="relative mx-auto" style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="absolute inset-0" style={{ overflow: "visible" }} aria-hidden>
+      <svg width={size} height={size} className="absolute inset-0" style={{ overflow: "visible" }}>
         <circle cx={c} cy={c} r={r} fill="none" stroke="var(--surface-2)" strokeWidth={stroke} />
         <g transform={`rotate(-90 ${c} ${c})`}>
           {segments.map((s, i) => {
@@ -162,8 +193,16 @@ export function CycleRing({ info, size = 256 }: { info: CycleInfo; size?: number
                 strokeWidth={stroke}
                 strokeDasharray={`${Math.max(len - 3, 1)} ${L}`}
                 strokeDashoffset={-start}
-                className="animate-grow-ring"
-                style={{ animationDelay: `${i * 70}ms` }}
+                className="animate-grow-ring cursor-pointer"
+                role="button"
+                aria-label={SEGMENT[s.kind]?.title}
+                onClick={() => setPicked((p) => (p === i ? null : i))}
+                style={{
+                  animationDelay: `${i * 70}ms`,
+                  pointerEvents: "stroke",
+                  opacity: picked === null || picked === i ? 1 : 0.3,
+                  transition: "opacity 200ms",
+                }}
               />
             );
           })}
@@ -176,7 +215,7 @@ export function CycleRing({ info, size = 256 }: { info: CycleInfo; size?: number
             fill="#fff"
             stroke={info.late > 0 ? PHASE_COLOR.late : "#ec4899"}
             strokeWidth={3.5}
-            style={{ filter: "drop-shadow(0 3px 8px rgba(236,72,153,0.45))" }}
+            style={{ filter: "drop-shadow(0 3px 8px rgba(236,72,153,0.45))", pointerEvents: "none" }}
           />
         ) : null}
       </svg>
@@ -188,7 +227,31 @@ export function CycleRing({ info, size = 256 }: { info: CycleInfo; size?: number
           background: `radial-gradient(circle, color-mix(in srgb, ${info.phase ? PHASE_COLOR[info.phase] : "#f472b6"} 38%, transparent) 0%, transparent 70%)`,
         }}
       />
-      <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+      {sel ? (
+        <button
+          key={picked}
+          onClick={() => setPicked(null)}
+          className="animate-lift absolute flex flex-col items-center justify-center rounded-full px-4 text-center"
+          style={{ inset: stroke + 22 }}
+        >
+          <span className="flex items-center gap-1.5 text-[0.9375rem] font-semibold">
+            <span className="h-2.5 w-2.5 rounded-full" style={{ background: sel.color }} />
+            {SEGMENT[sel.kind]?.title}
+          </span>
+          {selFrom && selTo ? (
+            <span className="mt-1 text-[1.25rem] font-bold tabular-nums">
+              {selFrom === selTo ? short(selFrom) : range(selFrom, selTo)}
+            </span>
+          ) : null}
+          <span className="mt-1 max-w-[10rem] text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
+            {SEGMENT[sel.kind]?.hint}
+          </span>
+        </button>
+      ) : null}
+      <div
+        className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center transition-opacity duration-200"
+        style={{ opacity: sel ? 0 : 1 }}
+      >
         <span
           className={`text-[3.5rem] font-bold leading-none tabular-nums ${info.late > 0 ? "" : "fem-gradient-text"}`}
           style={info.late > 0 ? { color: PHASE_COLOR.late } : undefined}

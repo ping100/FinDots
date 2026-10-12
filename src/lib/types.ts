@@ -19,6 +19,8 @@ export interface Profile {
   rates_auto: boolean;
   /** Какие курсы показывать на панели и на главной (до трёх). */
   shown_rates: string[];
+  /** Пол — спрашивает FemDots при первом входе; null — ещё не спрашивал. */
+  gender?: "female" | "male" | null;
 }
 
 export interface ExchangeRate {

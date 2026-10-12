@@ -11,18 +11,19 @@ import { useFem } from "./DataProvider";
 import { Stepper } from "./parts";
 
 /**
- * Первый вход в FemDots: три вопроса и согласие на обработку данных о
- * здоровье. Без согласия дальше нельзя — это особая категория данных.
+ * Первый вход в FemDots. Сначала — «Кто вы?»: девушке три вопроса о цикле
+ * и согласие на обработку данных о здоровье (без него дальше нельзя —
+ * особая категория данных), мужчине — только вход по коду партнёрши:
+ * свой цикл ему ни к чему. Ответ хранится в профиле.
  */
 export function Onboarding() {
-  const { saveSettings, startPeriod } = useFem();
+  const { profile, saveProfile, saveSettings, startPeriod } = useFem();
+  const gender = profile?.gender ?? null;
   const [last, setLast] = useState("");
   const [cycle, setCycle] = useState(28);
   const [length, setLength] = useState(5);
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
-  // «Я партнёр»: свой цикл не нужен — только код от девушки.
-  const [asPartner, setAsPartner] = useState(false);
   const now = today();
 
   const start = async () => {
@@ -49,34 +50,51 @@ export function Onboarding() {
         </span>
         <h1 className="mt-4 text-[1.5rem] font-semibold">Добро пожаловать в FemDots</h1>
         <p className="mt-1.5 text-sm leading-snug" style={{ color: "var(--muted)" }}>
-          Календарь цикла: прогноз месячных и овуляции, самочувствие по дням. Три вопроса — и готово.
+          {gender === "male"
+            ? "Здесь вы увидите цикл своей девушки — когда она пригласит вас."
+            : gender === "female"
+              ? "Календарь цикла: прогноз месячных и овуляции, самочувствие по дням. Три вопроса — и готово."
+              : "Календарь цикла и партнёрский режим. Для начала — кто вы?"}
         </p>
       </div>
 
-      <div className="mb-4 grid grid-cols-2 gap-1 rounded-2xl p-1" style={{ background: "var(--surface-2)" }}>
-        {[
-          { on: !asPartner, label: "Веду свой цикл", set: false },
-          { on: asPartner, label: "Я партнёр", set: true },
-        ].map((t) => (
-          <button
-            key={t.label}
-            onClick={() => setAsPartner(t.set)}
-            className="rounded-xl py-2 text-sm font-medium transition"
-            style={{ background: t.on ? "var(--surface)" : "transparent", boxShadow: t.on ? "0 2px 8px rgba(236,72,153,0.15)" : undefined }}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {asPartner ? (
+      {gender === null ? (
+        <>
+          <div className="space-y-3">
+            <WhoCard
+              icon="flower"
+              bg={FEM_GRADIENT}
+              title="Я девушка"
+              hint="Веду свой цикл: прогноз месячных, самочувствие, напоминания"
+              onClick={() => void saveProfile({ gender: "female" })}
+            />
+            <WhoCard
+              icon="heart"
+              bg="linear-gradient(150deg, #818cf8, #6366f1)"
+              title="Я мужчина"
+              hint="Смотрю цикл своей девушки — по её приглашению"
+              onClick={() => void saveProfile({ gender: "male" })}
+            />
+          </div>
+          <Link href="/" className="mt-6 block text-center text-sm" style={{ color: "var(--muted)" }}>
+            ← На главную Dots
+          </Link>
+        </>
+      ) : gender === "male" ? (
         <>
           <PartnerJoin />
-          <p className="px-2 text-center text-[0.75rem] leading-snug" style={{ color: "var(--muted)" }}>
-            Код даёт девушка: FemDots → Настройки → «Пригласить партнёра». Или просто откройте ссылку, которую она
-            прислала.
-          </p>
-          <Link href="/" className="mt-6 block text-center text-sm" style={{ color: "var(--muted)" }}>
+          <div className="fem-card mb-4 rounded-3xl p-4 text-[0.8125rem] leading-snug">
+            <p className="font-semibold">Где взять код</p>
+            <ol className="mt-1.5 list-decimal space-y-1 pl-4" style={{ color: "var(--muted)" }}>
+              <li>Девушка открывает FemDots → Настройки → «Пригласить партнёра».</li>
+              <li>Присылает вам ссылку — откройте её. Или продиктует код из 8 знаков.</li>
+            </ol>
+            <p className="mt-2" style={{ color: "var(--muted)" }}>
+              Вы будете видеть только то, чем она поделится. Отметить что-то за неё нельзя.
+            </p>
+          </div>
+          <ChangeWho onClick={() => void saveProfile({ gender: null })} />
+          <Link href="/" className="mt-4 block text-center text-sm" style={{ color: "var(--muted)" }}>
             ← На главную Dots
           </Link>
         </>
@@ -113,11 +131,50 @@ export function Onboarding() {
       <p className="mt-3 px-2 text-center text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
         Прогноз — оценка по вашим прошлым циклам. Это не способ предохранения и не медицинский совет.
       </p>
+      <ChangeWho onClick={() => void saveProfile({ gender: null })} />
       <Link href="/" className="mt-4 block text-center text-sm" style={{ color: "var(--muted)" }}>
         ← На главную Dots
       </Link>
       </>
       )}
     </div>
+  );
+}
+
+function WhoCard({
+  icon,
+  bg,
+  title,
+  hint,
+  onClick,
+}: {
+  icon: string;
+  bg: string;
+  title: string;
+  hint: string;
+  onClick: () => void;
+}) {
+  return (
+    <button onClick={onClick} className="fem-card flex w-full items-center gap-4 rounded-3xl p-4 text-left transition active:scale-[0.98]">
+      <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-white" style={{ background: bg }}>
+        <Icon name={icon} size={28} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[1.0625rem] font-semibold">{title}</span>
+        <span className="mt-0.5 block text-[0.8125rem] leading-snug" style={{ color: "var(--muted)" }}>
+          {hint}
+        </span>
+      </span>
+      <Icon name="chevron-right" size={18} className="opacity-30" />
+    </button>
+  );
+}
+
+/** Ошиблись на первом шаге — вернуться к «Кто вы?». */
+function ChangeWho({ onClick }: { onClick: () => void }) {
+  return (
+    <button onClick={onClick} className="mt-4 block w-full text-center text-[0.8125rem] underline" style={{ color: "var(--muted)" }}>
+      Выбрали не то? Изменить
+    </button>
   );
 }

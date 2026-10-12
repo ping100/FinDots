@@ -34,7 +34,7 @@ import { averageCycle, averagePeriod, cycleLengths } from "@/lib/fem/cycle";
  */
 export default function FemSettingsPage() {
   const router = useRouter();
-  const { profile, settings, periods, saveSettings, saveProfile, deleteAll } = useFem();
+  const { profile, settings, periods, partner, saveSettings, saveProfile, deleteAll } = useFem();
   const [confirming, setConfirming] = useState(false);
   const [checking, setChecking] = useState(false);
   const [updateNote, setUpdateNote] = useState<string | null>(null);
@@ -119,7 +119,9 @@ export default function FemSettingsPage() {
 
       <SettingsHeading>Партнёр</SettingsHeading>
       <PartnerShare />
-      <PartnerJoin />
+      {/* «Есть код от партнёрши?» девушке ни к чему — разве что она уже
+          смотрит чей-то цикл: тогда это переход к нему. */}
+      {partner || profile?.gender !== "female" ? <PartnerJoin /> : null}
 
       <SettingsHeading>Напоминания</SettingsHeading>
       <PushSettings />

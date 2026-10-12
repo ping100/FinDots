@@ -93,6 +93,7 @@ const SEGMENT: Record<string, { title: string; hint: string }> = {
   pills: { title: "Дни с гормоном", hint: "Овуляции нет — вы под защитой" },
   break: { title: "Перерыв", hint: "Здесь начинается кровотечение отмены" },
   protected: { title: "Под защитой", hint: PHASE_TEXT.protected.hint },
+  pregnant: { title: "Беременность", hint: "40 недель — от первого дня последних месячных" },
 };
 
 /**
@@ -105,7 +106,10 @@ export function CycleRing({ info, size = 256 }: { info: CycleInfo; size?: number
   // На таблетках / кольце / пластыре круг — это упаковка: дни с гормоном и перерыв.
   const pack = info.hormonal ? info.pack : null;
   // Овуляция подтверждена — длина этого цикла уже не средняя, а уточнённая.
-  const N = pack
+  const preg = info.pregnancy;
+  const N = preg
+    ? 280
+    : pack
     ? pack.length
     : info.lastStart && info.nextStart && !info.hormonal
       ? Math.max(daysBetween(info.lastStart, info.nextStart), info.cycleDay ?? 0, 15)
@@ -118,7 +122,12 @@ export function CycleRing({ info, size = 256 }: { info: CycleInfo; size?: number
   const at = (day: number) => (day - 1) / N;
 
   const segments: { from: number; to: number; color: string; kind: string }[] = [];
-  if (pack) {
+  if (preg) {
+    // Беременность — 40 недель кругом: пройденное ярче, впереди — бледнее.
+    const done = Math.min(280, (info.cycleDay ?? 1));
+    segments.push({ from: 1, to: done, color: "#f472b6", kind: "pregnant" });
+    if (done < 280) segments.push({ from: done + 1, to: 280, color: PHASE_COLOR.pregnant, kind: "pregnant" });
+  } else if (pack) {
     segments.push({ from: 1, to: pack.active, color: PHASE_COLOR.protected, kind: "pills" });
     if (pack.length > pack.active) segments.push({ from: pack.active + 1, to: pack.length, color: PHASE_COLOR.period, kind: "break" });
   } else if (info.hormonal) {
@@ -151,7 +160,7 @@ export function CycleRing({ info, size = 256 }: { info: CycleInfo; size?: number
   const selFrom = sel ? dateOf(sel.from) : null;
   const selTo = sel ? dateOf(sel.to) : null;
 
-  const day = pack ? pack.day : info.hormonal ? null : info.cycleDay ? Math.min(info.cycleDay, N) : null;
+  const day = preg ? Math.min(info.cycleDay ?? 1, 280) : pack ? pack.day : info.hormonal ? null : info.cycleDay ? Math.min(info.cycleDay, N) : null;
   const angle = day ? at(day) * 2 * Math.PI + Math.PI / N : 0;
   const mx = c + r * Math.sin(angle);
   const my = c - r * Math.cos(angle);
@@ -159,7 +168,11 @@ export function CycleRing({ info, size = 256 }: { info: CycleInfo; size?: number
   let big = "";
   let small = "";
   let caption = "";
-  if (pack) {
+  if (preg) {
+    big = `${preg.weeks}`;
+    small = `${plural(preg.weeks, "неделя", "недели", "недель")}${preg.days ? ` и ${preg.days} дн.` : ""}`;
+    caption = `роды ~${short(preg.due)}`;
+  } else if (pack) {
     big = `${pack.inBreak ? pack.day - pack.active : pack.day}`;
     small = pack.inBreak ? `день перерыва из ${pack.length - pack.active}` : `день из ${pack.active}`;
     caption = info.nextStart ? `кровотечение ~${info.nextStart.slice(8, 10)}.${info.nextStart.slice(5, 7)}` : "";

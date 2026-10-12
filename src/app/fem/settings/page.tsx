@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { today } from "@/lib/tasks/dates";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/lib/icons";
@@ -130,6 +131,19 @@ export default function FemSettingsPage() {
             onClick={() => void saveSettings({ goal: g.value })}
           />
         ))}
+      </div>
+
+      <div className="fem-card -mt-2 mb-4 overflow-hidden rounded-2xl">
+        <Row
+          title="Режим беременности"
+          hint={
+            s.pregnant_since
+              ? "Прогноз месячных на паузе. Выключите после родов или если тест не подтвердился"
+              : "Срок в неделях и дата родов вместо прогноза месячных"
+          }
+          on={!!s.pregnant_since}
+          onChange={(v) => void saveSettings({ pregnant_since: v ? today() : null })}
+        />
       </div>
 
       <SettingsHeading>Контрацепция и препараты</SettingsHeading>

@@ -6,6 +6,7 @@ import { Icon } from "@/lib/icons";
 import { addDays, today } from "@/lib/tasks/dates";
 import { FEM_GRADIENT, PHASE_COLOR, PHASE_TEXT, cycleHealth, cycleInfo, signalsFrom } from "@/lib/fem/cycle";
 import { OwnTogether } from "@/components/fem/Together";
+import { ForecastCard, PregnancyCheck } from "@/components/fem/Insights";
 import { PartnerJoin } from "@/components/fem/PartnerShare";
 import { long, range, short } from "@/lib/fem/format";
 import { useFem } from "@/components/fem/DataProvider";
@@ -24,6 +25,7 @@ export default function FemToday() {
     [periods, settings, days, now],
   );
   const health = useMemo(() => cycleHealth(periods), [periods]);
+  const logs = useMemo(() => [...days.values()].map((d) => ({ day: d.day, symptoms: d.symptoms })), [days]);
   const goal = settings!.goal;
   const method = settings!.method;
   const [busy, setBusy] = useState(false);
@@ -69,6 +71,7 @@ export default function FemToday() {
           </p>
         ) : null}
 
+        {info.pregnancy ? null : (
         <button
           onClick={act}
           disabled={busy}
@@ -88,15 +91,35 @@ export default function FemToday() {
               ? "Месячные закончились"
               : "Начались месячные"}
         </button>
+        )}
+        {info.pregnancy ? null : (
         <p className="mt-2 text-center text-[0.6875rem]" style={{ color: "var(--muted)" }}>
           Другой день — отметьте в{" "}
           <Link href="/fem/calendar" replace className="underline">
             календаре
           </Link>
         </p>
+        )}
       </div>
 
-      {info.hormonal ? (
+      <PregnancyCheck info={info} />
+
+      {info.pregnancy ? (
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <Fact
+            color={PHASE_COLOR.pregnant}
+            label="Срок"
+            value={`${info.pregnancy.weeks} нед. ${info.pregnancy.days} дн.`}
+            hint="от первого дня последних месячных"
+          />
+          <Fact
+            color="#f472b6"
+            label="Дата родов"
+            value={`~${short(info.pregnancy.due)}`}
+            hint="по правилу Негеле — уточнит врач"
+          />
+        </div>
+      ) : info.hormonal ? (
         <div className="mt-3 grid grid-cols-2 gap-2">
           <Fact
             color={PHASE_COLOR.period}
@@ -127,7 +150,7 @@ export default function FemToday() {
               value={range(fw.from, fw.to)}
               hint={
                 info.ovulationBy && !fw.shifted
-                  ? `овуляция ${short(fw.ovulation)} ✓ ${info.ovulationBy === "lh" ? "по тесту" : "по температуре"}`
+                  ? `овуляция ${short(fw.ovulation)} ✓ ${info.ovulationBy === "lh" ? "по тесту" : info.ovulationBy === "temp" ? "по температуре" : "по выделениям"}`
                   : `овуляция ~${short(fw.ovulation)}`
               }
             />
@@ -186,6 +209,8 @@ export default function FemToday() {
           <Icon name="chevron-right" size={16} className="opacity-30" />
         </Link>
       ) : null}
+
+      <ForecastCard periods={periods} logs={logs} info={info} who="own" />
 
       <OwnTogether />
 

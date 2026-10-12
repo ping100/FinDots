@@ -95,6 +95,11 @@ export interface PartnerView {
   pill_nudge: boolean;
   periods: FemPeriod[];
   lh_days: string[];
+  mucus_days: string[];
+  /** Её самочувствие по дням — если делится; для прогноза. */
+  symptom_days: { day: string; symptoms: string[] }[];
+  /** Прогноз на паузе (беременность) — причину она скажет сама. */
+  paused: boolean;
   intimacy: ({ day: string } & Intim)[];
   today: { mood: string | null; symptoms: string[]; status: string | null } | null;
 }
@@ -252,6 +257,7 @@ export function FemProvider({ children }: { children: ReactNode }) {
         method_start: null,
         pack_active: 21,
         pack_break: 7,
+        pregnant_since: null,
         ...settingsRef.current,
         ...patch,
       };

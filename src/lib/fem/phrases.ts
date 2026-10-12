@@ -56,6 +56,14 @@ const OWN: Phrases = {
       "Прислушайтесь к себе — и не торопите выводы",
     ],
   },
+  pregnant: {
+    lead: "Вы ждёте малыша",
+    lines: [
+      "Берегите себя — вы делаете самое важное",
+      "Больше отдыха, воды и тёплых слов себе",
+      "Каждый день — ещё немного ближе к встрече 💗",
+    ],
+  },
   protected: {
     lead: "Вы под защитой",
     lines: [
@@ -112,6 +120,10 @@ const PARTNER: Phrases = {
       "Сейчас важнее всего спокойствие рядом",
     ],
   },
+  pregnant: {
+    lead: "Особенное время",
+    lines: ["Заботьтесь о ней чуть больше обычного"],
+  },
   protected: {
     lead: "Ровный день",
     lines: [
@@ -155,6 +167,7 @@ export function phraseOf(
 export function chanceOf(phase: Phase): { label: string; level: 0 | 1 | 2 | 3 } {
   switch (phase) {
     case "protected":
+    case "pregnant":
       return { label: "Низкий", level: 0 };
     case "ovulation":
       return { label: "Очень высокий", level: 3 };

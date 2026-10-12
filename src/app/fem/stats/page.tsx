@@ -11,7 +11,11 @@ import {
   cycleHealth,
   cycleLengths,
   daysBetween,
+  pastPhase,
   tempShift,
+  ACTIVITY,
+  PHASE_COLOR,
+  type Phase,
 } from "@/lib/fem/cycle";
 import { addDays } from "@/lib/tasks/dates";
 import { short } from "@/lib/fem/format";
@@ -128,6 +132,9 @@ export default function FemStats() {
       ) : null}
 
       <TempChart />
+      <PhaseInsights />
+      <WeightChart />
+      <Lifestyle />
 
       <div className="fem-card mt-3 rounded-3xl p-4">
         <p className="text-[0.9375rem] font-semibold">Длина циклов</p>
@@ -257,6 +264,184 @@ function Tile({ value, unit, label }: { value: string; unit: string; label: stri
       <span className="block text-[0.625rem]" style={{ color: "var(--muted)" }}>
         {label}
       </span>
+    </div>
+  );
+}
+
+const GOOD_MOODS = new Set(["calm", "happy", "energetic", "playful"]);
+const DESIRE_LEVEL: Record<string, number> = { "x:low": 1, "x:mid": 2, "x:high": 3 };
+const PHASE_ROWS: { key: Phase; label: string }[] = [
+  { key: "period", label: "Месячные" },
+  { key: "follicular", label: "После месячных" },
+  { key: "fertile", label: "Фертильные дни" },
+  { key: "luteal", label: "Перед месячными" },
+];
+
+/**
+ * Настроение и желание по фазам цикла — по прошлым циклам с настоящими
+ * датами. Строка фазы появляется, когда в ней хотя бы 3 отметки.
+ */
+function PhaseInsights() {
+  const { days, periods } = useFem();
+  const rows = useMemo(() => {
+    const acc = new Map<Phase, { good: number; moods: number; desire: number; desires: number }>();
+    for (const d of days.values()) {
+      let ph = pastPhase(periods, d.day);
+      if (!ph) continue;
+      if (ph === "ovulation") ph = "fertile";
+      const a = acc.get(ph) ?? { good: 0, moods: 0, desire: 0, desires: 0 };
+      if (d.mood) {
+        a.moods++;
+        if (GOOD_MOODS.has(d.mood)) a.good++;
+      }
+      const lvl = d.tags.map((t) => DESIRE_LEVEL[t]).find(Boolean);
+      if (lvl) {
+        a.desire += lvl;
+        a.desires++;
+      }
+      acc.set(ph, a);
+    }
+    return PHASE_ROWS.map((p) => {
+      const a = acc.get(p.key);
+      return {
+        ...p,
+        mood: a && a.moods >= 3 ? a.good / a.moods : null,
+        desire: a && a.desires >= 3 ? a.desire / a.desires / 3 : null,
+      };
+    });
+  }, [days, periods]);
+  const withMood = rows.filter((r) => r.mood != null);
+  const withDesire = rows.filter((r) => r.desire != null);
+  if (withMood.length < 2 && withDesire.length < 2) return null;
+  const best = (list: typeof rows, key: "mood" | "desire") => [...list].sort((a, b) => (b[key] ?? 0) - (a[key] ?? 0))[0];
+  const worst = (list: typeof rows) => [...list].sort((a, b) => (a.mood ?? 0) - (b.mood ?? 0))[0];
+  return (
+    <div className="fem-card mt-3 rounded-3xl p-4">
+      <p className="text-[0.9375rem] font-semibold">Настроение и желание по фазам</p>
+      <p className="mb-3 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+        По вашим отметкам в прошлых циклах
+      </p>
+      <div className="space-y-2.5">
+        {rows.filter((r) => r.mood != null || r.desire != null).map((r) => (
+          <div key={r.key}>
+            <span className="flex items-center gap-1.5 text-[0.75rem] font-medium">
+              <span className="h-2 w-2 rounded-full" style={{ background: PHASE_COLOR[r.key] }} />
+              {r.label}
+            </span>
+            <Bar label="хорошее настроение" value={r.mood} color="#f472b6" />
+            <Bar label="желание" value={r.desire} color="#a78bfa" />
+          </div>
+        ))}
+      </div>
+      <p className="mt-3 text-[0.8125rem] leading-snug">
+        {withMood.length >= 2 ? `Лучше всего настроение — «${best(withMood, "mood").label.toLowerCase()}», ниже всего — «${worst(withMood).label.toLowerCase()}». ` : ""}
+        {withDesire.length >= 2 ? `Желание сильнее всего — «${best(withDesire, "desire").label.toLowerCase()}».` : ""}
+      </p>
+    </div>
+  );
+}
+
+function Bar({ label, value, color }: { label: string; value: number | null; color: string }) {
+  return (
+    <span className="mt-1 flex items-center gap-2">
+      <span className="w-[8.5rem] shrink-0 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+        {label}
+      </span>
+      <span className="h-2 flex-1 overflow-hidden rounded-full" style={{ background: "var(--surface-2)" }}>
+        {value != null ? (
+          <span className="animate-grow-x block h-full rounded-full" style={{ width: `${Math.max(4, value * 100)}%`, background: color }} />
+        ) : null}
+      </span>
+      <span className="w-9 text-right text-[0.6875rem] tabular-nums" style={{ color: "var(--muted)" }}>
+        {value != null ? `${Math.round(value * 100)}%` : "—"}
+      </span>
+    </span>
+  );
+}
+
+/** Вес за последние месяцы: линия и изменение за 30 дней. */
+function WeightChart() {
+  const { days } = useFem();
+  const now = today();
+  const pts = [...days.values()]
+    .filter((d) => d.weight != null && daysBetween(d.day, now) <= 180)
+    .map((d) => ({ day: d.day, w: Number(d.weight) }))
+    .sort((a, b) => a.day.localeCompare(b.day));
+  if (pts.length < 2) return null;
+  const W = 320;
+  const H = 100;
+  const from = pts[0].day;
+  const total = Math.max(daysBetween(from, now), 14);
+  const lo = Math.min(...pts.map((p) => p.w)) - 0.5;
+  const hi = Math.max(...pts.map((p) => p.w)) + 0.5;
+  const x = (d: string) => 8 + (daysBetween(from, d) / total) * (W - 16);
+  const y = (w: number) => 8 + (1 - (w - lo) / (hi - lo)) * (H - 16);
+  const lastW = pts[pts.length - 1].w;
+  const monthAgo = [...pts].reverse().find((p) => daysBetween(p.day, now) >= 25);
+  const diff = monthAgo ? Math.round((lastW - monthAgo.w) * 10) / 10 : null;
+  return (
+    <div className="fem-card mt-3 rounded-3xl p-4">
+      <p className="text-[0.9375rem] font-semibold">Вес</p>
+      <p className="mb-2 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+        Сейчас {String(lastW).replace(".", ",")} кг
+        {diff != null ? ` · ${diff > 0 ? "+" : ""}${String(diff).replace(".", ",")} кг за месяц` : ""}
+        {" · "}к месячным вес часто подрастает на 0,5–2 кг из-за воды — это нормально
+      </p>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ overflow: "visible" }}>
+        <polyline fill="none" stroke="#a78bfa" strokeWidth={2} strokeLinejoin="round" points={pts.map((p) => `${x(p.day)},${y(p.w)}`).join(" ")} />
+        {pts.map((p) => (
+          <circle key={p.day} cx={x(p.day)} cy={y(p.w)} r={3.5} fill="var(--surface)" stroke="#a78bfa" strokeWidth={2} />
+        ))}
+      </svg>
+      <div className="mt-1 flex justify-between text-[0.625rem] tabular-nums" style={{ color: "var(--muted)" }}>
+        <span>{short(from)}</span>
+        <span>{short(now)}</span>
+      </div>
+    </div>
+  );
+}
+
+/** Стресс и длина цикла, активность за месяц. */
+function Lifestyle() {
+  const { days, periods } = useFem();
+  const now = today();
+  const data = useMemo(() => {
+    const starts = [...periods].map((p) => p.start_date).sort();
+    const stress: number[] = [];
+    const calm: number[] = [];
+    for (let i = 1; i < starts.length; i++) {
+      const len = daysBetween(starts[i - 1], starts[i]);
+      if (len < 15 || len > 60) continue;
+      const n = [...days.values()].filter((d) => d.day >= starts[i - 1] && d.day < starts[i] && d.tags.includes("o:stress")).length;
+      (n >= 2 ? stress : calm).push(len);
+    }
+    const avg = (l: number[]) => l.reduce((a, b) => a + b, 0) / l.length;
+    const stressDiff = stress.length && calm.length ? Math.round(avg(stress) - avg(calm)) : null;
+    const month = [...days.values()].filter((d) => daysBetween(d.day, now) < 30 && d.day <= now);
+    const active = month.filter((d) => d.tags.some((t) => t.startsWith("a:") && t !== "a:none"));
+    const counts = new Map<string, number>();
+    for (const d of active) for (const t of d.tags) if (t.startsWith("a:") && t !== "a:none") counts.set(t, (counts.get(t) ?? 0) + 1);
+    const top = [...counts].sort((a, b) => b[1] - a[1])[0];
+    return { stressDiff, activeDays: active.length, top: top ? ACTIVITY.find((a) => a.value === top[0]) : null };
+  }, [days, periods, now]);
+  if (data.stressDiff == null && data.activeDays === 0) return null;
+  return (
+    <div className="fem-card mt-3 rounded-3xl p-4 text-[0.8125rem] leading-snug">
+      <p className="mb-2 text-[0.9375rem] font-semibold">Образ жизни</p>
+      {data.stressDiff != null ? (
+        <p className="mb-1.5">
+          ⚡{" "}
+          {Math.abs(data.stressDiff) < 2
+            ? "Стресс на длину цикла у вас почти не влияет."
+            : `В циклы со стрессом месячные приходили в среднем на ${Math.abs(data.stressDiff)} ${plural(Math.abs(data.stressDiff), "день", "дня", "дней")} ${data.stressDiff > 0 ? "позже" : "раньше"}.`}
+        </p>
+      ) : null}
+      {data.activeDays > 0 ? (
+        <p>
+          {data.top?.emoji ?? "🏃"} Активных дней за месяц: {data.activeDays}
+          {data.top ? ` · чаще всего — ${data.top.label.toLowerCase()}` : ""}. Движение помогает при ПМС и спазмах.
+        </p>
+      ) : null}
     </div>
   );
 }

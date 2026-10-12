@@ -43,6 +43,8 @@ export interface FemSettings {
   method_start: string | null;
   pack_active: number;
   pack_break: number;
+  /** Режим беременности: с какого дня включён. null — выключен. */
+  pregnant_since: string | null;
   remind_period: boolean;
   remind_fertile: boolean;
   pill_on: boolean;
@@ -78,7 +80,7 @@ export interface FemDay {
 }
 
 export type Flow = "spotting" | "light" | "medium" | "heavy";
-export type Phase = "period" | "follicular" | "fertile" | "ovulation" | "luteal" | "late" | "protected";
+export type Phase = "period" | "follicular" | "fertile" | "ovulation" | "luteal" | "late" | "protected" | "pregnant";
 
 export const FEM_COLOR = "#ec4899";
 /** Нежная палитра фаз: пастель, но различимая и в тёмной теме. */
@@ -90,6 +92,7 @@ export const PHASE_COLOR: Record<Phase, string> = {
   luteal: "#d8b4fe",
   late: "#fbbf24",
   protected: "#c4b5fd",
+  pregnant: "#f9a8d4",
 };
 /** Главная кнопка и выделенные плашки — мягкий градиент. */
 export const FEM_GRADIENT = "linear-gradient(135deg, #f472b6 0%, #fb7185 55%, #fda4af 100%)";
@@ -146,8 +149,8 @@ export interface CycleInfo {
   /** Идущие сейчас месячные (отметка без конца или сегодня внутри отметки). */
   current: FemPeriod | null;
   ovulation: string | null;
-  /** Овуляция подтверждена тестом на ЛГ или температурой — не только прогноз. */
-  ovulationBy: "lh" | "temp" | null;
+  /** Овуляция подтверждена тестом на ЛГ, температурой или выделениями — не только прогноз. */
+  ovulationBy: "lh" | "temp" | "mucus" | null;
   fertileStart: string | null;
   fertileEnd: string | null;
   /** Своя длина второй фазы — по циклам с подтверждённой овуляцией. */
@@ -156,6 +159,8 @@ export interface CycleInfo {
   hormonal: boolean;
   /** Схема упаковки (таблетки, кольцо, пластырь): какой день и перерыв ли. */
   pack: { day: number; active: number; length: number; inBreak: boolean } | null;
+  /** Режим беременности: срок от первого дня последних месячных и примерная дата родов. */
+  pregnancy: { weeks: number; days: number; due: string } | null;
 }
 
 /** Что, кроме дат месячных, уточняет прогноз. */
@@ -166,6 +171,9 @@ export interface CycleSignals {
   temps?: { day: string; temp: number }[];
   /** Дни экстренной контрацепции — следующие месячные могут сдвинуться. */
   ecDays?: string[];
+  /** Дни выделений «тягучие, как белок» — пик фертильности. */
+  mucusDays?: string[];
+  pregnantSince?: string | null;
   method?: Method;
   methodStart?: string | null;
   packActive?: number;
@@ -177,7 +185,9 @@ export function signalsFrom(days: Map<string, FemDay>, settings: FemSettings | n
   const lhDays: string[] = [];
   const temps: { day: string; temp: number }[] = [];
   const ecDays: string[] = [];
+  const mucusDays: string[] = [];
   for (const d of days.values()) {
+    if (d.tags?.includes("d:eggwhite")) mucusDays.push(d.day);
     if (d.lh === "pos") lhDays.push(d.day);
     if (d.temp != null) temps.push({ day: d.day, temp: Number(d.temp) });
     if (d.meds?.includes("ec")) ecDays.push(d.day);
@@ -187,6 +197,8 @@ export function signalsFrom(days: Map<string, FemDay>, settings: FemSettings | n
     lhDays: lhDays.sort(),
     temps,
     ecDays,
+    mucusDays: mucusDays.sort(),
+    pregnantSince: settings?.pregnant_since ?? null,
     method: settings?.method ?? "none",
     methodStart: settings?.method_start ?? null,
     packActive: settings?.pack_active ?? 21,
@@ -209,20 +221,32 @@ export function tempShift(temps: { day: string; temp: number }[], from: string, 
   return null;
 }
 
-/** Овуляция в промежутке [from, to): по ЛГ (день теста + 1) или по температуре. */
-function confirmedOvulation(sig: CycleSignals, from: string, to: string): { day: string; by: "lh" | "temp" } | null {
+/**
+ * Овуляция в промежутке [from, to): по ЛГ (день теста + 1), по температуре
+ * или — менее точно — по последнему дню выделений «как белок» (пик-день
+ * по методу Биллингса: овуляция обычно в этот день или на следующий).
+ */
+function confirmedOvulation(
+  sig: CycleSignals,
+  from: string,
+  to: string,
+  withMucus = true,
+): { day: string; by: "lh" | "temp" | "mucus" } | null {
   // Тест в первые дни цикла — не тот пик (часто ложный на месячных).
   const lh = sig.lhDays?.find((d) => d >= addDays(from, 5) && d < to);
   if (lh) return { day: addDays(lh, 1), by: "lh" };
   const t = sig.temps?.length ? tempShift(sig.temps, from, to) : null;
-  return t ? { day: t, by: "temp" } : null;
+  if (t) return { day: t, by: "temp" };
+  if (!withMucus) return null;
+  const mucus = sig.mucusDays?.filter((d) => d >= addDays(from, 5) && d < to) ?? [];
+  return mucus.length ? { day: mucus[mucus.length - 1], by: "mucus" } : null;
 }
 
 /** Своя длина второй фазы: от подтверждённой овуляции до следующих месячных. */
 function personalLuteal(starts: string[], sig: CycleSignals): number {
   const out: number[] = [];
   for (let i = 1; i < starts.length; i++) {
-    const ov = confirmedOvulation(sig, starts[i - 1], starts[i]);
+    const ov = confirmedOvulation(sig, starts[i - 1], starts[i], false);
     if (!ov) continue;
     const l = daysBetween(ov.day, starts[i]);
     if (l >= 10 && l <= 16) out.push(l);
@@ -257,8 +281,18 @@ export function cycleInfo(
   const empty: CycleInfo = {
     lastStart: null, cycleDay: null, cycleLength, periodLength, nextStart: null, nextRange: null, daysToNext: null,
     late: 0, current: null, ovulation: null, ovulationBy: null, fertileStart: null, fertileEnd: null, luteal,
-    phase: hormonal ? "protected" : null, hormonal, pack,
+    phase: hormonal ? "protected" : null, hormonal, pack, pregnancy: null,
   };
+  // Беременность: срок — от первого дня последних месячных (как считают
+  // врачи), дата родов — +280 дней (правило Негеле). Прогноз — на паузе.
+  if (sig.pregnantSince) {
+    const lmp = last && last.start_date <= sig.pregnantSince ? last.start_date : addDays(sig.pregnantSince, -14);
+    const total = Math.max(0, daysBetween(lmp, today));
+    return {
+      ...empty, lastStart: lmp, cycleDay: total + 1, hormonal: false, pack: null, phase: "pregnant",
+      pregnancy: { weeks: Math.floor(total / 7), days: total % 7, due: addDays(lmp, 280) },
+    };
+  }
   if (!last) {
     if (pack && sig.packBreak) {
       const next = nextBleed(pack, today);
@@ -294,7 +328,7 @@ export function cycleInfo(
   if (confirmed) {
     ovulation = confirmed.day;
     nextStart = addDays(ovulation, luteal);
-    spread = 1;
+    spread = confirmed.by === "mucus" ? 2 : 1;
   } else {
     nextStart = addDays(last.start_date, cycleLength);
     ovulation = addDays(nextStart, -luteal);
@@ -310,7 +344,7 @@ export function cycleInfo(
     lastStart: last.start_date, cycleDay, cycleLength, periodLength, nextStart,
     nextRange: [addDays(nextStart, -spread), addDays(nextStart, spread)],
     daysToNext, late, current,
-    ovulation, ovulationBy: confirmed?.by ?? null, fertileStart, fertileEnd, luteal, hormonal, pack: null,
+    ovulation, ovulationBy: confirmed?.by ?? null, fertileStart, fertileEnd, luteal, hormonal, pack: null, pregnancy: null,
     phase: phaseOf(today, { lastStart: last.start_date, periodEnd: current ? null : last.end_date, periodLength, nextStart, ovulation, fertileStart, fertileEnd, current: !!current, late }),
   };
 }
@@ -590,6 +624,7 @@ export const PHASE_TEXT: Record<Phase, { title: string; hint: string }> = {
   luteal: { title: "Лютеиновая фаза", hint: "Ближе к месячным возможны ПМС и усталость" },
   late: { title: "Задержка", hint: "Цикл может сдвигаться из-за стресса, сна и болезни" },
   protected: { title: "Гормональная контрацепция", hint: "Овуляция подавлена — фертильного окна нет" },
+  pregnant: { title: "Беременность", hint: "Прогноз месячных на паузе" },
 };
 
 export const GOALS: { value: Goal; label: string; hint: string }[] = [
@@ -615,3 +650,65 @@ export const MEDS: { value: string; label: string; emoji: string }[] = [
   { value: "stim", label: "Стимуляция овуляции", emoji: "🌱" },
   { value: "hormones", label: "Другие гормоны", emoji: "💊" },
 ];
+
+/**
+ * Прогноз самочувствия: что из отмеченного повторялось в прошлых циклах в
+ * тот же день цикла (±1). Первые дни считаем от начала месячных, остальные
+ * — от следующих (ПМС привязан к ним). Показываем, только если повторялось
+ * хотя бы в двух циклах и в половине тех, где вообще что-то отмечено.
+ */
+export function symptomForecast(
+  periods: FemPeriod[],
+  logs: { day: string; symptoms: string[] }[],
+  info: CycleInfo,
+  target: string,
+): { value: string; hits: number; of: number }[] {
+  if (!info.lastStart || info.hormonal || info.pregnancy) return [];
+  const starts = sorted(periods).map((p) => p.start_date);
+  const cycles: [string, string][] = [];
+  for (let i = 1; i < starts.length; i++) {
+    const gap = daysBetween(starts[i - 1], starts[i]);
+    if (gap >= 15 && gap <= 60) cycles.push([starts[i - 1], starts[i]]);
+  }
+  const recent = cycles.slice(-6);
+  const fromStart = daysBetween(info.lastStart, target);
+  const useStart = fromStart <= 6 || !info.nextStart;
+  const offset = useStart ? fromStart : daysBetween(target, info.nextStart!);
+  const counts = new Map<string, number>();
+  let observed = 0;
+  for (const [a, b] of recent) {
+    const inCycle = logs.filter((l) => l.day >= a && l.day < b && l.symptoms.length);
+    if (inCycle.length === 0) continue;
+    observed++;
+    const seen = new Set<string>();
+    for (const l of inCycle) {
+      const off = useStart ? daysBetween(a, l.day) : daysBetween(l.day, b);
+      if (Math.abs(off - offset) > 1) continue;
+      for (const sym of l.symptoms) if (sym !== "ok") seen.add(sym);
+    }
+    for (const sym of seen) counts.set(sym, (counts.get(sym) ?? 0) + 1);
+  }
+  return [...counts]
+    .filter(([, n]) => n >= 2 && n / observed >= 0.5)
+    .sort((x, y) => y[1] - x[1])
+    .slice(0, 3)
+    .map(([value, hits]) => ({ value, hits, of: observed }));
+}
+
+/** Фаза прошедшего дня — по настоящим датам месячных (для «Итогов»). */
+export function pastPhase(periods: FemPeriod[], day: string, luteal = 14): Phase | null {
+  const list = sorted(periods);
+  let i = -1;
+  for (let k = 0; k < list.length; k++) if (list[k].start_date <= day) i = k;
+  if (i < 0 || i + 1 >= list.length) return null;
+  const start = list[i].start_date;
+  const next = list[i + 1].start_date;
+  const gap = daysBetween(start, next);
+  if (gap < 15 || gap > 60) return null;
+  const end = list[i].end_date ?? addDays(start, 4);
+  if (day <= end) return "period";
+  const ov = addDays(next, -luteal);
+  if (day === ov) return "ovulation";
+  if (day >= addDays(ov, -5) && day <= addDays(ov, 1)) return "fertile";
+  return day < ov ? "follicular" : "luteal";
+}

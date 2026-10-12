@@ -35,7 +35,7 @@ export function PartnerShare() {
       />
       <Toggle
         title="Показывать самочувствие"
-        hint="Симптомы, которые вы отметили сегодня"
+        hint="Сегодняшние симптомы и прогноз «завтра возможно» с подсказкой, как помочь"
         on={symptoms}
         onChange={(v) => {
           setSymptoms(v);

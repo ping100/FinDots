@@ -12,6 +12,7 @@ import { FemHeader } from "./Shell";
 import { CycleRing, DayHero, plural } from "./parts";
 import { PartnerTogether } from "./Together";
 import { PartnerCalendar } from "./PartnerCalendar";
+import { ForecastCard } from "./Insights";
 
 /** Фаза — глазами партнёра: что происходит и как поддержать. */
 const PARTNER_PHASE: Record<Phase, { title: string; about: string; tips: string[] }> = {
@@ -47,6 +48,11 @@ const PARTNER_PHASE: Record<Phase, { title: string; about: string; tips: string[
     about: "Организм готовится к новому циклу. Возможны ПМС: усталость, раздражительность, тяга к сладкому.",
     tips: ["Возможны ПМС, усталость и перепады настроения", "Чуть больше внимания и заботы", "Что-нибудь вкусное к чаю точно не помешает"],
   },
+  pregnant: {
+    title: "Особенное время",
+    about: "Прогноз цикла сейчас на паузе.",
+    tips: ["Чуть больше заботы и внимания"],
+  },
   protected: {
     title: "Ровный период",
     about: "Она на гормональной контрацепции: овуляции нет, гормоны держатся ровно, кровотечение — по схеме.",
@@ -76,7 +82,7 @@ export function PartnerScreen() {
             { cycle_length: partner.cycle_length, period_length: partner.period_length },
             now,
             // Способ контрацепции партнёру не виден — только «гормональная или нет».
-            { lhDays: partner.lh_days ?? [], method: partner.hormonal ? "pop" : "none" },
+            { lhDays: partner.lh_days ?? [], mucusDays: partner.mucus_days ?? [], method: partner.hormonal ? "pop" : "none" },
           )
         : null,
     [partner, now],
@@ -94,10 +100,21 @@ export function PartnerScreen() {
     <div className="mx-auto w-full max-w-md px-4 pb-16">
       <FemHeader title={`Цикл: ${name}`} sub="Партнёрский режим" />
 
-      {info.phase ? <DayHero phase={info.phase} day={now} who="partner" goal={partner.goal} /> : null}
+      {info.phase && !partner.paused ? <DayHero phase={info.phase} day={now} who="partner" goal={partner.goal} /> : null}
 
       <PartnerTogether name={name} status={partner.share_status ? (partner.today?.status ?? null) : null} />
 
+      {partner.paused ? (
+        // Беременность: прогноз на паузе. Причину не называем — она скажет сама.
+        <div className="fem-card rounded-3xl px-4 py-5 text-center">
+          <p className="text-2xl">🌸</p>
+          <p className="mt-1 text-[0.9375rem] font-semibold">Прогноз цикла на паузе</p>
+          <p className="mt-1 text-[0.8125rem] leading-snug" style={{ color: "var(--muted)" }}>
+            {name} поставила прогноз на паузу. Просьбы и статус дня по-прежнему приходят сюда.
+          </p>
+        </div>
+      ) : (
+      <>
       {partner.goal === "conceive" ? (
         <p className="fem-card mb-4 rounded-3xl px-4 py-3 text-[0.8125rem] leading-snug">
           💗 <b>Вы планируете беременность.</b> Лучшие дни подсвечены ниже — напомним, когда они начнутся.
@@ -201,7 +218,11 @@ export function PartnerScreen() {
         </div>
       ) : null}
 
+      <ForecastCard periods={partner.periods} logs={partner.symptom_days ?? []} info={info} who="partner" name={name} />
+
       <PartnerCalendar info={info} />
+      </>
+      )}
 
       <div className="fem-card mt-3 overflow-hidden rounded-3xl">
         <div className="flex items-center gap-3 px-4 py-3.5">

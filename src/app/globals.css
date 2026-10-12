@@ -408,3 +408,64 @@ input[type="date"]::-webkit-date-and-time-value {
 .animate-grow-ring {
   animation: ring-in 0.5s ease-out both;
 }
+
+/* ─────────────────────────── FemDots ───────────────────────────
+   Своя, нежная тема: розово-лавандовый фон с мягкими пятнами света,
+   светлые карточки с розоватой тенью. Переопределяет общие переменные
+   только внутри FemDots. */
+.fem-theme {
+  --accent: #ec4899;
+  /* Переключатели «включено» — розовые, в тон FemDots. */
+  --ok: #ec4899;
+  --bg: #fdf3f7;
+  --surface: #fffafc;
+  --surface-2: #fbe8f1;
+  --border: #f6d9e6;
+  --muted: #a0828f;
+  --text: #2b1b24;
+  color: var(--text);
+  background:
+    radial-gradient(36rem 28rem at 110% -6%, rgba(244, 114, 182, 0.2), transparent 62%),
+    radial-gradient(32rem 30rem at -18% 28%, rgba(196, 181, 253, 0.26), transparent 62%),
+    radial-gradient(30rem 26rem at 60% 108%, rgba(94, 234, 212, 0.14), transparent 62%),
+    var(--bg);
+  background-attachment: fixed;
+}
+.dark .fem-theme {
+  --bg: #160e16;
+  --surface: #221622;
+  --surface-2: #2e1d2d;
+  --border: #3b2639;
+  --muted: #b89cb2;
+  --text: #f6e9f1;
+  background:
+    radial-gradient(36rem 28rem at 110% -6%, rgba(236, 72, 153, 0.18), transparent 62%),
+    radial-gradient(32rem 30rem at -18% 28%, rgba(139, 92, 246, 0.18), transparent 62%),
+    radial-gradient(30rem 26rem at 60% 108%, rgba(20, 184, 166, 0.1), transparent 62%),
+    var(--bg);
+  background-attachment: fixed;
+}
+/* Карточки FemDots: мягкая розоватая тень вместо плоского прямоугольника. */
+.fem-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 10px 30px -12px rgba(236, 72, 153, 0.22);
+}
+.dark .fem-card {
+  box-shadow: 0 10px 30px -14px rgba(0, 0, 0, 0.6);
+}
+/* Крупные цифры — градиентом, как в современных трекерах. */
+.fem-gradient-text {
+  background: linear-gradient(135deg, #ec4899, #a855f7);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+/* Сердцевина кольца тихо «дышит» — единственное движение на экране. */
+@keyframes fem-glow {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(1.04); }
+}
+.animate-fem-glow {
+  animation: fem-glow 4.5s ease-in-out infinite;
+}

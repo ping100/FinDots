@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useFem } from "@/components/fem/DataProvider";
 import { FemHeader } from "@/components/fem/Shell";
 import { Stepper } from "@/components/fem/parts";
+import { PartnerJoin, PartnerShare } from "@/components/fem/PartnerShare";
 import { PushSettings } from "@/components/PushSettings";
 import { SettingsHeading } from "@/components/SettingsHeading";
 import { PrivacyLink } from "@/components/PrivacyLink";
@@ -22,7 +23,7 @@ export default function FemSettingsPage() {
       <FemHeader title="Настройки" sub="FemDots" />
 
       <SettingsHeading>Цикл</SettingsHeading>
-      <div className="mb-1 rounded-2xl p-4" style={{ background: "var(--surface)" }}>
+      <div className="fem-card mb-1 rounded-2xl p-4">
         <Stepper label="Обычная длина цикла" value={s.cycle_length} min={15} max={60} unit="дней"
           onChange={(v) => void saveSettings({ cycle_length: v })} />
         <Stepper label="Сколько идут месячные" value={s.period_length} min={1} max={15} unit="дней"
@@ -34,9 +35,13 @@ export default function FemSettingsPage() {
           : "Пока отметок мало, прогноз считается по этим числам. Потом — по вашим циклам."}
       </p>
 
+      <SettingsHeading>Партнёр</SettingsHeading>
+      <PartnerShare />
+      <PartnerJoin />
+
       <SettingsHeading>Напоминания</SettingsHeading>
       <PushSettings />
-      <div className="mb-4 overflow-hidden rounded-2xl" style={{ background: "var(--surface)" }}>
+      <div className="fem-card mb-4 overflow-hidden rounded-2xl">
         <Row title="Скоро месячные" hint="За 2 дня до прогноза" on={s.remind_period} onChange={(v) => void saveSettings({ remind_period: v })} />
         <Row title="Фертильное окно" hint="В первый день окна" on={s.remind_fertile} onChange={(v) => void saveSettings({ remind_fertile: v })} divided />
         <Row title="Таблетка" hint="Каждый день в выбранное время" on={s.pill_on} onChange={(v) => void saveSettings({ pill_on: v })} divided />
@@ -56,7 +61,7 @@ export default function FemSettingsPage() {
       </div>
 
       <SettingsHeading>Данные</SettingsHeading>
-      <div className="mb-4 rounded-2xl p-4" style={{ background: "var(--surface)" }}>
+      <div className="fem-card mb-4 rounded-2xl p-4">
         <p className="mb-3 text-[0.8125rem] leading-snug" style={{ color: "var(--muted)" }}>
           Данные о цикле и самочувствии видите только вы — даже администратор Dots к ним доступа не имеет.
         </p>
@@ -75,7 +80,7 @@ export default function FemSettingsPage() {
       </div>
 
       <HomeLink />
-      <div className="overflow-hidden rounded-2xl" style={{ background: "var(--surface)" }}>
+      <div className="fem-card overflow-hidden rounded-2xl">
         <PrivacyLink from="/fem/settings" />
       </div>
     </div>

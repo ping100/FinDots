@@ -50,7 +50,12 @@ export async function proxy(request: NextRequest) {
     // Куда шёл — чтобы вернуть туда после входа. На главную и так
     // вернёт, и «?next=%2F» в адресе только уродует ссылку, которой
     // человек потом делится.
-    if (request.nextUrl.pathname !== "/") url.searchParams.set("next", request.nextUrl.pathname);
+    // С параметрами: в ссылке-приглашении FemDots (/fem/join?code=…) код
+    // и есть суть — без него после входа приглашение потерялось бы.
+    url.search = "";
+    if (request.nextUrl.pathname !== "/") {
+      url.searchParams.set("next", request.nextUrl.pathname + request.nextUrl.search);
+    }
     return NextResponse.redirect(url);
   }
 

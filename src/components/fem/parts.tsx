@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Icon } from "@/lib/icons";
 import {
+  FEM_GRADIENT,
   FLOWS,
   MOODS,
   PHASE_COLOR,
@@ -70,9 +71,9 @@ function StepButton({ onClick, children }: { onClick: () => void; children: Reac
  * (месячные, фертильное окно, овуляция), белая точка — сегодня. В центре
  * — главное: сколько до месячных, какой день или задержка.
  */
-export function CycleRing({ info, size = 248 }: { info: CycleInfo; size?: number }) {
+export function CycleRing({ info, size = 256 }: { info: CycleInfo; size?: number }) {
   const N = info.cycleLength;
-  const stroke = 18;
+  const stroke = 20;
   const r = (size - stroke) / 2 - 6;
   const L = 2 * Math.PI * r;
   const c = size / 2;
@@ -135,7 +136,7 @@ export function CycleRing({ info, size = 248 }: { info: CycleInfo; size?: number
                 fill="none"
                 stroke={s.color}
                 strokeWidth={stroke}
-                strokeDasharray={`${Math.max(len - 2.5, 1)} ${L}`}
+                strokeDasharray={`${Math.max(len - 3, 1)} ${L}`}
                 strokeDashoffset={-start}
                 className="animate-grow-ring"
                 style={{ animationDelay: `${i * 70}ms` }}
@@ -144,11 +145,30 @@ export function CycleRing({ info, size = 248 }: { info: CycleInfo; size?: number
           })}
         </g>
         {day ? (
-          <circle cx={mx} cy={my} r={stroke / 2 + 3} fill="var(--surface)" stroke={info.late > 0 ? PHASE_COLOR.late : "var(--text)"} strokeWidth={3} />
+          <circle
+            cx={mx}
+            cy={my}
+            r={stroke / 2 + 4}
+            fill="#fff"
+            stroke={info.late > 0 ? PHASE_COLOR.late : "#ec4899"}
+            strokeWidth={3.5}
+            style={{ filter: "drop-shadow(0 3px 8px rgba(236,72,153,0.45))" }}
+          />
         ) : null}
       </svg>
+      {/* Мягкое свечение внутри кольца — в цвет текущей фазы. */}
+      <div
+        className="animate-fem-glow pointer-events-none absolute rounded-full"
+        style={{
+          inset: stroke + 18,
+          background: `radial-gradient(circle, color-mix(in srgb, ${info.phase ? PHASE_COLOR[info.phase] : "#f472b6"} 38%, transparent) 0%, transparent 70%)`,
+        }}
+      />
       <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-        <span className="text-[3.25rem] font-bold leading-none tabular-nums" style={{ color: info.late > 0 ? PHASE_COLOR.late : "var(--text)" }}>
+        <span
+          className={`text-[3.5rem] font-bold leading-none tabular-nums ${info.late > 0 ? "" : "fem-gradient-text"}`}
+          style={info.late > 0 ? { color: PHASE_COLOR.late } : undefined}
+        >
           {big}
         </span>
         <span className="mt-1 max-w-[9rem] text-sm font-medium leading-tight">{small}</span>
@@ -186,8 +206,9 @@ export function Pill({
       aria-pressed={on}
       className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[0.8125rem] transition active:scale-95"
       style={{
-        background: on ? "var(--accent)" : "var(--surface-2)",
+        background: on ? FEM_GRADIENT : "var(--surface-2)",
         color: on ? "#fff" : "var(--text)",
+        boxShadow: on ? "0 4px 12px -4px rgba(236,72,153,0.55)" : undefined,
       }}
     >
       {children}

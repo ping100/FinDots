@@ -27,17 +27,18 @@ export async function POST(request: Request) {
     auth: { persistSession: false },
   });
 
-  const [tasksRes, billsRes, wellnessRes, summaryRes, femRes] = await Promise.all([
+  const [tasksRes, billsRes, wellnessRes, summaryRes, femRes, femPartnerRes] = await Promise.all([
     supabase.rpc("claim_due_reminders", { p_secret: secret }),
     supabase.rpc("claim_due_bill_reminders", { p_secret: secret }),
     supabase.rpc("claim_due_wellness_reminders", { p_secret: secret }),
     supabase.rpc("claim_due_task_summaries", { p_secret: secret }),
     supabase.rpc("claim_due_fem_reminders", { p_secret: secret }),
+    supabase.rpc("claim_due_fem_partner_reminders", { p_secret: secret }),
   ]);
   // Рассылки независимы: сбой в напоминаниях о платежах не должен
   // оставить без напоминаний задачи — и наоборот.
-  const failures = [tasksRes.error, billsRes.error, wellnessRes.error, summaryRes.error, femRes.error].filter(Boolean);
-  if (failures.length === 5) {
+  const failures = [tasksRes.error, billsRes.error, wellnessRes.error, summaryRes.error, femRes.error, femPartnerRes.error].filter(Boolean);
+  if (failures.length === 6) {
     return NextResponse.json({ error: failures.map((e) => e!.message).join("; ") }, { status: 500 });
   }
 
@@ -85,6 +86,15 @@ export async function POST(request: Request) {
     discreet: boolean;
   }[];
 
+  const femPartner = (femPartnerRes.data ?? []) as {
+    endpoint: string;
+    p256dh: string;
+    auth: string;
+    owner_name: string;
+    mark: string;
+    days_left: number;
+  }[];
+
   const messages = [
     ...tasks.map((row) => ({
       sub: row,
@@ -102,6 +112,16 @@ export async function POST(request: Request) {
     ...wellness.map((row) => ({ sub: row, push: wellnessPush(row) })),
     ...summaries.map((row) => ({ sub: row, push: summaryPush(row) })),
     ...fem.map((row) => ({ sub: row, push: femPush(row) })),
+    // Партнёру — бережно: без слова «месячные» на экране блокировки.
+    ...femPartner.map((row) => ({
+      sub: row,
+      push: {
+        title: "🌸 FemDots",
+        body: `${row.owner_name}: ${row.days_left <= 0 ? "сегодня" : row.days_left === 1 ? "завтра" : `через ${row.days_left} дня`} начнутся особые дни — немного больше заботы и тепла 💗`,
+        url: "/fem",
+        tag: "fem-partner",
+      },
+    })),
   ];
 
   const results = await Promise.all(

@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Icon } from "@/lib/icons";
 import { addDays, today } from "@/lib/tasks/dates";
-import { PHASE_COLOR, PHASE_TEXT, cycleInfo } from "@/lib/fem/cycle";
+import { FEM_GRADIENT, PHASE_COLOR, PHASE_TEXT, cycleInfo } from "@/lib/fem/cycle";
+import { PartnerJoin } from "@/components/fem/PartnerShare";
 import { long, range, short } from "@/lib/fem/format";
 import { useFem } from "@/components/fem/DataProvider";
 import { FemHeader } from "@/components/fem/Shell";
@@ -15,7 +16,7 @@ import { CycleRing, DayLog, plural } from "@/components/fem/parts";
  * («начались» / «закончились»), ближайшие даты и самочувствие за сегодня.
  */
 export default function FemToday() {
-  const { settings, periods, startPeriod, endPeriod } = useFem();
+  const { settings, periods, partner, startPeriod, endPeriod } = useFem();
   const now = today();
   const info = useMemo(() => cycleInfo(periods, settings!, now), [periods, settings, now]);
   const [busy, setBusy] = useState(false);
@@ -42,12 +43,17 @@ export default function FemToday() {
   return (
     <div className="mx-auto w-full max-w-md px-4 pb-32">
       <FemHeader title={long(now)} sub="FemDots" />
+      {/* Ведёте свой цикл и при этом смотрите чужой — переход сюда. */}
+      {partner ? <PartnerJoin /> : null}
 
-      <div className="rounded-3xl px-4 pb-5 pt-6" style={{ background: "var(--surface)" }}>
+      <div className="fem-card rounded-[28px] px-4 pb-5 pt-6">
         <CycleRing info={info} />
 
         {phase && info.phase ? (
-          <div className="mt-4 flex items-start gap-2.5 rounded-2xl px-3 py-2.5" style={{ background: "var(--surface-2)" }}>
+          <div
+            className="mt-4 flex items-start gap-2.5 rounded-2xl px-3.5 py-3"
+            style={{ background: `color-mix(in srgb, ${PHASE_COLOR[info.phase]} 16%, var(--surface))` }}
+          >
             <span className="mt-1 h-3 w-3 shrink-0 rounded-full" style={{ background: PHASE_COLOR[info.phase] }} />
             <span>
               <span className="block text-sm font-semibold">{phase.title}</span>
@@ -62,7 +68,11 @@ export default function FemToday() {
           onClick={act}
           disabled={busy}
           className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-[0.9375rem] font-semibold text-white transition active:scale-[0.98] disabled:opacity-60"
-          style={{ background: info.current ? "var(--text)" : PHASE_COLOR.period, color: info.current ? "var(--bg)" : "#fff" }}
+          style={
+            info.current
+              ? { background: "var(--surface-2)", color: "var(--text)" }
+              : { background: FEM_GRADIENT, color: "#fff", boxShadow: "0 12px 26px -12px rgba(236,72,153,0.75)" }
+          }
         >
           <Icon name={info.current ? "check" : "drop"} size={18} />
           {info.current ? "Месячные закончились" : "Начались месячные"}
@@ -100,7 +110,7 @@ export default function FemToday() {
         </div>
       ) : null}
 
-      <div className="mt-3 rounded-3xl p-4" style={{ background: "var(--surface)" }}>
+      <div className="fem-card mt-3 rounded-3xl p-4">
         <p className="mb-3 text-[0.9375rem] font-semibold">Как вы сегодня?</p>
         <DayLog day={now} showFlow={!!info.current || (info.daysToNext != null && info.daysToNext <= 2)} />
       </div>
@@ -115,7 +125,7 @@ export default function FemToday() {
 
 function Fact({ color, label, value, hint }: { color: string; label: string; value: string; hint: string }) {
   return (
-    <div className="rounded-2xl px-3.5 py-3" style={{ background: "var(--surface)" }}>
+    <div className="fem-card rounded-2xl px-3.5 py-3">
       <span className="flex items-center gap-1.5 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
         <span className="h-2 w-2 rounded-full" style={{ background: color }} />
         {label}

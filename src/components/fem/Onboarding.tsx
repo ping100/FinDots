@@ -4,7 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { Icon } from "@/lib/icons";
 import { addDays, today } from "@/lib/tasks/dates";
-import { FEM_COLOR } from "@/lib/fem/cycle";
+import { FEM_COLOR, FEM_GRADIENT } from "@/lib/fem/cycle";
+import { PartnerJoin } from "./PartnerShare";
 import { Button, Field, inputClass, inputStyle } from "@/components/ui";
 import { useFem } from "./DataProvider";
 import { Stepper } from "./parts";
@@ -20,6 +21,8 @@ export function Onboarding() {
   const [length, setLength] = useState(5);
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
+  // «Я партнёр»: свой цикл не нужен — только код от девушки.
+  const [asPartner, setAsPartner] = useState(false);
   const now = today();
 
   const start = async () => {
@@ -38,8 +41,11 @@ export function Onboarding() {
   return (
     <div className="mx-auto w-full max-w-md px-5 pb-12 pt-8">
       <div className="mb-6 flex flex-col items-center text-center">
-        <span className="animate-pop flex h-16 w-16 items-center justify-center rounded-full text-white" style={{ background: FEM_COLOR }}>
-          <Icon name="flower" size={34} />
+        <span
+          className="animate-pop flex h-20 w-20 items-center justify-center rounded-full text-white"
+          style={{ background: FEM_GRADIENT, boxShadow: "0 16px 36px -14px rgba(236,72,153,0.75)" }}
+        >
+          <Icon name="flower" size={40} />
         </span>
         <h1 className="mt-4 text-[1.5rem] font-semibold">Добро пожаловать в FemDots</h1>
         <p className="mt-1.5 text-sm leading-snug" style={{ color: "var(--muted)" }}>
@@ -47,7 +53,36 @@ export function Onboarding() {
         </p>
       </div>
 
-      <div className="rounded-3xl p-4" style={{ background: "var(--surface)" }}>
+      <div className="mb-4 grid grid-cols-2 gap-1 rounded-2xl p-1" style={{ background: "var(--surface-2)" }}>
+        {[
+          { on: !asPartner, label: "Веду свой цикл", set: false },
+          { on: asPartner, label: "Я партнёр", set: true },
+        ].map((t) => (
+          <button
+            key={t.label}
+            onClick={() => setAsPartner(t.set)}
+            className="rounded-xl py-2 text-sm font-medium transition"
+            style={{ background: t.on ? "var(--surface)" : "transparent", boxShadow: t.on ? "0 2px 8px rgba(236,72,153,0.15)" : undefined }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {asPartner ? (
+        <>
+          <PartnerJoin />
+          <p className="px-2 text-center text-[0.75rem] leading-snug" style={{ color: "var(--muted)" }}>
+            Код даёт девушка: FemDots → Настройки → «Пригласить партнёра». Или просто откройте ссылку, которую она
+            прислала.
+          </p>
+          <Link href="/" className="mt-6 block text-center text-sm" style={{ color: "var(--muted)" }}>
+            ← На главную Dots
+          </Link>
+        </>
+      ) : (
+      <>
+      <div className="fem-card rounded-3xl p-4">
         <Field label="Когда начались последние месячные?">
           <input type="date" className={inputClass} style={inputStyle} value={last} max={now} onChange={(e) => setLast(e.target.value)} />
         </Field>
@@ -81,6 +116,8 @@ export function Onboarding() {
       <Link href="/" className="mt-4 block text-center text-sm" style={{ color: "var(--muted)" }}>
         ← На главную Dots
       </Link>
+      </>
+      )}
     </div>
   );
 }

@@ -39,14 +39,17 @@ export type Flow = "spotting" | "light" | "medium" | "heavy";
 export type Phase = "period" | "follicular" | "fertile" | "ovulation" | "luteal" | "late";
 
 export const FEM_COLOR = "#ec4899";
+/** Нежная палитра фаз: пастель, но различимая и в тёмной теме. */
 export const PHASE_COLOR: Record<Phase, string> = {
-  period: "#f43f5e",
-  follicular: "#f9a8d4",
-  fertile: "#2dd4bf",
-  ovulation: "#0d9488",
-  luteal: "#c4b5fd",
-  late: "#f59e0b",
+  period: "#fb7185",
+  follicular: "#f9c4dc",
+  fertile: "#5eead4",
+  ovulation: "#14b8a6",
+  luteal: "#d8b4fe",
+  late: "#fbbf24",
 };
+/** Главная кнопка и выделенные плашки — мягкий градиент. */
+export const FEM_GRADIENT = "linear-gradient(135deg, #f472b6 0%, #fb7185 55%, #fda4af 100%)";
 
 /** Сколько дней от a до b (b − a). */
 export function daysBetween(a: string, b: string): number {

@@ -49,7 +49,7 @@ export default function FemCalendar() {
     <div className="mx-auto w-full max-w-md px-4 pb-32">
       <FemHeader title="Календарь" sub="Отмеченное и прогноз" />
 
-      <div className="rounded-3xl p-3" style={{ background: "var(--surface)" }}>
+      <div className="fem-card rounded-3xl p-3">
         <div className="mb-2 flex items-center justify-between px-1">
           <button onClick={() => setShift((s) => s - 1)} aria-label="Раньше" className="p-1" style={{ color: "var(--accent)" }}>
             <Icon name="chevron-left" size={22} />

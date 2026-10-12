@@ -1,13 +1,13 @@
 "use client";
 
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Icon } from "@/lib/icons";
 import { Loader } from "@/components/Loader";
-import { FEM_COLOR } from "@/lib/fem/cycle";
 import { useFem } from "./DataProvider";
 import { Onboarding } from "./Onboarding";
+import { PartnerScreen } from "./PartnerScreen";
 
 const TABS = [
   { href: "/fem", label: "Цикл", icon: "drop" },
@@ -23,20 +23,20 @@ const TABS = [
  */
 export function FemShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { ready, error, settings } = useFem();
+  const { ready, error, settings, partner } = useFem();
   if (!ready) return <Loader />;
 
-  const style = { "--accent": FEM_COLOR } as CSSProperties;
+  // Ссылка-приглашение открывается всегда — даже до первого входа в FemDots.
+  if (pathname.startsWith("/fem/join")) {
+    return <div className="fem-theme min-h-dvh pt-safe">{children}</div>;
+  }
+  // Своего цикла нет: партнёр видит цикл своей девушки, остальные — знакомство.
   if (!settings) {
-    return (
-      <div className="min-h-dvh pt-safe" style={style}>
-        <Onboarding />
-      </div>
-    );
+    return <div className="fem-theme min-h-dvh pt-safe">{partner ? <PartnerScreen /> : <Onboarding />}</div>;
   }
 
   return (
-    <div className="min-h-dvh pt-safe" style={style}>
+    <div className="fem-theme min-h-dvh pt-safe">
       {error ? (
         <p className="mx-4 mt-3 rounded-2xl px-4 py-2 text-xs" style={{ background: "var(--danger)", color: "#fff" }}>
           {error}

@@ -76,14 +76,14 @@ export default function FemStats() {
       </div>
 
       {spread != null ? (
-        <p className="mt-3 rounded-2xl px-4 py-3 text-[0.8125rem] leading-snug" style={{ background: "var(--surface)" }}>
+        <p className="fem-card mt-3 rounded-2xl px-4 py-3 text-[0.8125rem] leading-snug">
           {spread <= 7
             ? `Цикл регулярный: последние циклы отличаются не больше чем на ${spread} ${plural(spread, "день", "дня", "дней")}.`
             : `Цикл скачет: от ${Math.min(...lengths)} до ${Math.max(...lengths)} дней. Если так держится несколько месяцев, стоит рассказать об этом врачу.`}
         </p>
       ) : null}
 
-      <div className="mt-3 rounded-3xl p-4" style={{ background: "var(--surface)" }}>
+      <div className="fem-card mt-3 rounded-3xl p-4">
         <p className="text-[0.9375rem] font-semibold">Длина циклов</p>
         <p className="mb-3 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
           Каждый столбик — один цикл, пунктир — средний ({avgCycle} {plural(avgCycle, "день", "дня", "дней")})
@@ -116,7 +116,7 @@ export default function FemStats() {
         )}
       </div>
 
-      <div className="mt-3 rounded-3xl p-4" style={{ background: "var(--surface)" }}>
+      <div className="fem-card mt-3 rounded-3xl p-4">
         <p className="text-[0.9375rem] font-semibold">Чаще всего за 3 месяца</p>
         {data.top.length === 0 ? (
           <p className="mt-2 text-[0.8125rem]" style={{ color: "var(--muted)" }}>
@@ -148,7 +148,7 @@ export default function FemStats() {
 
 function Tile({ value, unit, label }: { value: string; unit: string; label: string }) {
   return (
-    <div className="rounded-2xl px-3 py-3 text-center" style={{ background: "var(--surface)" }}>
+    <div className="fem-card rounded-2xl px-3 py-3 text-center">
       <span className="block text-[1.375rem] font-bold leading-tight tabular-nums">{value}</span>
       <span className="block text-[0.6875rem]">{unit}</span>
       <span className="block text-[0.625rem]" style={{ color: "var(--muted)" }}>

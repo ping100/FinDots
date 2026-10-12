@@ -8,8 +8,6 @@ import {
   SYMPTOMS,
   averageCycle,
   averagePeriod,
-  cycleHealth,
-  cycleLengths,
   daysBetween,
   pastPhase,
   tempShift,
@@ -18,6 +16,7 @@ import {
   type Phase,
 } from "@/lib/fem/cycle";
 import { addDays } from "@/lib/tasks/dates";
+import { CycleAssistant, CycleDynamics, CycleHistory, MyCycles } from "@/components/fem/CycleStats";
 import { short } from "@/lib/fem/format";
 import { useFem } from "@/components/fem/DataProvider";
 import { FemHeader } from "@/components/fem/Shell";
@@ -57,9 +56,6 @@ export default function FemStats() {
 
   const avgCycle = averageCycle(periods, settings!.cycle_length);
   const avgPeriod = averagePeriod(periods, settings!.period_length);
-  const lengths = cycleLengths(periods).slice(-6);
-  const spread = lengths.length >= 3 ? Math.max(...lengths) - Math.min(...lengths) : null;
-  const health = cycleHealth(periods);
 
   if (periods.length === 0) {
     return (
@@ -78,9 +74,6 @@ export default function FemStats() {
     );
   }
 
-  const max = Math.max(avgCycle, ...data.cycles.map((c) => c.length));
-  const H = 120;
-
   return (
     <div className="mx-auto w-full max-w-md px-4 pb-32">
       <FemHeader title="Итоги" sub="По вашим отметкам" />
@@ -91,83 +84,15 @@ export default function FemStats() {
         <Tile value={`${data.cycles.length}`} unit={plural(data.cycles.length, "цикл", "цикла", "циклов")} label="отмечено" />
       </div>
 
-      {spread != null ? (
-        <p className="fem-card mt-3 rounded-2xl px-4 py-3 text-[0.8125rem] leading-snug">
-          {spread <= 7
-            ? `Цикл регулярный: последние циклы отличаются не больше чем на ${spread} ${plural(spread, "день", "дня", "дней")}.`
-            : `Цикл скачет: от ${Math.min(...lengths)} до ${Math.max(...lengths)} дней. Если так держится несколько месяцев, стоит рассказать об этом врачу.`}
-        </p>
-      ) : null}
-
-      {health ? (
-        <div className="fem-card mt-3 rounded-3xl p-4">
-          <p className="text-[0.9375rem] font-semibold">Сверка с нормой</p>
-          <p className="mb-2.5 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-            По критериям FIGO — международной федерации гинекологов
-          </p>
-          <div className="space-y-2">
-            {health.map((h) => (
-              <div key={h.label} className="flex items-start gap-2.5">
-                <span
-                  className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[0.6875rem] font-bold text-white"
-                  style={{ background: h.ok ? "#14b8a6" : "#f59e0b" }}
-                >
-                  {h.ok ? "✓" : "!"}
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-sm font-medium">{h.label}</span>
-                  <span className="block text-[0.75rem] leading-snug" style={{ color: "var(--muted)" }}>
-                    {h.detail}
-                  </span>
-                </span>
-              </div>
-            ))}
-          </div>
-          {health.some((h) => !h.ok) ? (
-            <p className="mt-3 rounded-2xl px-3 py-2 text-[0.75rem] leading-snug" style={{ background: "var(--surface-2)" }}>
-              Отклонение повторяется — это не диагноз, но стоит показать врачу-гинекологу. Возьмите с собой эти итоги.
-            </p>
-          ) : null}
-        </div>
-      ) : null}
+      <MyCycles />
+      <CycleAssistant />
+      <CycleHistory />
+      <CycleDynamics />
 
       <TempChart />
       <PhaseInsights />
       <WeightChart />
       <Lifestyle />
-
-      <div className="fem-card mt-3 rounded-3xl p-4">
-        <p className="text-[0.9375rem] font-semibold">Длина циклов</p>
-        <p className="mb-3 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-          Каждый столбик — один цикл, пунктир — средний ({avgCycle} {plural(avgCycle, "день", "дня", "дней")})
-        </p>
-        {data.cycles.length === 0 ? (
-          <p className="py-4 text-center text-[0.8125rem]" style={{ color: "var(--muted)" }}>
-            Появится, когда будет отмечено начало хотя бы двух месячных
-          </p>
-        ) : (
-          <div className="relative" style={{ height: H + 34 }}>
-            <div
-              className="absolute inset-x-0 border-t border-dashed"
-              style={{ top: 16 + H - (avgCycle / max) * H, borderColor: "var(--muted)", opacity: 0.6 }}
-            />
-            <div className="absolute inset-0 flex items-end justify-around gap-1.5">
-              {data.cycles.map((c) => (
-                <div key={c.start} className="flex min-w-0 flex-1 flex-col items-center">
-                  <span className="mb-1 text-[0.6875rem] font-semibold tabular-nums">{c.length}</span>
-                  <span
-                    className="animate-grow-y w-full max-w-[28px] rounded-t-[4px]"
-                    style={{ height: (c.length / max) * H, background: FEM_COLOR, transformOrigin: "bottom" }}
-                  />
-                  <span className="mt-1 h-4 truncate text-[0.625rem]" style={{ color: "var(--muted)" }}>
-                    {short(c.start)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
 
       <div className="fem-card mt-3 rounded-3xl p-4">
         <p className="text-[0.9375rem] font-semibold">Чаще всего за 3 месяца</p>

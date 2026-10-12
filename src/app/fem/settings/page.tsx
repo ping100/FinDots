@@ -176,6 +176,17 @@ export default function FemSettingsPage() {
         />
       </div>
 
+      {s.ai_consent_at ? (
+        <div className="fem-card mb-4 overflow-hidden rounded-2xl">
+          <Row
+            title="Разбор цикла нейросетью"
+            hint="Согласие дано — обезличенная сводка уходит в OpenRouter только по вашей кнопке в «Итогах». Выключите, чтобы отозвать"
+            on
+            onChange={() => void saveSettings({ ai_consent_at: null })}
+          />
+        </div>
+      ) : null}
+
       <SettingsHeading>Данные</SettingsHeading>
       <div className="fem-card mb-4 rounded-2xl p-4">
         <p className="mb-3 text-[0.8125rem] leading-snug" style={{ color: "var(--muted)" }}>

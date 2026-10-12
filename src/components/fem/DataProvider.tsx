@@ -270,6 +270,7 @@ export function FemProvider({ children }: { children: ReactNode }) {
         pack_active: 21,
         pack_break: 7,
         pregnant_since: null,
+        ai_consent_at: null,
         ...settingsRef.current,
         ...patch,
       };

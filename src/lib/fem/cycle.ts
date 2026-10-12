@@ -45,6 +45,8 @@ export interface FemSettings {
   pack_break: number;
   /** Режим беременности: с какого дня включён. null — выключен. */
   pregnant_since: string | null;
+  /** Согласие на разбор цикла нейросетью (обезличенная сводка в OpenRouter). */
+  ai_consent_at: string | null;
   remind_period: boolean;
   remind_fertile: boolean;
   pill_on: boolean;

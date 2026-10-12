@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { Icon } from "@/lib/icons";
+import { createClient } from "@/lib/supabase/client";
+import { DEFAULT_SHOWN, crossRate, formatRate, symbolFor, useOfficialRates } from "@/lib/officialRates";
 
 /**
  * Две плашки на развилке: погода и курс валют. Маленькие и тихие — это
@@ -15,10 +17,10 @@ import { Icon } from "@/lib/icons";
  */
 
 type Weather = { temp: number; code: number; day: boolean; city: string; at: number };
-type Rates = { usd: number; rub: number; usdChange?: number; rubChange?: number; at: number };
+type Shown = { codes: string[]; base: string };
 
 const WEATHER_KEY = "dots.home.weather";
-const RATES_KEY = "dots.home.rates";
+const SHOWN_KEY = "dots.home.shown";
 const FRESH_MS = 30 * 60_000;
 
 /** Город по часовому поясу — когда геолокации нет. */
@@ -103,33 +105,30 @@ function position(): Promise<{ lat: number; lon: number }> {
 
 export function HomeWidgets({ delay = 0 }: { delay?: number }) {
   const [weather, setWeather] = useState<Weather | null>(null);
-  const [rates, setRates] = useState<Rates | null>(null);
+  const official = useOfficialRates();
+  // Какие валюты и к какой основной — из профиля (выбирают в настройках
+  // денег). Запоминаем, чтобы при следующем открытии не ждать базу.
+  const [shown, setShown] = useState<Shown>({ codes: DEFAULT_SHOWN, base: "KZT" });
   const [locating, setLocating] = useState(false);
 
   useEffect(() => {
     const cachedW = read<Weather>(WEATHER_KEY);
-    const cachedR = read<Rates>(RATES_KEY);
+    const cachedS = read<Shown>(SHOWN_KEY);
     if (cachedW) setWeather(cachedW);
-    if (cachedR) setRates(cachedR);
+    if (cachedS) setShown(cachedS);
 
     if (!cachedW || Date.now() - cachedW.at > FRESH_MS) void refreshWeather(false);
-    if (!cachedR || Date.now() - cachedR.at > FRESH_MS) {
-      fetch("/api/rates")
-        .then((r) => r.json())
-        .then((json: { kzt?: Record<string, number>; change?: Record<string, number> }) => {
-          if (!json.kzt?.USD || !json.kzt.RUB) return;
-          const next = {
-            usd: json.kzt.USD,
-            rub: json.kzt.RUB,
-            usdChange: json.change?.USD,
-            rubChange: json.change?.RUB,
-            at: Date.now(),
-          };
-          setRates(next);
-          write(RATES_KEY, next);
-        })
-        .catch(() => undefined);
-    }
+    const supabase = createClient();
+    void supabase.auth.getSession().then(async ({ data }) => {
+      const id = data.session?.user.id;
+      if (!id) return;
+      const res = await supabase.from("profiles").select("shown_rates, base_currency").eq("id", id).maybeSingle();
+      const row = res.data as { shown_rates?: string[]; base_currency?: string } | null;
+      if (!row) return;
+      const next = { codes: row.shown_rates ?? DEFAULT_SHOWN, base: row.base_currency ?? "KZT" };
+      setShown(next);
+      write(SHOWN_KEY, next);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -156,7 +155,19 @@ export function HomeWidgets({ delay = 0 }: { delay?: number }) {
     }
   };
 
-  if (!weather && !rates) return <div className="h-9" aria-hidden />;
+  const rates = official
+    ? shown.codes
+        .filter((code) => code !== shown.base)
+        .map((code) => ({
+          code,
+          value: crossRate(official, code, shown.base),
+          // Изменение за день есть только у курса к тенге.
+          change: shown.base === "KZT" ? official.change[code] : undefined,
+        }))
+        .filter((x): x is { code: string; value: number; change: number | undefined } => !!x.value)
+    : [];
+
+  if (!weather && rates.length === 0) return <div className="h-9" aria-hidden />;
   const sky = weather ? describe(weather.code, weather.day) : null;
 
   return (
@@ -181,15 +192,18 @@ export function HomeWidgets({ delay = 0 }: { delay?: number }) {
         </button>
       ) : null}
 
-      {rates ? (
+      {rates.length ? (
         <span
           className="flex h-9 items-center gap-2.5 rounded-full px-3 text-[0.8125rem] tabular-nums"
           style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
-          aria-label={`Курс Нацбанка: доллар ${rates.usd} тенге, рубль ${rates.rub} тенге`}
+          aria-label={`Курс Нацбанка: ${rates.map((r) => `${r.code} ${formatRate(r.value)}`).join(", ")}`}
         >
-          <Rate sign="$" value={rates.usd} change={rates.usdChange} />
-          <span className="h-3.5 w-px" style={{ background: "var(--border)" }} />
-          <Rate sign="₽" value={rates.rub} change={rates.rubChange} />
+          {rates.map((r, i) => (
+            <span key={r.code} className="flex items-center gap-2.5">
+              {i > 0 ? <span className="h-3.5 w-px" style={{ background: "var(--border)" }} /> : null}
+              <Rate sign={symbolFor(r.code)} value={r.value} change={r.change} />
+            </span>
+          ))}
         </span>
       ) : null}
     </div>
@@ -202,7 +216,7 @@ function Rate({ sign, value, change }: { sign: string; value: number; change?: n
   return (
     <span className="flex items-center gap-1">
       <span style={{ color: "var(--muted)" }}>{sign}</span>
-      <span className="font-semibold">{value.toLocaleString("ru-RU", { maximumFractionDigits: 2 })}</span>
+      <span className="font-semibold">{formatRate(value)}</span>
       {moved ? (
         <span
           className="text-[0.625rem]"

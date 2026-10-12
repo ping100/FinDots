@@ -17,6 +17,8 @@ export interface Profile {
   access_ai: boolean;
   /** Курсы валют подтягиваются сами (Нацбанк РК). */
   rates_auto: boolean;
+  /** Какие курсы показывать на панели и на главной (до трёх). */
+  shown_rates: string[];
 }
 
 export interface ExchangeRate {

@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CURRENCIES, formatMoney, symbolOf } from "@/lib/money";
+import { formatMoney, symbolOf } from "@/lib/money";
+import { DEFAULT_SHOWN, crossRate, formatRate, symbolFor, useOfficialRates } from "@/lib/officialRates";
 import type { CurrencyCode } from "@/lib/types";
 import { SERIES } from "./charts";
 import { toISODate } from "@/lib/savings";
@@ -189,7 +190,12 @@ export function DailyAllowance() {
           ) : null}
         </p>
         <SpendSpark daily={data.daily} today={data.dayOfMonth} limit={data.short ? 0 : data.perDay} avg={data.avg} base={base} />
-        <RatesLine base={base} rates={rates} auto={profile?.rates_auto !== false} />
+        <RatesLine
+          base={base}
+          rates={rates}
+          auto={profile?.rates_auto !== false}
+          shown={profile?.shown_rates ?? DEFAULT_SHOWN}
+        />
       </button>
 
       <Sheet open={explain} title="Откуда эти числа" onClose={() => setExplain(false)}>
@@ -356,45 +362,46 @@ function SpendSpark({
 }
 
 /**
- * Тихая строка курса внизу карточки: «$ 453,93 · ₽ 5,35 ₸». Курс — не
- * деньги человека, поэтому «глазок» его не прячет.
+ * Тихая строка курса внизу карточки: «$ 453,93 ₸ · ₽ 5,35 ₸». Какие
+ * валюты — выбирают в настройках (до трёх). Курс — не деньги человека,
+ * поэтому «глазок» его не прячет.
  */
 function RatesLine({
   base,
   rates,
   auto,
+  shown,
 }: {
   base: CurrencyCode;
   rates: { code: CurrencyCode; rate_to_base: number }[];
   auto: boolean;
+  shown: string[];
 }) {
-  // Доллар первым — его курс смотрят чаще всего.
-  const order = ["USD", "EUR", "RUB"];
-  const rank = (code: string) => (order.includes(code) ? order.indexOf(code) : order.length);
-  const shown = [...CURRENCIES]
-    .sort((a, b) => rank(a.code) - rank(b.code))
-    .filter((c) => c.code !== base)
-    .map((c) => ({ c, rate: rates.find((r) => r.code === c.code)?.rate_to_base }))
-    .filter((x): x is { c: (typeof CURRENCIES)[number]; rate: number } => !!x.rate && x.rate !== 1);
-  if (shown.length === 0) return null;
+  const official = useOfficialRates();
+  const items = shown
+    .filter((code) => code !== base)
+    .map((code) => {
+      // Свой курс — только если автообновление выключено и он вообще задан.
+      const own = !auto ? rates.find((r) => r.code === code)?.rate_to_base : undefined;
+      const value = own ?? (official ? crossRate(official, code, base) : null);
+      return { code, value };
+    })
+    .filter((x): x is { code: string; value: number } => !!x.value);
+  if (items.length === 0) return null;
   return (
     <div
       className="mt-2.5 flex items-center justify-between gap-2 border-t pt-2 text-[0.6875rem] tabular-nums"
       style={{ borderColor: "var(--border)", color: "var(--muted)" }}
     >
-      <span>
-        {shown.map(({ c, rate }, i) => (
-          <span key={c.code}>
+      <span className="min-w-0 truncate">
+        {items.map(({ code, value }, i) => (
+          <span key={code}>
             {i > 0 ? " · " : ""}
-            {c.symbol}{" "}
-            <span style={{ color: "var(--text)" }}>
-              {rate.toLocaleString("ru-RU", { maximumFractionDigits: rate < 1 ? 4 : 2 })}
-            </span>{" "}
-            {symbolOf(base)}
+            {symbolFor(code)} <span style={{ color: "var(--text)" }}>{formatRate(value)}</span> {symbolOf(base)}
           </span>
         ))}
       </span>
-      <span>{auto ? "курс Нацбанка" : "ваш курс"}</span>
+      <span className="shrink-0">{auto ? "курс Нацбанка" : "ваш курс"}</span>
     </div>
   );
 }

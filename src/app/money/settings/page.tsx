@@ -7,6 +7,7 @@ import { THEMES, THEME_AUTO_HINT } from "@/lib/look";
 import { CURRENT_BUILD, applyUpdate, buildMoment, serverBuild } from "@/lib/update";
 import { Icon } from "@/lib/icons";
 import { CURRENCIES, parseAmount, symbolOf } from "@/lib/money";
+import { DEFAULT_SHOWN, MAX_SHOWN, RATE_CHOICES, symbolFor } from "@/lib/officialRates";
 import { createClient } from "@/lib/supabase/client";
 import { RATES_KEY, useStore } from "@/components/DataProvider";
 import { DataTransfer } from "@/components/DataTransfer";
@@ -92,11 +93,11 @@ export default function SettingsPage() {
         />
         <Row
           label="Курсы валют"
-          hint={
-            profile?.rates_auto === false
-              ? "Задаются вручную"
-              : "Автоматически, по курсу Нацбанка РК"
-          }
+          hint={`${profile?.rates_auto === false ? "Вручную" : "По курсу Нацбанка"} · показывать: ${(
+            profile?.shown_rates ?? DEFAULT_SHOWN
+          )
+            .map(symbolFor)
+            .join(", ")}`}
           onClick={() => setSheet("rates")}
         />
       </Group>
@@ -193,6 +194,11 @@ export default function SettingsPage() {
       </Sheet>
 
       <Sheet open={sheet === "rates"} title="Курсы валют" onClose={() => setSheet(null)}>
+        <ShownRates
+          base={base}
+          shown={profile?.shown_rates ?? DEFAULT_SHOWN}
+          onChange={(next) => saveProfile({ shown_rates: next })}
+        />
         <RatesAuto auto={profile?.rates_auto !== false} onToggle={(on) => saveProfile({ rates_auto: on })} sync={syncRates} />
         <p className="mb-3 text-xs" style={{ color: "var(--muted)" }}>
           Сколько {base} стоит одна единица валюты.
@@ -336,6 +342,61 @@ function Row({
   ) : (
     <div className={className} style={style}>
       {content}
+    </div>
+  );
+}
+
+/**
+ * Какие валюты показывать в строке курса на панели и на главной. До трёх:
+ * больше в одну строку не помещается. Порядок — порядок выбора.
+ */
+function ShownRates({
+  base,
+  shown,
+  onChange,
+}: {
+  base: string;
+  shown: string[];
+  onChange: (next: string[]) => Promise<void>;
+}) {
+  const [picked, setPicked] = useState(shown);
+  const full = picked.length >= MAX_SHOWN;
+  const toggle = (code: string) => {
+    const next = picked.includes(code) ? picked.filter((c) => c !== code) : full ? picked : [...picked, code];
+    if (next === picked) return;
+    setPicked(next);
+    void onChange(next);
+  };
+  return (
+    <div className="mb-4">
+      <p className="mb-1 text-[0.9375rem]">Какие валюты показывать</p>
+      <p className="mb-2.5 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+        На панели под «Свободно» и на главной, до {MAX_SHOWN}-х. {full ? "Чтобы выбрать другую — снимите одну из выбранных." : ""}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {RATE_CHOICES.filter((c) => c.code !== base).map((c) => {
+          const on = picked.includes(c.code);
+          return (
+            <button
+              key={c.code}
+              onClick={() => toggle(c.code)}
+              aria-pressed={on}
+              disabled={!on && full}
+              className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition active:scale-95 disabled:opacity-40"
+              style={{
+                background: on ? "var(--accent)" : "var(--surface-2)",
+                color: on ? "#fff" : "var(--text)",
+              }}
+            >
+              <span className="font-semibold">{c.symbol}</span>
+              {c.name}
+              {on && picked.length > 1 ? (
+                <span className="text-[0.625rem] opacity-80">{picked.indexOf(c.code) + 1}</span>
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

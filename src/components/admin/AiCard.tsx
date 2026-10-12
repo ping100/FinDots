@@ -15,9 +15,11 @@ export function AiCard() {
   const [status, setStatus] = useState<Status | null>(null);
 
   useEffect(() => {
+    // Сессия истекла — вместо JSON приходит страница входа; не падаем.
     void fetch("/api/admin/ai-config")
       .then((res) => (res.ok ? res.json() : null))
-      .then((data) => setStatus(data));
+      .then((data) => setStatus(data))
+      .catch(() => setStatus(null));
   }, []);
 
   const modelLabel = AI_MODELS.find((m) => m.id === status?.model)?.label ?? status?.model;

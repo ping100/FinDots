@@ -39,7 +39,8 @@ export default function AdminAiPage() {
       .then((data: Status | null) => {
         setStatus(data);
         setModel(data?.model ?? AI_MODELS[0].id);
-      });
+      })
+      .catch(() => setModel(AI_MODELS[0].id));
   }, []);
 
   useEffect(() => {

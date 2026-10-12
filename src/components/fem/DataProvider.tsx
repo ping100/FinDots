@@ -211,7 +211,16 @@ export function FemProvider({ children }: { children: ReactNode }) {
         new Map(
           ((d.data ?? []) as FemDay[]).map((x) => [
             x.day,
-            { ...x, temp: x.temp == null ? null : Number(x.temp), weight: x.weight == null ? null : Number(x.weight) },
+            {
+              ...EMPTY_DAY,
+              ...x,
+              // Списки — всегда массивы, даже у старых строк.
+              symptoms: x.symptoms ?? [],
+              meds: x.meds ?? [],
+              tags: x.tags ?? [],
+              temp: x.temp == null ? null : Number(x.temp),
+              weight: x.weight == null ? null : Number(x.weight),
+            },
           ]),
         ),
       );

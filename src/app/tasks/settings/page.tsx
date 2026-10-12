@@ -142,7 +142,7 @@ export default function SettingsPage() {
                 <button
                   key={item.id}
                   onClick={() => void saveProfile({ text_scale: item.id })}
-                  className="flex-1 rounded-2xl border px-3 py-2.5 font-medium"
+                  className="min-w-0 flex-1 rounded-2xl border px-1.5 py-2.5 font-medium"
                   style={{
                     // Размер надписи и есть предпросмотр выбора.
                     fontSize: `${0.875 * item.factor}rem`,

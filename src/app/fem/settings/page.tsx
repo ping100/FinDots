@@ -297,7 +297,7 @@ function Choice({
     <button
       onClick={onClick}
       aria-pressed={on}
-      className="flex-1 rounded-2xl border px-3 py-2.5 text-sm font-medium transition active:scale-95"
+      className="min-w-0 flex-1 rounded-2xl border px-1.5 py-2.5 text-sm font-medium transition active:scale-95"
       style={{
         fontSize,
         borderColor: on ? "var(--accent)" : "var(--border)",

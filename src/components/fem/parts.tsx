@@ -1,12 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@/lib/icons";
 import {
   FEM_GRADIENT,
+  ACTIVITY,
+  DESIRE,
+  DISCHARGE,
   FLOWS,
   MEDS,
   MOODS,
+  OTHER_TAGS,
+  PREG_TESTS,
+  SEX_TAGS,
+  SHARED_KINDS,
+  cycleInfo,
   PHASE_COLOR,
   PHASE_TEXT,
   SYMPTOMS,
@@ -14,6 +22,8 @@ import {
   type CycleInfo,
   type FemDay,
   type Goal,
+  type Intim,
+  type IntimKind,
   type Phase,
 } from "@/lib/fem/cycle";
 import { phraseOf } from "@/lib/fem/phrases";
@@ -304,11 +314,12 @@ export function Pill({
 }
 
 /**
- * Самочувствие за день: выделения, симптомы, настроение, заметка. Всё
- * нажатием, без набора — сохраняется сразу.
+ * Дневник дня — как во Flo, но короче: сверху то, что отмечают каждый
+ * день (выделения, близость, самочувствие, настроение), остальное —
+ * свёрнуто в «Ещё». Всё нажатием, сохраняется сразу.
  */
 export function DayLog({ day, showFlow = true }: { day: string; showFlow?: boolean }) {
-  const { days, saveDay } = useFem();
+  const { days, saveDay, intimacy, setIntimacy, settings, periods, share } = useFem();
   const entry: FemDay = days.get(day) ?? {
     day,
     flow: null,
@@ -320,19 +331,52 @@ export function DayLog({ day, showFlow = true }: { day: string; showFlow?: boole
     meds: [],
     pill: null,
     status: null,
+    tags: [],
+    weight: null,
+    preg_test: null,
   };
   const [note, setNote] = useState(entry.note ?? "");
   useEffect(() => setNote(entry.note ?? ""), [day, entry.note]);
+  const filledMore =
+    entry.tags.some((t) => /^(d|o|a):/.test(t)) ||
+    entry.symptoms.some((v) => SYMPTOMS.find((x) => x.value === v)?.group === "digestion") ||
+    !!entry.lh || entry.temp != null || entry.meds.length > 0 || entry.weight != null || !!entry.preg_test;
+  const [more, setMore] = useState(filledMore || settings?.goal === "conceive");
 
-  const toggleSymptom = (value: string) =>
-    void saveDay(day, {
-      symptoms: entry.symptoms.includes(value) ? entry.symptoms.filter((s) => s !== value) : [...entry.symptoms, value],
-    });
+  const toggleSymptom = (value: string) => {
+    const on = entry.symptoms.includes(value);
+    // «Всё в порядке» и жалобы друг друга исключают.
+    const rest = value === "ok" ? [] : entry.symptoms.filter((x) => x !== "ok");
+    void saveDay(day, { symptoms: on ? entry.symptoms.filter((x) => x !== value) : [...rest, value] });
+  };
+  /** Тег с префиксом: single — в группе выбирается один (выделения, желание). */
+  const toggleTag = (value: string, single = false) => {
+    const on = entry.tags.includes(value);
+    const prefix = value.split(":")[0] + ":";
+    const rest = single ? entry.tags.filter((x) => !x.startsWith(prefix)) : entry.tags;
+    // «Без тренировки» / «Выделений нет» — тоже исключают остальные в группе.
+    const none = value.endsWith(":none");
+    const cleaned = none ? entry.tags.filter((x) => !x.startsWith(prefix)) : rest.filter((x) => x !== `${prefix}none`);
+    void saveDay(day, { tags: on ? entry.tags.filter((x) => x !== value) : [...cleaned, value] });
+  };
+
+  // Близость — общая отметка пары.
+  const intim = intimacy.get(day) ?? null;
+  // Без защиты в фертильные дни, если беременность не планируется, — мягко подсказать.
+  const risky = useMemo(() => {
+    if (!intim?.kinds.includes("sex") || intim.protected !== false || settings?.goal === "conceive" || !settings) return false;
+    if (settings.method !== "none") return false;
+    const info = cycleInfo(periods, settings, day);
+    return !!info.fertileStart && day >= info.fertileStart && day <= info.fertileEnd!;
+  }, [intim, settings, periods, day]);
+
+  const body = SYMPTOMS.filter((x) => !x.group);
+  const digestion = SYMPTOMS.filter((x) => x.group === "digestion");
 
   return (
-    <div className="space-y-3.5">
+    <div className="space-y-4">
       {showFlow ? (
-        <Group title="Выделения">
+        <Group title="Месячные">
           {FLOWS.map((f) => (
             <Pill key={f.value} on={entry.flow === f.value} onClick={() => void saveDay(day, { flow: entry.flow === f.value ? null : f.value })}>
               <span className="flex" style={{ color: entry.flow === f.value ? "#fff" : PHASE_COLOR.period }}>
@@ -343,14 +387,40 @@ export function DayLog({ day, showFlow = true }: { day: string; showFlow?: boole
           ))}
         </Group>
       ) : null}
-      <Group title="Самочувствие">
-        {SYMPTOMS.map((s) => (
-          <Pill key={s.value} on={entry.symptoms.includes(s.value)} onClick={() => toggleSymptom(s.value)}>
-            <span>{s.emoji}</span>
-            {s.label}
+
+      <Group title="Близость вдвоём" hint={share?.partner_name ? `видно и ${share.partner_name}` : undefined}>
+        <IntimacyPicker value={intim} onChange={(v) => void setIntimacy(day, v)} />
+      </Group>
+      <Group title="Только для вас">
+        {SEX_TAGS.map((t) => (
+          <Pill key={t.value} on={entry.tags.includes(t.value)} onClick={() => toggleTag(t.value)}>
+            <ChipHeart kind={t.heart} />
+            {t.label}
+          </Pill>
+        ))}
+        {DESIRE.map((t) => (
+          <Pill key={t.value} on={entry.tags.includes(t.value)} onClick={() => toggleTag(t.value, true)}>
+            <span>{t.emoji}</span>
+            {t.label}
           </Pill>
         ))}
       </Group>
+      {risky ? (
+        <p className="-mt-2 rounded-2xl px-3 py-2 text-[0.75rem] leading-snug" style={{ background: "color-mix(in srgb, #f59e0b 16%, transparent)" }}>
+          Это фертильный день. Если беременность не планируется, экстренная контрацепция работает лучше всего в
+          первые 72 часа — посоветуйтесь с врачом или фармацевтом.
+        </p>
+      ) : null}
+
+      <Group title="Симптомы">
+        {body.map((x) => (
+          <Pill key={x.value} on={entry.symptoms.includes(x.value)} onClick={() => toggleSymptom(x.value)}>
+            <span>{x.emoji}</span>
+            {x.label}
+          </Pill>
+        ))}
+      </Group>
+
       <Group title="Настроение">
         {MOODS.map((m) => (
           <Pill key={m.value} on={entry.mood === m.value} onClick={() => void saveDay(day, { mood: entry.mood === m.value ? null : m.value })}>
@@ -359,7 +429,108 @@ export function DayLog({ day, showFlow = true }: { day: string; showFlow?: boole
           </Pill>
         ))}
       </Group>
-      <Extras day={day} entry={entry} />
+
+      {more ? (
+        <>
+          <Group title="Выделения">
+            {DISCHARGE.map((t) => (
+              <Pill key={t.value} on={entry.tags.includes(t.value)} onClick={() => toggleTag(t.value, true)}>
+                <span>{t.emoji}</span>
+                {t.label}
+              </Pill>
+            ))}
+          </Group>
+          <Group title="Пищеварение">
+            {digestion.map((x) => (
+              <Pill key={x.value} on={entry.symptoms.includes(x.value)} onClick={() => toggleSymptom(x.value)}>
+                <span>{x.emoji}</span>
+                {x.label}
+              </Pill>
+            ))}
+          </Group>
+          <Group title="Тест на беременность">
+            {PREG_TESTS.map((t) => (
+              <Pill key={t.value} on={entry.preg_test === t.value} onClick={() => void saveDay(day, { preg_test: entry.preg_test === t.value ? null : t.value })}>
+                <span>{t.emoji}</span>
+                {t.label}
+              </Pill>
+            ))}
+          </Group>
+          <Group title="Тест на овуляцию (ЛГ)" hint="Положительный — прогноз станет точнее">
+            {(
+              [
+                ["neg", "Отрицательный", "➖"],
+                ["pos", "Положительный", "✅"],
+              ] as const
+            ).map(([v, label, e]) => (
+              <Pill key={v} on={entry.lh === v} onClick={() => void saveDay(day, { lh: entry.lh === v ? null : v })}>
+                <span>{e}</span>
+                {label}
+              </Pill>
+            ))}
+          </Group>
+          <div className="grid grid-cols-2 gap-3">
+            <NumberField
+              label="Базальная t°"
+              hint="утром, до подъёма"
+              unit="°C"
+              placeholder="36,60"
+              value={entry.temp}
+              min={34}
+              max={39}
+              digits={2}
+              onSave={(v) => void saveDay(day, { temp: v })}
+            />
+            <NumberField
+              label="Вес"
+              unit="кг"
+              placeholder="58,5"
+              value={entry.weight}
+              min={25}
+              max={300}
+              digits={1}
+              onSave={(v) => void saveDay(day, { weight: v })}
+            />
+          </div>
+          <Group title="Препараты">
+            {MEDS.map((m) => {
+              const on = entry.meds.includes(m.value);
+              return (
+                <Pill
+                  key={m.value}
+                  on={on}
+                  onClick={() => void saveDay(day, { meds: on ? entry.meds.filter((x) => x !== m.value) : [...entry.meds, m.value] })}
+                >
+                  <span>{m.emoji}</span>
+                  {m.label}
+                </Pill>
+              );
+            })}
+          </Group>
+          <Group title="Другое">
+            {OTHER_TAGS.map((t) => (
+              <Pill key={t.value} on={entry.tags.includes(t.value)} onClick={() => toggleTag(t.value)}>
+                <span>{t.emoji}</span>
+                {t.label}
+              </Pill>
+            ))}
+          </Group>
+          <Group title="Физическая активность">
+            {ACTIVITY.map((t) => (
+              <Pill key={t.value} on={entry.tags.includes(t.value)} onClick={() => toggleTag(t.value)}>
+                <span>{t.emoji}</span>
+                {t.label}
+              </Pill>
+            ))}
+          </Group>
+        </>
+      ) : (
+        <button onClick={() => setMore(true)} className="flex items-center gap-1.5 text-[0.8125rem] font-medium" style={{ color: "var(--accent)" }}>
+          <Icon name="plus" size={14} />
+          Ещё: выделения, тесты, температура, вес, активность
+        </button>
+      )}
+
       <div>
         <span className="mb-1.5 block text-xs font-semibold" style={{ color: "var(--muted)" }}>
           Заметка
@@ -378,93 +549,74 @@ export function DayLog({ day, showFlow = true }: { day: string; showFlow?: boole
   );
 }
 
-/**
- * Тесты на овуляцию, базальная температура и препараты — то, что делает
- * прогноз точнее. Свёрнуто, пока не нужно: большинству хватает основного.
- */
-function Extras({ day, entry }: { day: string; entry: FemDay }) {
-  const { saveDay, settings } = useFem();
-  const filled = !!entry.lh || entry.temp != null || entry.meds.length > 0;
-  const [open, setOpen] = useState(filled || settings?.goal === "conceive");
-  const [temp, setTemp] = useState(entry.temp != null ? String(entry.temp) : "");
-  useEffect(() => setTemp(entry.temp != null ? String(entry.temp) : ""), [day, entry.temp]);
-
-  const saveTemp = () => {
-    const v = Number(temp.replace(",", "."));
-    const next = temp.trim() === "" ? null : v >= 34 && v <= 39 ? Math.round(v * 100) / 100 : undefined;
-    if (next === undefined) {
-      setTemp(entry.temp != null ? String(entry.temp) : "");
+/** Число с единицей: температура, вес. Пусто — стереть; вне границ — вернуть как было. */
+function NumberField({
+  label,
+  hint,
+  unit,
+  placeholder,
+  value,
+  min,
+  max,
+  digits,
+  onSave,
+}: {
+  label: string;
+  hint?: string;
+  unit: string;
+  placeholder: string;
+  value: number | null;
+  min: number;
+  max: number;
+  digits: number;
+  onSave: (v: number | null) => void;
+}) {
+  const [text, setText] = useState(value != null ? String(value).replace(".", ",") : "");
+  useEffect(() => setText(value != null ? String(value).replace(".", ",") : ""), [value]);
+  const save = () => {
+    if (text.trim() === "") {
+      if (value != null) onSave(null);
       return;
     }
-    if (next !== entry.temp) void saveDay(day, { temp: next });
+    const v = Number(text.replace(",", "."));
+    if (!(v >= min && v <= max)) {
+      setText(value != null ? String(value).replace(".", ",") : "");
+      return;
+    }
+    const k = 10 ** digits;
+    const next = Math.round(v * k) / k;
+    if (next !== value) onSave(next);
   };
-
-  if (!open) {
-    return (
-      <button onClick={() => setOpen(true)} className="flex items-center gap-1.5 text-[0.8125rem] font-medium" style={{ color: "var(--accent)" }}>
-        <Icon name="plus" size={14} />
-        Тест на овуляцию, температура, препараты
-      </button>
-    );
-  }
   return (
-    <>
-      <Group title="Тест на овуляцию (ЛГ)">
-        {(
-          [
-            ["neg", "Отрицательный", "➖"],
-            ["pos", "Положительный", "✅"],
-          ] as const
-        ).map(([v, label, e]) => (
-          <Pill key={v} on={entry.lh === v} onClick={() => void saveDay(day, { lh: entry.lh === v ? null : v })}>
-            <span>{e}</span>
-            {label}
-          </Pill>
-        ))}
-      </Group>
-      <div>
-        <span className="mb-1.5 block text-xs font-semibold" style={{ color: "var(--muted)" }}>
-          Базальная температура (утром, до подъёма)
+    <div>
+      <span className="mb-1.5 block text-xs font-semibold" style={{ color: "var(--muted)" }}>
+        {label}
+        {hint ? <span className="font-normal"> · {hint}</span> : null}
+      </span>
+      <div className="flex items-center gap-1.5">
+        <input
+          inputMode="decimal"
+          className={`${inputClass} text-center tabular-nums`}
+          style={inputStyle}
+          placeholder={placeholder}
+          value={text}
+          onChange={(e) => setText(e.target.value.replace(/[^0-9.,]/g, "").slice(0, 6))}
+          onBlur={save}
+        />
+        <span className="text-sm" style={{ color: "var(--muted)" }}>
+          {unit}
         </span>
-        <div className="flex items-center gap-2">
-          <input
-            inputMode="decimal"
-            className={`${inputClass} max-w-[7.5rem] text-center tabular-nums`}
-            style={inputStyle}
-            placeholder="36,60"
-            value={temp}
-            onChange={(e) => setTemp(e.target.value.replace(/[^0-9.,]/g, "").slice(0, 5))}
-            onBlur={saveTemp}
-          />
-          <span className="text-sm" style={{ color: "var(--muted)" }}>
-            °C
-          </span>
-        </div>
       </div>
-      <Group title="Препараты">
-        {MEDS.map((m) => {
-          const on = entry.meds.includes(m.value);
-          return (
-            <Pill
-              key={m.value}
-              on={on}
-              onClick={() => void saveDay(day, { meds: on ? entry.meds.filter((x) => x !== m.value) : [...entry.meds, m.value] })}
-            >
-              <span>{m.emoji}</span>
-              {m.label}
-            </Pill>
-          );
-        })}
-      </Group>
-    </>
+    </div>
   );
 }
 
-function Group({ title, children }: { title: string; children: React.ReactNode }) {
+function Group({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
   return (
     <div>
       <span className="mb-1.5 block text-xs font-semibold" style={{ color: "var(--muted)" }}>
         {title}
+        {hint ? <span className="font-normal"> · {hint}</span> : null}
       </span>
       <div className="flex flex-wrap gap-1.5">{children}</div>
     </div>
@@ -500,5 +652,133 @@ export function DayHero({
         {line}
       </h2>
     </div>
+  );
+}
+
+/**
+ * Сердечко близости в календаре и на кнопках: внутри — иконка вида.
+ * Общее для пары — розовое (без защиты — сплошное красное), личное — только
+ * её, лавандовое.
+ */
+export type HeartKind = "protected" | "unprotected" | "oral" | "anal" | "touch" | "toys" | "solo" | "orgasm";
+
+const HEART = "M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.7 4.5c2.1 0 3.6 1.2 4.3 2.4h2c.7-1.2 2.2-2.4 4.3-2.4 3.7 0 5.8 3.9 4.3 7.3C19.5 16.4 12 21 12 21z";
+const PRIVATE_KINDS: HeartKind[] = ["toys", "solo", "orgasm"];
+export const HEART_LABEL: Record<HeartKind, string> = {
+  protected: "Секс с защитой",
+  unprotected: "Секс без защиты",
+  oral: "Оральный секс",
+  anal: "Анальный секс",
+  touch: "Интимные прикосновения",
+  toys: "Секс-игрушки",
+  solo: "Мастурбация",
+  orgasm: "Оргазм",
+};
+
+/** Сердечко на кнопке — на белом кружке, чтобы не сливалось с розовой выбранной кнопкой. */
+function ChipHeart({ kind }: { kind: HeartKind }) {
+  return (
+    <span className="-ml-1 flex h-[22px] w-[22px] items-center justify-center rounded-full bg-white">
+      <IntimacyHeart kind={kind} size={16} />
+    </span>
+  );
+}
+
+export function IntimacyHeart({ kind, size = 12 }: { kind: HeartKind; size?: number }) {
+  const fill = kind === "unprotected" ? "#e11d48" : PRIVATE_KINDS.includes(kind) ? "#a78bfa" : "#f472b6";
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-label={HEART_LABEL[kind]} className="shrink-0">
+      <path d={HEART} fill={fill} />
+      {kind === "protected" ? (
+        // Щит — «с защитой».
+        <path d="M12 7.6l4 1.5v3c0 2.6-1.8 4.3-4 5.1-2.2-.8-4-2.5-4-5.1v-3z" fill="#fff" />
+      ) : kind === "oral" ? (
+        // Язычок.
+        <g>
+          <path d="M9.2 9.4h5.6v3.8a2.8 2.8 0 0 1-5.6 0z" fill="#fff" />
+          <path d="M12 9.6v3.4" stroke={fill} strokeWidth={1.1} strokeLinecap="round" />
+        </g>
+      ) : kind === "anal" ? (
+        // Пробка.
+        <g fill="#fff">
+          <path d="M12 7.6c1.7 1.4 2.4 3 2 4.6-.3 1-1 1.5-2 1.5s-1.7-.5-2-1.5c-.4-1.6.3-3.2 2-4.6z" />
+          <rect x="11.35" y="13.4" width="1.3" height="1.6" />
+          <rect x="9.4" y="14.9" width="5.2" height="1.6" rx="0.8" />
+        </g>
+      ) : kind === "touch" ? (
+        // Ладонь.
+        <g stroke="#fff" strokeWidth={1.3} strokeLinecap="round" fill="#fff">
+          <path d="M9.4 12h5.2v2.4a2.6 2.6 0 0 1-5.2 0z" stroke="none" />
+          <path d="M9.9 9.4v3M11.4 8.7v3.3M12.9 8.7v3.3M14.3 9.4v3" fill="none" />
+        </g>
+      ) : kind === "toys" ? (
+        // Игрушка.
+        <g>
+          <path d="M9.8 15.4l4.6-6.2" stroke="#fff" strokeWidth={2.8} strokeLinecap="round" />
+          <circle cx="9.5" cy="15.9" r="1.3" fill="#fff" />
+        </g>
+      ) : kind === "solo" ? (
+        <path d="M12 8l1.1 2.8 2.8 1.1-2.8 1.1L12 15.8l-1.1-2.8-2.8-1.1 2.8-1.1z" fill="#fff" />
+      ) : kind === "orgasm" ? (
+        <g fill="#fff">
+          <path d="M11 8.6l.9 2.3 2.3.9-2.3.9-.9 2.3-.9-2.3-2.3-.9 2.3-.9z" />
+          <circle cx="14.8" cy="9.2" r="0.9" />
+          <circle cx="14.6" cy="14.4" r="0.7" />
+        </g>
+      ) : null}
+    </svg>
+  );
+}
+
+/** Какие сердечки у дня: общее (видно обоим) и — только у неё — личное. */
+export function heartsOf(intim: Intim | null | undefined, tags?: string[]): HeartKind[] {
+  const out: HeartKind[] = [];
+  if (intim?.kinds.includes("sex")) out.push(intim.protected === false ? "unprotected" : "protected");
+  for (const k of ["anal", "oral", "touch"] as const) if (intim?.kinds.includes(k)) out.push(k);
+  if (tags?.includes("s:toys")) out.push("toys");
+  if (tags?.includes("s:masturbation")) out.push("solo");
+  if (tags?.includes("s:orgasm") && out.length === 0) out.push("orgasm");
+  return out;
+}
+
+/** Главное сердечко дня — для календаря. */
+export function heartOf(intim: Intim | null | undefined, tags?: string[]): HeartKind | null {
+  return heartsOf(intim, tags)[0] ?? null;
+}
+
+/**
+ * Выбор общей близости — у неё в дневнике и у партнёра в календаре.
+ * Секс с защитой и без — взаимоисключающие, остальное — сколько угодно.
+ */
+export function IntimacyPicker({ value, onChange }: { value: Intim | null; onChange: (next: Intim | null) => void }) {
+  const kinds = value?.kinds ?? [];
+  const sexOn = kinds.includes("sex");
+  const setSex = (prot: boolean) => {
+    const same = sexOn && value?.protected === prot;
+    const rest = kinds.filter((k) => k !== "sex");
+    const next: IntimKind[] = same ? rest : [...rest, "sex"];
+    onChange(next.length ? { kinds: next, protected: same ? null : prot } : null);
+  };
+  const toggle = (k: IntimKind) => {
+    const next = kinds.includes(k) ? kinds.filter((x) => x !== k) : [...kinds, k];
+    onChange(next.length ? { kinds: next, protected: next.includes("sex") ? (value?.protected ?? null) : null } : null);
+  };
+  return (
+    <>
+      <Pill on={sexOn && value?.protected !== false} onClick={() => setSex(true)}>
+        <ChipHeart kind="protected" />
+        Секс с защитой
+      </Pill>
+      <Pill on={sexOn && value?.protected === false} onClick={() => setSex(false)}>
+        <ChipHeart kind="unprotected" />
+        Секс без защиты
+      </Pill>
+      {SHARED_KINDS.map((k) => (
+        <Pill key={k.value} on={kinds.includes(k.value)} onClick={() => toggle(k.value)}>
+          <ChipHeart kind={k.value} />
+          {k.label}
+        </Pill>
+      ))}
+    </>
   );
 }

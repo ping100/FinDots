@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { applyLook } from "@/lib/look";
 import { scaleFactor } from "@/lib/textScale";
 import type { Profile } from "@/lib/types";
-import type { FemDay, FemPeriod, FemSettings, Goal } from "@/lib/fem/cycle";
+import type { FemDay, FemPeriod, FemSettings, Goal, Intim } from "@/lib/fem/cycle";
 
 /**
  * Данные FemDots: настройки, отметки месячных и дни с самочувствием.
@@ -54,6 +54,13 @@ export interface FemStore {
   /** Что ещё видит партнёр: статус, цель, напоминание про таблетку. */
   shareOptions: ShareOptions | null;
   setShareOptions: (next: ShareOptions) => Promise<void>;
+
+  /** Близость по дням: общая для пары (сердечко у обоих). protected: null — не отмечено. */
+  intimacy: Map<string, Intim>;
+  /** Отметить / снять близость (null — снять). */
+  setIntimacy: (day: string, value: Intim | null) => Promise<void>;
+  /** То же со стороны партнёра — в её календаре. */
+  setPartnerIntimacy: (day: string, value: Intim | null) => Promise<void>;
 }
 
 export type SignalKind = "care" | "buy" | "alone" | "heart" | "ok";
@@ -90,6 +97,7 @@ export interface PartnerView {
   pill_nudge: boolean;
   periods: FemPeriod[];
   lh_days: string[];
+  intimacy: ({ day: string } & Intim)[];
   today: { mood: string | null; symptoms: string[]; status: string | null } | null;
 }
 
@@ -110,7 +118,20 @@ export function useFem(): FemStore {
   return store;
 }
 
-const EMPTY_DAY = { flow: null, symptoms: [], mood: null, note: null, lh: null, temp: null, meds: [], pill: null, status: null };
+const EMPTY_DAY = {
+  flow: null,
+  symptoms: [],
+  mood: null,
+  note: null,
+  lh: null,
+  temp: null,
+  meds: [],
+  pill: null,
+  status: null,
+  tags: [],
+  weight: null,
+  preg_test: null,
+};
 
 export function FemProvider({ children }: { children: ReactNode }) {
   const supabase = useMemo(() => createClient(), []);
@@ -125,6 +146,7 @@ export function FemProvider({ children }: { children: ReactNode }) {
   const [share, setShare] = useState<MyShare | null>(null);
   const [signals, setSignals] = useState<FemSignal[]>([]);
   const [shareOptions, setShareOptionsState] = useState<ShareOptions | null>(null);
+  const [intimacy, setIntimacyState] = useState<Map<string, Intim>>(new Map());
 
   const reloadShares = useCallback(async () => {
     const [view, mine, options] = await Promise.all([
@@ -153,11 +175,26 @@ export function FemProvider({ children }: { children: ReactNode }) {
       setUserId(user.id);
       // Партнёрские данные — своим запросом, параллельно: их отсутствие не ошибка.
       const shares = reloadShares().catch(() => undefined);
+      const intim = supabase
+        .from("fem_intimacy")
+        .select("day, protected, kinds")
+        .eq("active", true)
+        .then((res) => {
+          if (!res.error)
+            setIntimacyState(
+              new Map(
+                (res.data ?? []).map((x) => [
+                  x.day as string,
+                  { protected: x.protected as boolean | null, kinds: (x.kinds ?? ["sex"]) as Intim["kinds"] },
+                ]),
+              ),
+            );
+        });
       const [p, s, per, d] = await Promise.all([
         supabase.from("profiles").select("*").eq("id", user.id).single(),
         supabase.from("fem_settings").select("*").eq("user_id", user.id).maybeSingle(),
         supabase.from("fem_periods").select("id, start_date, end_date").order("start_date"),
-        supabase.from("fem_days").select("day, flow, symptoms, mood, note, lh, temp, meds, pill, status").order("day").limit(3000),
+        supabase.from("fem_days").select("day, flow, symptoms, mood, note, lh, temp, meds, pill, status, tags, weight, preg_test").order("day").limit(3000),
       ]);
       const failed = [p, s, per, d].find((r) => r.error)?.error;
       if (failed) setError("Не получилось загрузить данные — проверьте интернет");
@@ -168,9 +205,14 @@ export function FemProvider({ children }: { children: ReactNode }) {
       }
       setPeriods((per.data ?? []) as FemPeriod[]);
       setDays(
-        new Map(((d.data ?? []) as FemDay[]).map((x) => [x.day, { ...x, temp: x.temp == null ? null : Number(x.temp) }])),
+        new Map(
+          ((d.data ?? []) as FemDay[]).map((x) => [
+            x.day,
+            { ...x, temp: x.temp == null ? null : Number(x.temp), weight: x.weight == null ? null : Number(x.weight) },
+          ]),
+        ),
       );
-      await shares;
+      await Promise.all([shares, intim]);
       setReady(true);
     })();
   }, [supabase, reloadShares]);
@@ -266,7 +308,10 @@ export function FemProvider({ children }: { children: ReactNode }) {
         next.temp == null &&
         next.meds.length === 0 &&
         !next.pill &&
-        !next.status;
+        !next.status &&
+        next.tags.length === 0 &&
+        next.weight == null &&
+        !next.preg_test;
       setDays((prev) => {
         const map = new Map(prev);
         if (empty) map.delete(day);
@@ -289,12 +334,14 @@ export function FemProvider({ children }: { children: ReactNode }) {
       supabase.from("fem_days").delete().eq("user_id", userId),
       supabase.from("fem_periods").delete().eq("user_id", userId),
       supabase.from("fem_settings").delete().eq("user_id", userId),
+      supabase.from("fem_intimacy").delete().eq("owner_id", userId),
     ]);
     fail(results.find((r) => r.error)?.error?.message);
     setDays(new Map());
     setPeriods([]);
     setSettings(null);
     setShare(null);
+    setIntimacyState(new Map());
   }, [fail, supabase, userId]);
 
   const createShare: FemStore["createShare"] = useCallback(
@@ -398,16 +445,61 @@ export function FemProvider({ children }: { children: ReactNode }) {
     [fail, supabase],
   );
 
+  const setIntimacy: FemStore["setIntimacy"] = useCallback(
+    async (day, v) => {
+      if (!userId) return;
+      setIntimacyState((prev) => {
+        const map = new Map(prev);
+        if (v) map.set(day, v);
+        else map.delete(day);
+        return map;
+      });
+      const res = await supabase
+        .from("fem_intimacy")
+        .upsert(
+          { owner_id: userId, day, protected: v?.protected ?? null, kinds: v?.kinds ?? [], added_by: userId, active: !!v },
+          { onConflict: "owner_id,day" },
+        );
+      fail(res.error?.message);
+    },
+    [fail, supabase, userId],
+  );
+
+  const setPartnerIntimacy: FemStore["setPartnerIntimacy"] = useCallback(
+    async (day, v) => {
+      setPartner((prev) =>
+        prev
+          ? {
+              ...prev,
+              intimacy: [
+                ...(prev.intimacy ?? []).filter((x) => x.day !== day),
+                ...(v ? [{ day, ...v }] : []),
+              ].sort((a, b) => a.day.localeCompare(b.day)),
+            }
+          : prev,
+      );
+      const res = await supabase.rpc("fem_partner_intimacy_set", {
+        p_day: day,
+        p_kinds: v?.kinds ?? [],
+        p_protected: v?.protected ?? null,
+      });
+      fail(res.error?.message);
+    },
+    [fail, supabase],
+  );
+
   const value = useMemo<FemStore>(
     () => ({
       ready, error, profile, settings, periods, days, saveSettings, saveProfile, startPeriod, endPeriod, deletePeriod, saveDay, deleteAll,
       partner, share, createShare, updateShare, revokeShare, acceptCode, leavePartner, setPartnerRemind, reloadShares,
       userId, signals, sendSignal, markSignalsSeen, shareOptions, setShareOptions,
+      intimacy, setIntimacy, setPartnerIntimacy,
     }),
     [
       ready, error, profile, settings, periods, days, saveSettings, saveProfile, startPeriod, endPeriod, deletePeriod, saveDay, deleteAll,
       partner, share, createShare, updateShare, revokeShare, acceptCode, leavePartner, setPartnerRemind, reloadShares,
       userId, signals, sendSignal, markSignalsSeen, shareOptions, setShareOptions,
+      intimacy, setIntimacy, setPartnerIntimacy,
     ],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

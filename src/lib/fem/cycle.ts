@@ -67,6 +67,14 @@ export interface FemDay {
   pill: boolean | null;
   /** Статус дня для партнёра. */
   status: string | null;
+  /**
+   * Остальные разделы дневника, ключи с префиксом: d: — выделения,
+   * s: — близость (подробности, только ей), x: — желание, o: — другое,
+   * a: — активность.
+   */
+  tags: string[];
+  weight: number | null;
+  preg_test: "none" | "neg" | "faint" | "pos" | null;
 }
 
 export type Flow = "spotting" | "light" | "medium" | "heavy";
@@ -467,27 +475,111 @@ export const FLOWS: { value: Flow; label: string; drops: number }[] = [
   { value: "heavy", label: "Обильные", drops: 3 },
 ];
 
-export const SYMPTOMS: { value: string; label: string; emoji: string }[] = [
-  { value: "cramps", label: "Спазмы", emoji: "⚡" },
-  { value: "headache", label: "Голова", emoji: "🤕" },
-  { value: "bloating", label: "Вздутие", emoji: "🎈" },
-  { value: "breasts", label: "Грудь", emoji: "💗" },
-  { value: "acne", label: "Высыпания", emoji: "🔴" },
-  { value: "fatigue", label: "Усталость", emoji: "🥱" },
-  { value: "cravings", label: "Тянет на сладкое", emoji: "🍫" },
+/** Симптомы: тело и пищеварение — один список, в дневнике — два раздела. */
+export const SYMPTOMS: { value: string; label: string; emoji: string; group?: "digestion" }[] = [
+  { value: "ok", label: "Всё в порядке", emoji: "👍" },
+  { value: "cramps", label: "Боли внизу живота", emoji: "⚡" },
+  { value: "breasts", label: "Чувствительная грудь", emoji: "💗" },
+  { value: "headache", label: "Головная боль", emoji: "🤕" },
+  { value: "acne", label: "Прыщи", emoji: "🔴" },
+  { value: "backache", label: "Боль в спине", emoji: "🔙" },
+  { value: "fatigue", label: "Усталость", emoji: "🪫" },
+  { value: "cravings", label: "Повышенный аппетит", emoji: "🍔" },
   { value: "insomnia", label: "Бессонница", emoji: "🌙" },
-  { value: "nausea", label: "Тошнота", emoji: "🤢" },
-  { value: "backache", label: "Поясница", emoji: "🔙" },
+  { value: "bellyache", label: "Боль в животе", emoji: "😣" },
+  { value: "itch", label: "Зуд во влагалище", emoji: "🌵" },
+  { value: "dryness", label: "Сухость во влагалище", emoji: "🏜️" },
+  { value: "nausea", label: "Тошнота", emoji: "🤢", group: "digestion" },
+  { value: "bloating", label: "Вздутие живота", emoji: "🎈", group: "digestion" },
+  { value: "constipation", label: "Запор", emoji: "🔒", group: "digestion" },
+  { value: "diarrhea", label: "Диарея", emoji: "🚽", group: "digestion" },
+];
+
+export type TagOption = { value: string; label: string; emoji: string };
+
+/** Вагинальные выделения (не месячные). «Тягучие, как белок» — признак фертильных дней. */
+export const DISCHARGE: TagOption[] = [
+  { value: "d:none", label: "Выделений нет", emoji: "🚫" },
+  { value: "d:creamy", label: "Кремообразные", emoji: "🥛" },
+  { value: "d:watery", label: "Водянистые", emoji: "💧" },
+  { value: "d:sticky", label: "Липкие", emoji: "🍯" },
+  { value: "d:eggwhite", label: "Тягучие, как белок", emoji: "🥚" },
+  { value: "d:spotting", label: "Кровомажущие", emoji: "🩸" },
+  { value: "d:unusual", label: "Нетипичные", emoji: "❓" },
+  { value: "d:clumpy", label: "Белые, комковатые", emoji: "☁️" },
+  { value: "d:grey", label: "Серые", emoji: "🌫️" },
+];
+
+/** Близость пары: видна обоим, у каждого вида — своя иконка в сердечке. */
+export type IntimKind = "sex" | "oral" | "anal" | "touch";
+export interface Intim {
+  kinds: IntimKind[];
+  /** Для «sex»: с защитой (true), без (false), не сказано (null). */
+  protected: boolean | null;
+}
+
+export const SHARED_KINDS: { value: Exclude<IntimKind, "sex">; label: string }[] = [
+  { value: "oral", label: "Оральный секс" },
+  { value: "anal", label: "Анальный секс" },
+  { value: "touch", label: "Интимные прикосновения" },
+];
+
+/** Личное — только ей, лавандовые сердечки. */
+export const SEX_TAGS: (TagOption & { heart: "toys" | "solo" | "orgasm" })[] = [
+  { value: "s:masturbation", label: "Мастурбация", emoji: "", heart: "solo" },
+  { value: "s:toys", label: "Секс-игрушки", emoji: "", heart: "toys" },
+  { value: "s:orgasm", label: "Оргазм", emoji: "", heart: "orgasm" },
+];
+
+export const DESIRE: TagOption[] = [
+  { value: "x:high", label: "Сильное желание", emoji: "🔥" },
+  { value: "x:mid", label: "Среднее желание", emoji: "❤️" },
+  { value: "x:low", label: "Слабое желание", emoji: "🤍" },
+];
+
+export const OTHER_TAGS: TagOption[] = [
+  { value: "o:travel", label: "Путешествие", emoji: "📍" },
+  { value: "o:stress", label: "Стресс", emoji: "⚡" },
+  { value: "o:meditation", label: "Медитация", emoji: "🪷" },
+  { value: "o:journal", label: "Дневник", emoji: "📔" },
+  { value: "o:kegel", label: "Упражнения Кегеля", emoji: "🌀" },
+  { value: "o:breathing", label: "Дыхательные упражнения", emoji: "🫁" },
+  { value: "o:illness", label: "Болезнь или травма", emoji: "🩹" },
+  { value: "o:alcohol", label: "Алкоголь", emoji: "🍷" },
+];
+
+export const ACTIVITY: TagOption[] = [
+  { value: "a:none", label: "Без тренировки", emoji: "🛋️" },
+  { value: "a:yoga", label: "Йога", emoji: "🧘" },
+  { value: "a:gym", label: "Тренажёрный зал", emoji: "🏋️" },
+  { value: "a:dance", label: "Аэробика и танцы", emoji: "💃" },
+  { value: "a:swim", label: "Плавание", emoji: "🏊" },
+  { value: "a:team", label: "Командный спорт", emoji: "🏀" },
+  { value: "a:run", label: "Бег", emoji: "🏃" },
+  { value: "a:bike", label: "Велосипед", emoji: "🚴" },
+  { value: "a:walk", label: "Ходьба", emoji: "🚶" },
+];
+
+export const PREG_TESTS: { value: NonNullable<FemDay["preg_test"]>; label: string; emoji: string }[] = [
+  { value: "none", label: "Не делала", emoji: "➖" },
+  { value: "neg", label: "Отрицательный", emoji: "⚪" },
+  { value: "faint", label: "Бледная полоска", emoji: "🌫️" },
+  { value: "pos", label: "Положительный", emoji: "💗" },
 ];
 
 export const MOODS: { value: string; label: string; emoji: string }[] = [
-  { value: "calm", label: "Спокойно", emoji: "😌" },
-  { value: "happy", label: "Радостно", emoji: "😊" },
-  { value: "energetic", label: "Бодро", emoji: "⚡️" },
-  { value: "sad", label: "Грустно", emoji: "😢" },
+  { value: "calm", label: "Спокойствие", emoji: "😌" },
+  { value: "happy", label: "Радость", emoji: "😊" },
+  { value: "energetic", label: "Много энергии", emoji: "⚡️" },
+  { value: "sad", label: "Грусть", emoji: "😢" },
   { value: "irritated", label: "Раздражение", emoji: "😠" },
-  { value: "anxious", label: "Тревожно", emoji: "😰" },
-  { value: "tired", label: "Вяло", emoji: "😴" },
+  { value: "anxious", label: "Тревога", emoji: "😰" },
+  { value: "tired", label: "Мало энергии", emoji: "😴" },
+  { value: "playful", label: "Игривость", emoji: "😜" },
+  { value: "swings", label: "Перепады настроения", emoji: "🎢" },
+  { value: "down", label: "Подавленность", emoji: "😞" },
+  { value: "apathy", label: "Апатия", emoji: "😶" },
+  { value: "confused", label: "Растерянность", emoji: "😵‍💫" },
 ];
 
 export const PHASE_TEXT: Record<Phase, { title: string; hint: string }> = {

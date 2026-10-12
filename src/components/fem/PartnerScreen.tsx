@@ -11,6 +11,7 @@ import { useFem } from "./DataProvider";
 import { FemHeader } from "./Shell";
 import { CycleRing, DayHero, plural } from "./parts";
 import { PartnerTogether } from "./Together";
+import { PartnerCalendar } from "./PartnerCalendar";
 
 /** Фаза — глазами партнёра: что происходит и как поддержать. */
 const PARTNER_PHASE: Record<Phase, { title: string; about: string; tips: string[] }> = {
@@ -199,6 +200,8 @@ export function PartnerScreen() {
           />
         </div>
       ) : null}
+
+      <PartnerCalendar info={info} />
 
       <div className="fem-card mt-3 overflow-hidden rounded-3xl">
         <div className="flex items-center gap-3 px-4 py-3.5">

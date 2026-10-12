@@ -6,7 +6,7 @@ import { FEM_GRADIENT, PHASE_COLOR, buildMarks, cycleInfo, signalsFrom, daysBetw
 import { long } from "@/lib/fem/format";
 import { useFem } from "@/components/fem/DataProvider";
 import { FemHeader } from "@/components/fem/Shell";
-import { DayLog } from "@/components/fem/parts";
+import { DayLog, IntimacyHeart, heartOf } from "@/components/fem/parts";
 import { Sheet } from "@/components/ui";
 
 const HEADS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
@@ -30,7 +30,7 @@ const TEAL = "#14b8a6";
  * Точка под числом — в этот день отмечено самочувствие.
  */
 export default function FemCalendar() {
-  const { settings, periods, days, startPeriod, endPeriod, deletePeriod } = useFem();
+  const { settings, periods, days, intimacy, startPeriod, endPeriod, deletePeriod } = useFem();
   const now = today();
   const info = useMemo(
     () => cycleInfo(periods, settings!, now, signalsFrom(days, settings)),
@@ -85,6 +85,11 @@ export default function FemCalendar() {
           <Legend style={{ border: `1.5px dotted ${PHASE_COLOR.period}` }} label="Прогноз" />
           <Legend style={{ background: TEAL }} label="Фертильные" />
           <Legend style={{ border: `1.5px dotted ${TEAL}` }} label="Овуляция" />
+          <span className="flex items-center gap-1">
+            <IntimacyHeart kind="protected" size={11} />
+            <IntimacyHeart kind="unprotected" size={11} />
+            Близость
+          </span>
         </div>
       </div>
 
@@ -104,6 +109,7 @@ export default function FemCalendar() {
                 const d = iso(y, m, i + 1);
                 const mark = marks.get(d);
                 const isToday = d === now;
+                const heart = heartOf(intimacy.get(d), days.get(d)?.tags);
                 let bg = isToday ? "var(--surface-2)" : "transparent";
                 let color = "var(--text)";
                 let border = "none";
@@ -132,10 +138,15 @@ export default function FemCalendar() {
                       </span>
                     ) : null}
                     <span
-                      className="flex h-9 w-9 items-center justify-center rounded-full text-[0.9375rem] tabular-nums"
+                      className="relative flex h-9 w-9 items-center justify-center rounded-full text-[0.9375rem] tabular-nums"
                       style={{ background: bg, color, border, fontWeight: isToday ? 800 : 500 }}
                     >
                       {i + 1}
+                      {heart ? (
+                        <span className="absolute -right-2 -top-1.5 rounded-full p-[1px]" style={{ background: "var(--surface)" }}>
+                          <IntimacyHeart kind={heart} size={16} />
+                        </span>
+                      ) : null}
                     </span>
                     <span className="mt-0.5 h-1 w-1 rounded-full" style={{ background: days.has(d) ? "var(--accent)" : "transparent" }} />
                   </button>

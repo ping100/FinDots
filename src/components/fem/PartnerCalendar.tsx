@@ -42,6 +42,8 @@ export function PartnerCalendar({ info }: { info: CycleInfo }) {
   const count = new Date(y, m + 1, 0).getDate();
   const lead = (first.getDay() + 6) % 7;
   const pickedValue = picked ? (hearts.get(picked) ?? null) : null;
+  // Подпись про сердечки — только когда в этом месяце они есть.
+  const monthHasHearts = [...hearts.keys()].some((d) => d.startsWith(iso(y, m, 1).slice(0, 8)));
 
   return (
     <div className="fem-card mt-3 rounded-3xl p-3">
@@ -107,9 +109,11 @@ export function PartnerCalendar({ info }: { info: CycleInfo }) {
           );
         })}
       </div>
-      <p className="mt-1 text-center text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-        Сердечки — близость, которую отметила {partner.owner_name}. Нажмите на сердечко — подробнее
-      </p>
+      {monthHasHearts ? (
+        <p className="mt-1 text-center text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+          Сердечки — близость, которую отметила {partner.owner_name}. Нажмите на сердечко — подробнее
+        </p>
+      ) : null}
 
       <Sheet open={!!picked} title={picked ? long(picked) : ""} onClose={() => setPicked(null)}>
         {picked ? (

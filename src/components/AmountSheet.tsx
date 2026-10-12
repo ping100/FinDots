@@ -32,6 +32,8 @@ export function AmountSheet({
   optionLabel,
   subcategories,
   onAddSubcategory,
+  onRenameSubcategory,
+  onDeleteSubcategory,
   submitLabel = "Готово",
   extra,
   withFee,
@@ -52,6 +54,9 @@ export function AmountSheet({
   subcategories?: { id: string; name: string }[];
   /** Завести новое уточнение, не выходя из окна; возвращает его id. */
   onAddSubcategory?: (name: string) => Promise<string>;
+  /** Переименовать и убрать уточнение — тоже не выходя из окна. */
+  onRenameSubcategory?: (id: string, name: string) => Promise<void>;
+  onDeleteSubcategory?: (id: string) => Promise<void>;
   submitLabel?: string;
   /** Дополнительная кнопка под подзаголовком — например, «настроить категорию». */
   extra?: ReactNode;
@@ -68,6 +73,9 @@ export function AmountSheet({
   const [subcategoryId, setSubcategoryId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [newSub, setNewSub] = useState("");
+  // «Изменить»: уточнения можно переименовать или убрать.
+  const [editingSubs, setEditingSubs] = useState(false);
+  const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
 
@@ -107,6 +115,31 @@ export function AmountSheet({
       if (prev === "0") return key;
       return prev + key;
     });
+  };
+
+  const renameSub = async () => {
+    if (!renaming || !onRenameSubcategory) return;
+    const name = renaming.name.trim();
+    if (!name) return;
+    setProblem(null);
+    try {
+      await onRenameSubcategory(renaming.id, name);
+      setRenaming(null);
+    } catch (e) {
+      setProblem(e instanceof Error ? e.message : "Не получилось переименовать");
+    }
+  };
+
+  const deleteSub = async (id: string) => {
+    if (!onDeleteSubcategory) return;
+    setProblem(null);
+    try {
+      await onDeleteSubcategory(id);
+      if (subcategoryId === id) setSubcategoryId(null);
+      setRenaming(null);
+    } catch (e) {
+      setProblem(e instanceof Error ? e.message : "Не получилось убрать уточнение");
+    }
   };
 
   const createSub = async () => {
@@ -198,21 +231,53 @@ export function AmountSheet({
       </div>
 
       {subcategories || onAddSubcategory ? (
-        <FieldGroup label="Уточнение">
+        <div className="mb-3" role="group" aria-label="Уточнение">
+          <div className="mb-1.5 flex items-center justify-between">
+            <span className="text-sm" style={{ color: "var(--muted)" }}>
+              Уточнение
+            </span>
+            {subcategories?.length && onRenameSubcategory ? (
+              <button
+                onClick={() => {
+                  setEditingSubs((v) => !v);
+                  setRenaming(null);
+                  setAdding(false);
+                }}
+                className="text-sm font-medium"
+                style={{ color: "var(--accent)" }}
+              >
+                {editingSubs ? "Готово" : "Изменить"}
+              </button>
+            ) : null}
+          </div>
+          {editingSubs ? (
+            <p className="mb-2 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+              Нажмите на уточнение, чтобы переименовать или убрать его
+            </p>
+          ) : null}
           <div className="flex flex-wrap gap-2">
-            <Chip active={subcategoryId === null} onClick={() => setSubcategoryId(null)}>
-              без уточнения
-            </Chip>
+            {editingSubs ? null : (
+              <Chip active={subcategoryId === null} onClick={() => setSubcategoryId(null)}>
+                без уточнения
+              </Chip>
+            )}
             {subcategories?.map((sub) => (
               <Chip
                 key={sub.id}
-                active={subcategoryId === sub.id}
-                onClick={() => setSubcategoryId(sub.id)}
+                active={editingSubs ? renaming?.id === sub.id : subcategoryId === sub.id}
+                onClick={() => (editingSubs ? setRenaming({ id: sub.id, name: sub.name }) : setSubcategoryId(sub.id))}
               >
-                {sub.name}
+                {editingSubs ? (
+                  <span className="flex items-center gap-1">
+                    {sub.name}
+                    <Icon name="edit" size={12} />
+                  </span>
+                ) : (
+                  sub.name
+                )}
               </Chip>
             ))}
-            {onAddSubcategory && !adding ? (
+            {onAddSubcategory && !adding && !editingSubs ? (
               <Chip onClick={() => setAdding(true)}>
                 <span className="flex items-center gap-1">
                   <Icon name="plus" size={13} />
@@ -249,7 +314,46 @@ export function AmountSheet({
               </button>
             </div>
           ) : null}
-        </FieldGroup>
+
+          {editingSubs && renaming ? (
+            <div className="mt-2 space-y-2">
+              <div className="flex gap-2">
+                <input
+                  autoFocus
+                  className={inputClass}
+                  style={inputStyle}
+                  value={renaming.name}
+                  maxLength={40}
+                  onChange={(e) => setRenaming({ ...renaming, name: e.target.value })}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      void renameSub();
+                    }
+                    if (e.key === "Escape") setRenaming(null);
+                  }}
+                />
+                <button
+                  onClick={() => void renameSub()}
+                  disabled={!renaming.name.trim()}
+                  className="shrink-0 rounded-2xl px-4 text-sm font-semibold text-white disabled:opacity-40"
+                  style={{ background: "var(--accent)" }}
+                >
+                  ОК
+                </button>
+              </div>
+              {onDeleteSubcategory ? (
+                <button
+                  onClick={() => void deleteSub(renaming.id)}
+                  className="text-sm"
+                  style={{ color: "var(--danger)" }}
+                >
+                  Убрать уточнение «{subcategories?.find((x) => x.id === renaming.id)?.name}»
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
       ) : null}
 
       {options?.length ? (

@@ -28,6 +28,8 @@ export function CategoryEditor({
   const [color, setColor] = useState(PALETTE[0]);
   const [limit, setLimit] = useState("");
   const [newSub, setNewSub] = useState("");
+  // Переименование уточнения: нажали на его название — поле на месте кружка.
+  const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
   const [planned, setPlanned] = useState("");
   const [dueDay, setDueDay] = useState("");
   const [paid, setPaid] = useState(false);
@@ -45,6 +47,7 @@ export function CategoryEditor({
     setColor(category?.color ?? PALETTE[Math.floor(Math.random() * PALETTE.length)]);
     setLimit(category?.monthly_limit != null ? String(category.monthly_limit) : "");
     setNewSub("");
+    setRenaming(null);
     setPlanned(category?.planned_amount != null ? String(category.planned_amount) : "");
     setDueDay(category?.due_day != null ? String(category.due_day) : "");
     setPaid(category?.paid_month === monthStart());
@@ -55,6 +58,13 @@ export function CategoryEditor({
   // внутри него нечего: сумма и так известна заранее, в отличие от
   // обычной категории трат, где подкатегория разбивает общий лимит.
   const isRecurring = recurring || category?.planned_amount != null;
+
+  const renameSub = async () => {
+    const name = renaming?.name.trim();
+    if (!renaming || !name) return;
+    await saveCategory({ id: renaming.id, name });
+    setRenaming(null);
+  };
 
   const addSub = async () => {
     const name = newSub.trim();
@@ -228,13 +238,49 @@ export function CategoryEditor({
         >
           {subs.length ? (
             <div className="mb-2 flex flex-wrap gap-2">
-              {subs.map((sub) => (
+              {subs.map((sub) =>
+                renaming?.id === sub.id ? (
+                  <span key={sub.id} className="flex w-full gap-2">
+                    <input
+                      autoFocus
+                      className={inputClass}
+                      style={inputStyle}
+                      value={renaming.name}
+                      maxLength={40}
+                      onChange={(e) => setRenaming({ ...renaming, name: e.target.value })}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          void renameSub();
+                        }
+                        if (e.key === "Escape") setRenaming(null);
+                      }}
+                    />
+                    <button
+                      onClick={() => void renameSub()}
+                      disabled={!renaming.name.trim()}
+                      className="shrink-0 rounded-2xl px-4 text-sm font-semibold text-white disabled:opacity-40"
+                      style={{ background: "var(--accent)" }}
+                    >
+                      ОК
+                    </button>
+                  </span>
+                ) : (
                 <span
                   key={sub.id}
                   className="flex items-center gap-1.5 rounded-full border py-1.5 pl-3.5 pr-1.5 text-sm"
                   style={{ background: "var(--surface-2)", borderColor: "var(--border)" }}
                 >
-                  {sub.name}
+                  <button
+                    onClick={() => setRenaming({ id: sub.id, name: sub.name })}
+                    aria-label={`Переименовать «${sub.name}»`}
+                    className="flex items-center gap-1"
+                  >
+                    {sub.name}
+                    <span className="opacity-40">
+                      <Icon name="edit" size={12} />
+                    </span>
+                  </button>
                   <button
                     onClick={() => deleteCategory(sub.id)}
                     aria-label={`Убрать «${sub.name}»`}
@@ -243,7 +289,8 @@ export function CategoryEditor({
                     <Icon name="close" size={13} />
                   </button>
                 </span>
-              ))}
+                ),
+              )}
             </div>
           ) : null}
           <div className="flex gap-2">

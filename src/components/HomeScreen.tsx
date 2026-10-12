@@ -84,7 +84,7 @@ export function HomeScreen() {
   const {
     profile, wallets, categories, transactions, rates,
     balanceOf, poolOf, toBase,
-    addIncome, allocate, addExpense, addTransfer, addSubcategory, saveCategory, reorderCategories, moneyHidden,
+    addIncome, allocate, addExpense, addTransfer, addSubcategory, saveCategory, deleteCategory, reorderCategories, moneyHidden,
   } = useStore();
 
   const [offset, setOffset] = useState(0);
@@ -669,6 +669,8 @@ export function HomeScreen() {
             ? (name) => addSubcategory(dialog.category.id, name)
             : undefined
         }
+        onRenameSubcategory={(id, name) => saveCategory({ id, name })}
+        onDeleteSubcategory={(id) => deleteCategory(id)}
         onClose={() => setDialog(null)}
         onSubmit={async ({ amount, note, occurredAt, subcategoryId }) => {
           if (dialog?.kind !== "income") return;
@@ -755,6 +757,8 @@ export function HomeScreen() {
             ? (name) => addSubcategory(dialog.category.id, name)
             : undefined
         }
+        onRenameSubcategory={(id, name) => saveCategory({ id, name })}
+        onDeleteSubcategory={(id) => deleteCategory(id)}
         submitLabel="Записать трату"
         withFee
         onClose={() => setDialog(null)}

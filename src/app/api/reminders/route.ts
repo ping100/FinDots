@@ -76,12 +76,12 @@ export async function POST(request: Request) {
   const messages = [
     ...tasks.map((row) => ({
       sub: row,
-      push: { title: "Напоминание", body: row.title, url: "/tasks", tag: `task-${row.task_id}` },
+      push: { title: `📌 ${row.title}`, body: "Время пришло — отметьте, когда сделаете", url: "/tasks", tag: `task-${row.task_id}` },
     })),
     ...bills.map((row) => ({
       sub: row,
       push: {
-        title: "Скоро платёж",
+        title: "💳 Скоро платёж",
         body: `${row.name} — ${money(Number(row.amount), row.currency)}, ${whenDue(row.days_left, row.due)}`,
         url: "/money",
         tag: `bill-${row.category_id}-${row.due}`,
@@ -127,28 +127,39 @@ function money(amount: number, currency: string): string {
   return `${rounded.toLocaleString("ru-RU", { minimumFractionDigits: digits, maximumFractionDigits: digits })} ${symbol}`;
 }
 
-/** Текст напоминаний «Здоровья». Тег один на вид: новое заменяет старое, не копится. */
+/**
+ * Текст напоминаний «Здоровья». Тег один на вид: новое заменяет старое, не
+ * копится. Стаканы рисуем капельками — прогресс виден, не читая цифр.
+ */
 function wellnessPush(row: { kind: "water" | "sleep_prep" | "sleep"; glasses: number; goal: number; prep_min: number }) {
   if (row.kind === "water") {
+    const left = Math.max(row.goal - row.glasses, 0);
     return {
-      title: "Пора выпить воды",
+      title: "💧 Пора выпить воды",
       body:
         row.glasses > 0
-          ? `Сегодня ${row.glasses} из ${row.goal} стаканов — ещё один?`
-          : `Начните со стакана воды — цель на сегодня ${row.goal}`,
+          ? `${drops(row.glasses, row.goal)}  ${row.glasses} из ${row.goal} — осталось ${left} ${plural(left, "стакан", "стакана", "стаканов")}`
+          : `Начните со стакана воды — цель на сегодня ${row.goal} ${plural(row.goal, "стакан", "стакана", "стаканов")}`,
       url: "/tasks",
       tag: "water",
     };
   }
   if (row.kind === "sleep_prep") {
     return {
-      title: "Скоро спать",
+      title: "🌙 Скоро спать",
       body: `Через ${row.prep_min} мин — отбой. Самое время отложить телефон`,
       url: "/tasks",
       tag: "sleep",
     };
   }
-  return { title: "Пора спать", body: "Спокойной ночи! Задачи подождут до утра", url: "/tasks", tag: "sleep" };
+  return { title: "😴 Пора спать", body: "Спокойной ночи! Задачи подождут до утра", url: "/tasks", tag: "sleep" };
+}
+
+/** «💧💧💧○○○»: до 10 делений, дальше — пропорционально. */
+function drops(glasses: number, goal: number): string {
+  const total = Math.min(goal, 10);
+  const filled = goal <= 10 ? Math.min(glasses, goal) : Math.round((glasses / goal) * 10);
+  return "💧".repeat(filled) + "○".repeat(Math.max(total - filled, 0));
 }
 
 /** «Доброе утро! Сегодня 5 задач» — «Первая в 10:00 — Позвонить в банк. Пропущено: 2». */
@@ -157,7 +168,10 @@ function summaryPush(row: { total: number; overdue: number; first_title: string 
   if (row.first_title && row.first_time) parts.push(`Первая в ${row.first_time.slice(0, 5)} — ${row.first_title}`);
   if (row.overdue > 0) parts.push(`Пропущено: ${row.overdue}`);
   return {
-    title: row.total > 0 ? `Доброе утро! Сегодня ${row.total} ${plural(row.total, "задача", "задачи", "задач")}` : "Доброе утро! На сегодня задач нет",
+    title:
+      row.total > 0
+        ? `☀️ Доброе утро! Сегодня ${row.total} ${plural(row.total, "задача", "задачи", "задач")}`
+        : "☀️ Доброе утро! На сегодня задач нет",
     body: parts.length ? parts.join(". ") : row.total > 0 ? "Хорошего дня!" : "Свободный день — можно что-то запланировать",
     url: "/tasks",
     tag: "summary",

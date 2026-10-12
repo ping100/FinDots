@@ -26,8 +26,8 @@ export async function POST() {
   const results = await Promise.all(
     subscriptions.map((target) =>
       sendPush(target, {
-        title: "Dots",
-        body: "Уведомления работают — напоминания о задачах придут сюда",
+        title: "✅ Уведомления включены",
+        body: "Всё работает — сюда будут приходить напоминания о задачах, воде, сне и платежах",
         url: "/tasks/settings",
         tag: "test",
       }),

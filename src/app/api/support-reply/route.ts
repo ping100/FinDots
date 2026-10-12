@@ -38,7 +38,7 @@ export async function POST(request: Request) {
   const results = await Promise.all(
     rows.map(async (row) => {
       const result = await sendPush(row, {
-        title: "Ответ администратора",
+        title: "💬 Ответ поддержки",
         body: row.body,
         url: "/money/settings",
         tag: `support-${messageId}`,

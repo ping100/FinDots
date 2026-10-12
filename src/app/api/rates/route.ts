@@ -24,7 +24,13 @@ export async function GET() {
   return NextResponse.json(result, { headers: { "Cache-Control": "private, max-age=600" } });
 }
 
-type Rates = { source: "nbk" | "open"; date: string; kzt: Record<string, number> };
+type Rates = {
+  source: "nbk" | "open";
+  date: string;
+  kzt: Record<string, number>;
+  /** Насколько курс изменился с прошлого дня, в тенге за единицу (только у Нацбанка). */
+  change?: Record<string, number>;
+};
 
 async function fromNationalBank(): Promise<Rates | null> {
   const res = await fetch("https://nationalbank.kz/rss/rates_all.xml", {
@@ -34,6 +40,7 @@ async function fromNationalBank(): Promise<Rates | null> {
   if (!res.ok) return null;
   const xml = await res.text();
   const kzt: Record<string, number> = {};
+  const change: Record<string, number> = {};
   let date = "";
   for (const item of xml.matchAll(/<item>([\s\S]*?)<\/item>/g)) {
     const tag = (name: string) => item[1].match(new RegExp(`<${name}>([^<]*)</${name}>`))?.[1]?.trim() ?? "";
@@ -42,11 +49,13 @@ async function fromNationalBank(): Promise<Rates | null> {
     const quant = Number(tag("quant")) || 1;
     if (!WANTED.includes(code) || !(value > 0)) continue;
     kzt[code] = value / quant;
+    const delta = Number(tag("change"));
+    if (Number.isFinite(delta)) change[code] = delta / quant;
     date ||= tag("pubDate"); // «12.10.2026»
   }
   if (!kzt.USD || !kzt.RUB) return null;
   const [d, m, y] = date.split(".");
-  return { source: "nbk", date: y ? `${y}-${m}-${d}` : new Date().toISOString().slice(0, 10), kzt };
+  return { source: "nbk", date: y ? `${y}-${m}-${d}` : new Date().toISOString().slice(0, 10), kzt, change };
 }
 
 async function fromOpenApi(): Promise<Rates | null> {

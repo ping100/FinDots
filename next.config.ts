@@ -22,14 +22,16 @@ const BUILT_AT = new Date().toISOString();
  * можно спрятать под приманку, и человек, думая, что жмёт на чужую кнопку,
  * нажмёт на кнопку в своих финансах. Остальное — браузер не угадывает тип
  * файлов, не рассказывает чужим сайтам полный адрес страницы и не даёт
- * странице камеру, микрофон и геолокацию — они приложению не нужны.
+ * странице камеру и микрофон — они приложению не нужны. Геолокация —
+ * только самому приложению (погода на главной, и то после «Разрешить»),
+ * встроенным чужим страницам — нет.
  */
 const SECURITY_HEADERS = [
   { key: "X-Frame-Options", value: "DENY" },
   { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(self)" },
 ];
 
 const nextConfig: NextConfig = {

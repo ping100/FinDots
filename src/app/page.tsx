@@ -3,6 +3,7 @@ import { Logo } from "@/components/Logo";
 import { HomeCard } from "@/components/HomeCard";
 import { HomeAdminCard } from "@/components/HomeAdminCard";
 import { Greeting } from "@/components/Greeting";
+import { HomeWidgets } from "@/components/HomeWidgets";
 
 /**
  * Развилка: одна учётная запись, два приложения.
@@ -58,6 +59,7 @@ export default async function Home({
         >
           Куда пойдём?
         </p>
+        <HomeWidgets delay={820} />
       </div>
 
       {deniedName ? (

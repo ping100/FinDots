@@ -29,9 +29,19 @@ function grouped(list: FemSignal[]): { key: string; last: FemSignal; ids: number
 
 /**
  * Карточку можно смахнуть влево — она уезжает и пропадает. Вертикальная
- * прокрутка не мешает: свайп ловим, только если палец идёт вбок.
+ * прокрутка не мешает: свайп ловим, только если палец идёт вбок. Для тех,
+ * кто не догадается смахнуть, children-функция получает close — им
+ * работает видимая кнопка ×.
  */
-export function Swipeable({ onDismiss, leaving, children }: { onDismiss: () => void; leaving?: boolean; children: React.ReactNode }) {
+export function Swipeable({
+  onDismiss,
+  leaving,
+  children,
+}: {
+  onDismiss: () => void;
+  leaving?: boolean;
+  children: React.ReactNode | ((close: () => void) => React.ReactNode);
+}) {
   const start = useRef<{ x: number; y: number; id: number } | null>(null);
   const [dx, setDx] = useState(0);
   const [gone, setGone] = useState(false);
@@ -46,6 +56,10 @@ export function Swipeable({ onDismiss, leaving, children }: { onDismiss: () => v
     return () => clearTimeout(t);
   }, [leaving]);
   const out = gone || leaving;
+  const close = () => {
+    setGone(true);
+    setTimeout(() => dismiss.current(), 260);
+  };
   return (
     <div
       onPointerDown={(e) => {
@@ -62,10 +76,8 @@ export function Swipeable({ onDismiss, leaving, children }: { onDismiss: () => v
       }}
       onPointerUp={() => {
         start.current = null;
-        if (dx < -90) {
-          setGone(true);
-          setTimeout(() => dismiss.current(), 260);
-        } else setDx(0);
+        if (dx < -90) close();
+        else setDx(0);
       }}
       onPointerCancel={() => {
         start.current = null;
@@ -78,8 +90,24 @@ export function Swipeable({ onDismiss, leaving, children }: { onDismiss: () => v
         transition: start.current ? "none" : "transform 250ms ease, opacity 250ms ease",
       }}
     >
-      {children}
+      {typeof children === "function" ? children(close) : children}
     </div>
+  );
+}
+
+/** Маленький крестик «Скрыть» — то же, что смахнуть. */
+function CloseX({ onClick, label = "Скрыть" }: { onClick: () => void; label?: string }) {
+  return (
+    <button
+      onClick={onClick}
+      onPointerDown={(e) => e.stopPropagation()}
+      aria-label={label}
+      title={label}
+      className="-mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[1rem] leading-none transition active:scale-90"
+      style={{ color: "var(--muted)" }}
+    >
+      ×
+    </button>
   );
 }
 
@@ -150,7 +178,8 @@ export function OwnTogether() {
             const t = signalText(g.last.kind, g.last.item);
             return (
               <Swipeable key={g.key} onDismiss={() => void dismissSignals(g.ids)}>
-                <div className="flex items-center gap-2.5 rounded-2xl px-3 py-2" style={{ background: "var(--surface-2)" }}>
+                {(close) => (
+                <div className="flex items-center gap-2.5 rounded-2xl py-2 pl-3 pr-2" style={{ background: "var(--surface-2)" }}>
                   <span className="text-lg">{t.emoji}</span>
                   <span className="min-w-0 flex-1 text-sm">
                     <b>{name}:</b> {t.text}
@@ -159,7 +188,9 @@ export function OwnTogether() {
                   <span className="shrink-0 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
                     {ago(g.last.created_at)}
                   </span>
+                  <CloseX onClick={close} />
                 </div>
+                )}
               </Swipeable>
             );
           })}
@@ -337,7 +368,8 @@ export function PartnerTogether({ name, status }: { name: string; status: string
         const isDone = done.has(g.key);
         return (
           <Swipeable key={g.key} leaving={leaving.has(g.key)} onDismiss={() => void dismissSignals(g.ids)}>
-            <div className="fem-card animate-lift flex items-center gap-3 rounded-3xl px-4 py-3">
+            {(close) => (
+            <div className="fem-card animate-lift flex items-center gap-3 rounded-3xl py-3 pl-4 pr-3">
               <span className="text-2xl">{t.emoji}</span>
               <span className="min-w-0 flex-1">
                 <span className="block text-[0.9375rem] font-semibold leading-snug">
@@ -346,10 +378,18 @@ export function PartnerTogether({ name, status }: { name: string; status: string
                 </span>
                 <span className="block text-[0.6875rem]" style={{ color: "var(--muted)" }}>
                   {name} · {ago(g.last.created_at)}
-                  {g.last.kind === "alone" ? " · смахните, когда прочтёте" : ""}
                 </span>
               </span>
-              {g.last.kind !== "alone" ? (
+              {g.last.kind === "alone" ? (
+                // Тут не бежать, а дать время — достаточно показать, что прочитал.
+                <button
+                  onClick={close}
+                  className="shrink-0 rounded-full px-3 py-2 text-[0.8125rem] font-semibold"
+                  style={{ background: "var(--surface-2)", color: "var(--accent)" }}
+                >
+                  Понял 👌
+                </button>
+              ) : (
                 <button
                   onClick={() => void reply(g)}
                   disabled={busy || isDone}
@@ -358,8 +398,10 @@ export function PartnerTogether({ name, status }: { name: string; status: string
                 >
                   {isDone ? "Ответили ✓" : "Уже бегу 🏃"}
                 </button>
-              ) : null}
+              )}
+              {g.last.kind !== "alone" && !isDone ? <CloseX onClick={close} /> : null}
             </div>
+            )}
           </Swipeable>
         );
       })}
@@ -376,7 +418,8 @@ export function PartnerTogether({ name, status }: { name: string; status: string
             }
           }}
         >
-          <div className="fem-card flex items-center gap-3 rounded-3xl px-4 py-3">
+          {(close) => (
+          <div className="fem-card flex items-center gap-3 rounded-3xl py-3 pl-4 pr-3">
             <span className="text-2xl">{st.emoji}</span>
             <span className="min-w-0 flex-1">
               <span className="block text-[0.6875rem]" style={{ color: "var(--muted)" }}>
@@ -384,7 +427,9 @@ export function PartnerTogether({ name, status }: { name: string; status: string
               </span>
               <span className="block text-[0.9375rem] font-semibold">{st.label}</span>
             </span>
+            <CloseX onClick={close} label="Скрыть до завтра" />
           </div>
+          )}
         </Swipeable>
       ) : null}
 

@@ -83,6 +83,30 @@ function StepButton({ onClick, children }: { onClick: () => void; children: Reac
   );
 }
 
+/**
+ * Подсказка, которую показываем, пока человек сам не попробовал: false —
+ * ещё не знает (показать), true — уже понял. Память — телефона.
+ */
+export function useLearned(key: string): [boolean, () => void] {
+  const [learned, setLearned] = useState(true);
+  useEffect(() => {
+    try {
+      setLearned(localStorage.getItem(key) === "1");
+    } catch {
+      // Нет памяти — подсказку не навязываем.
+    }
+  }, [key]);
+  const learn = () => {
+    setLearned(true);
+    try {
+      localStorage.setItem(key, "1");
+    } catch {
+      // Не запомнили — покажем ещё раз, не страшно.
+    }
+  };
+  return [learned, learn];
+}
+
 /** Что за дуга кольца — простыми словами, для подсказки по нажатию. */
 const SEGMENT: Record<string, { title: string; hint: string }> = {
   period: { title: "Месячные", hint: PHASE_TEXT.period.hint },
@@ -147,6 +171,7 @@ export function CycleRing({ info, size = 256 }: { info: CycleInfo; size?: number
 
   // Выбранная дуга: в центре — её название и даты; сама гаснет через 5 с.
   const [picked, setPicked] = useState<number | null>(null);
+  const [ringKnown, learnRing] = useLearned("fem.hint.ring");
   useEffect(() => {
     if (picked === null) return;
     const t = setTimeout(() => setPicked(null), 5000);
@@ -198,6 +223,7 @@ export function CycleRing({ info, size = 256 }: { info: CycleInfo; size?: number
   }
 
   return (
+    <>
     <div className="relative mx-auto" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="absolute inset-0" style={{ overflow: "visible" }}>
         <circle cx={c} cy={c} r={r} fill="none" stroke="var(--surface-2)" strokeWidth={stroke} />
@@ -219,7 +245,10 @@ export function CycleRing({ info, size = 256 }: { info: CycleInfo; size?: number
                 className="animate-grow-ring cursor-pointer"
                 role="button"
                 aria-label={SEGMENT[s.kind]?.title}
-                onClick={() => setPicked((p) => (p === i ? null : i))}
+                onClick={() => {
+                  learnRing();
+                  setPicked((p) => (p === i ? null : i));
+                }}
                 style={{
                   animationDelay: `${i * 70}ms`,
                   pointerEvents: "stroke",
@@ -289,6 +318,12 @@ export function CycleRing({ info, size = 256 }: { info: CycleInfo; size?: number
         ) : null}
       </div>
     </div>
+    {!ringKnown && segments.length > 1 ? (
+      <p className="animate-lift mt-2 text-center text-[0.75rem] font-medium" style={{ color: "var(--accent)" }}>
+        👆 Нажмите на цветную часть кольца — покажу, что это за дни
+      </p>
+    ) : null}
+    </>
   );
 }
 

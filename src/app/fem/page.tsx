@@ -11,14 +11,14 @@ import { PartnerJoin } from "@/components/fem/PartnerShare";
 import { long, range, short } from "@/lib/fem/format";
 import { useFem } from "@/components/fem/DataProvider";
 import { FemHeader } from "@/components/fem/Shell";
-import { CycleRing, DayHero, DayLog, plural } from "@/components/fem/parts";
+import { CycleRing, DayHero, DayLog, plural, useLearned } from "@/components/fem/parts";
 
 /**
  * Главный экран FemDots: фраза дня, кольцо цикла, одна главная кнопка
  * («начались» / «закончились»), ближайшие даты и самочувствие за сегодня.
  */
 export default function FemToday() {
-  const { settings, periods, days, partner, startPeriod, endPeriod, saveDay } = useFem();
+  const { settings, periods, days, partner, share, startPeriod, endPeriod, saveDay } = useFem();
   const now = today();
   const info = useMemo(
     () => cycleInfo(periods, settings!, now, signalsFrom(days, settings)),
@@ -101,6 +101,8 @@ export default function FemToday() {
         </p>
         )}
       </div>
+
+      <FirstSteps partner={share?.partner_name ?? null} />
 
       <PregnancyCheck info={info} />
 
@@ -224,6 +226,39 @@ export default function FemToday() {
           ? "На гормональной контрацепции прогноз — по схеме метода. Это не медицинский совет."
           : `Прогноз — оценка по вашим прошлым циклам (${info.cycleLength} ${plural(info.cycleLength, "день", "дня", "дней")} в среднем)${info.ovulationBy ? " и подтверждённой овуляции" : ""}. Это не способ предохранения и не медицинский совет.`}
       </p>
+    </div>
+  );
+}
+
+/**
+ * «Как здесь всё устроено» — один раз, при первых заходах: где что
+ * отмечать и куда смотреть. Закрывается кнопкой «Понятно» навсегда.
+ */
+function FirstSteps({ partner }: { partner: string | null }) {
+  const [known, learn] = useLearned("fem.hint.today");
+  if (known) return null;
+  const steps: [string, React.ReactNode][] = [
+    ["🩸", <>Начались месячные — нажмите кнопку выше. Другой день — в <Link href="/fem/calendar" replace className="underline">календаре</Link>.</>],
+    ["✍️", "Ниже отмечайте, как вы сегодня, — пара нажатий в день делает прогноз точнее."],
+    ["📊", <>Как прошёл цикл и что в норме — во вкладке <Link href="/fem/stats" replace className="underline">«Итоги»</Link>.</>],
+    partner
+      ? ["💌", `${partner} подключён — просьбы и статус дня ниже, в карточке «Вы и ${partner}».`]
+      : ["💌", <>Хотите, чтобы партнёр видел прогноз? Код для него — в <Link href="/fem/settings" replace className="underline">настройках</Link>.</>],
+  ];
+  return (
+    <div className="fem-card animate-lift mt-3 rounded-3xl p-4">
+      <p className="text-[0.9375rem] font-semibold">Как здесь всё устроено</p>
+      <div className="mt-2.5 space-y-2">
+        {steps.map(([emoji, text], i) => (
+          <p key={i} className="flex gap-2.5 text-[0.8125rem] leading-snug">
+            <span className="text-base leading-5">{emoji}</span>
+            <span className="min-w-0 flex-1">{text}</span>
+          </p>
+        ))}
+      </div>
+      <button onClick={learn} className="mt-3 w-full rounded-2xl py-2.5 text-sm font-semibold" style={{ background: "var(--surface-2)", color: "var(--accent)" }}>
+        Понятно
+      </button>
     </div>
   );
 }

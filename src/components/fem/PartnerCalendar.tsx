@@ -108,7 +108,7 @@ export function PartnerCalendar({ info }: { info: CycleInfo }) {
         })}
       </div>
       <p className="mt-1 text-center text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-        Сердечки — близость, которую отметила {partner.owner_name}
+        Сердечки — близость, которую отметила {partner.owner_name}. Нажмите на сердечко — подробнее
       </p>
 
       <Sheet open={!!picked} title={picked ? long(picked) : ""} onClose={() => setPicked(null)}>

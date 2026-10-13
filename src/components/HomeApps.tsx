@@ -55,6 +55,8 @@ export function HomeApps({ delay }: { delay: number }) {
   const [start, setStart] = useState(0);
   const [userId, setUserId] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  // Средние оценки приложений: null — ещё не пришли (строку не рисуем).
+  const [ratings, setRatings] = useState<Map<string, { average: number; total: number }> | null>(null);
 
   useEffect(() => {
     mountedAt.current = performance.now();
@@ -79,6 +81,11 @@ export function HomeApps({ delay }: { delay: number }) {
         return;
       }
       setUserId(id);
+      void supabase.rpc("app_ratings").then(({ data, error }) => {
+        if (error || !Array.isArray(data)) return;
+        const rows = data as { app: string; average: number | string; total: number }[];
+        setRatings(new Map(rows.map((r) => [r.app, { average: Number(r.average), total: r.total }])));
+      });
       const res = await supabase.from("profiles").select("apps_enabled").eq("id", id).maybeSingle();
       const apps = (res.data as { apps_enabled?: string[] } | null)?.apps_enabled;
       show(apps?.length ? apps : DEFAULT);
@@ -132,6 +139,7 @@ export function HomeApps({ delay }: { delay: number }) {
               icon={app.icon}
               color={app.color}
               delay={late ? 0 : start + index * 110}
+              rating={ratings ? (ratings.get(app.id) ?? null) : undefined}
             />
           );
           return late ? (

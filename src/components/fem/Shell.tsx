@@ -8,6 +8,7 @@ import { Loader } from "@/components/Loader";
 import { useFem } from "./DataProvider";
 import { Onboarding } from "./Onboarding";
 import { PartnerScreen } from "./PartnerScreen";
+import { Backdrop } from "./Backdrop";
 
 const TABS = [
   { href: "/fem", label: "Цикл", icon: "drop" },
@@ -32,11 +33,17 @@ export function FemShell({ children }: { children: ReactNode }) {
   }
   // Своего цикла нет: партнёр видит цикл своей девушки, остальные — знакомство.
   if (!settings) {
-    return <div className="fem-theme min-h-dvh pt-safe">{partner ? <PartnerScreen /> : <Onboarding />}</div>;
+    return (
+      <div className="fem-theme min-h-dvh pt-safe">
+        {partner ? <Backdrop /> : null}
+        {partner ? <PartnerScreen /> : <Onboarding />}
+      </div>
+    );
   }
 
   return (
     <div className="fem-theme min-h-dvh pt-safe">
+      <Backdrop />
       {error ? (
         <p className="mx-4 mt-3 rounded-2xl px-4 py-2 text-xs" style={{ background: "var(--danger)", color: "#fff" }}>
           {error}

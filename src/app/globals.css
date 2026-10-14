@@ -620,3 +620,155 @@ input[type="date"]::-webkit-date-and-time-value {
     animation: none;
   }
 }
+
+/* Листание месяца в календаре партнёра. */
+@keyframes month-next {
+  from {
+    opacity: 0;
+    transform: translateX(28%);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes month-prev {
+  from {
+    opacity: 0;
+    transform: translateX(-28%);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.animate-month-next {
+  animation: month-next 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.animate-month-prev {
+  animation: month-prev 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Линия графика «прорисовывается» слева направо. */
+@keyframes chart-draw {
+  from {
+    stroke-dasharray: 0 1;
+  }
+  to {
+    stroke-dasharray: 1 0;
+  }
+}
+.chart-draw {
+  animation: chart-draw 900ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Кружки дней в ленте циклов появляются один за другим. */
+@keyframes dot-pop {
+  from {
+    transform: scale(0);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+.dot-pop {
+  animation: dot-pop 320ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* Сердечко близости в ленте — тёплое свечение. */
+@keyframes heart-glow {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 0 rgba(236, 72, 153, 0));
+  }
+  50% {
+    filter: drop-shadow(0 0 4px rgba(236, 72, 153, 0.7));
+  }
+}
+.heart-glow {
+  animation: heart-glow 2.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chart-draw,
+  .dot-pop,
+  .heart-glow,
+  .animate-month-next,
+  .animate-month-prev {
+    animation: none;
+  }
+}
+
+/* Значок, вылетающий при отметке. */
+@keyframes fx-burst {
+  0% {
+    transform: translate(-50%, -50%) scale(0.4);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+    transform: translate(calc(-50% + var(--dx) * 0.3), calc(-50% - 14px)) scale(1.15);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--dx)), calc(-50% - 78px)) scale(0.8) rotate(var(--rot));
+  }
+}
+.fx-burst {
+  position: fixed;
+  z-index: 100;
+  pointer-events: none;
+  font-size: 18px;
+  line-height: 1;
+  animation: fx-burst 950ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Фон FemDots: три мягких пятна в цвет фазы, медленно плавают. */
+.fem-theme {
+  isolation: isolate;
+}
+.fem-blob {
+  position: fixed;
+  z-index: -1;
+  pointer-events: none;
+  border-radius: 9999px;
+  transition: background 1.2s ease;
+  will-change: transform;
+}
+@keyframes blob-a {
+  from {
+    transform: translate(0, 0) scale(1);
+  }
+  to {
+    transform: translate(-12vw, 8vh) scale(1.18);
+  }
+}
+@keyframes blob-b {
+  from {
+    transform: translate(0, 0) scale(1.1);
+  }
+  to {
+    transform: translate(14vw, -6vh) scale(0.92);
+  }
+}
+@keyframes blob-c {
+  from {
+    transform: translate(0, 0) scale(0.95);
+  }
+  to {
+    transform: translate(-8vw, -10vh) scale(1.15);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fem-blob {
+    animation: none !important;
+  }
+}
+.fem-theme {
+  --blob-alpha: 34%;
+}
+.dark .fem-theme {
+  --blob-alpha: 22%;
+}

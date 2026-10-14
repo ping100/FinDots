@@ -7,6 +7,7 @@ import { long } from "@/lib/fem/format";
 import { useFem } from "@/components/fem/DataProvider";
 import { FemHeader } from "@/components/fem/Shell";
 import { DayLog, IntimacyHeart, heartOf } from "@/components/fem/parts";
+import { CalendarCell, DOT, bandOf } from "@/components/fem/CalendarCell";
 import { Sheet } from "@/components/ui";
 
 const HEADS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
@@ -25,9 +26,9 @@ const TEAL = "#14b8a6";
 
 /**
  * Календарь цикла лентой: месяцы идут подряд, листаются пальцем вниз.
- * Залитые розовые — отмеченные месячные, розовый пунктир — их прогноз,
- * бирюзовые цифры — фертильное окно, бирюзовый пунктир — овуляция.
- * Точка под числом — в этот день отмечено самочувствие.
+ * Дни одной фазы сливаются в полосу: розовая — месячные, розовый пунктир —
+ * их прогноз, бирюзовая — фертильное окно, бирюзовый кружок — овуляция.
+ * Цветные точки под числом — что отмечено в этот день.
  */
 export default function FemCalendar() {
   const { settings, periods, days, intimacy, startPeriod, endPeriod, deletePeriod } = useFem();
@@ -81,10 +82,10 @@ export default function FemCalendar() {
           ))}
         </div>
         <div className="mt-1.5 flex flex-wrap justify-center gap-x-3 gap-y-1 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-          <Legend style={{ background: PHASE_COLOR.period }} label="Месячные" />
-          <Legend style={{ border: `1.5px dotted ${PHASE_COLOR.period}` }} label="Прогноз" />
-          <Legend style={{ background: TEAL }} label="Фертильные" />
-          <Legend style={{ border: `1.5px dotted ${TEAL}` }} label="Овуляция" />
+          <Legend wide style={{ background: PHASE_COLOR.period }} label="Месячные" />
+          <Legend wide style={{ border: `1.5px dashed ${PHASE_COLOR.period}`, background: `color-mix(in srgb, ${PHASE_COLOR.period} 12%, transparent)` }} label="Прогноз" />
+          <Legend wide style={{ background: `color-mix(in srgb, ${TEAL} 22%, transparent)` }} label="Фертильные" />
+          <Legend style={{ background: TEAL }} label="Овуляция" />
           <span className="flex items-center gap-1">
             <IntimacyHeart kind="protected" size={11} />
             <IntimacyHeart kind="unprotected" size={11} />
@@ -108,48 +109,30 @@ export default function FemCalendar() {
               {Array.from({ length: count }, (_, i) => {
                 const d = iso(y, m, i + 1);
                 const mark = marks.get(d);
-                const isToday = d === now;
-                const heart = heartOf(intimacy.get(d), days.get(d)?.tags);
-                let bg = isToday ? "var(--surface-2)" : "transparent";
-                let color = "var(--text)";
-                let border = "none";
-                if (mark?.period) {
-                  bg = PHASE_COLOR.period;
-                  color = "#fff";
-                } else if (mark?.predicted) {
-                  border = `2px dotted ${PHASE_COLOR.period}`;
-                  color = PHASE_COLOR.period;
-                } else if (mark?.ovulation) {
-                  border = `2px dotted ${TEAL}`;
-                  color = TEAL;
-                } else if (mark?.fertile) {
-                  color = TEAL;
-                }
+                const band = bandOf(mark);
+                const col = (lead + i) % 7;
+                const prev = i > 0 ? bandOf(marks.get(iso(y, m, i))) : null;
+                const next = i < count - 1 ? bandOf(marks.get(iso(y, m, i + 2))) : null;
+                const entry = days.get(d);
+                const dots: string[] = [];
+                if (entry?.mood) dots.push(DOT.mood);
+                if (entry?.symptoms.some((x) => x !== "ok")) dots.push(DOT.symptoms);
+                if (entry?.lh || entry?.temp != null || (entry?.preg_test && entry.preg_test !== "none")) dots.push(DOT.tests);
+                if (entry?.note) dots.push(DOT.note);
                 return (
-                  <button
+                  <CalendarCell
                     key={d}
+                    n={i + 1}
+                    band={band}
+                    capStart={col === 0 || prev !== band}
+                    capEnd={col === 6 || next !== band}
+                    ovulation={!!mark?.ovulation && !mark.period}
+                    today={d === now}
+                    heart={heartOf(intimacy.get(d), entry?.tags)}
+                    dots={dots}
                     onClick={() => setPicked(d)}
-                    aria-label={long(d)}
-                    className="relative flex h-[3.25rem] flex-col items-center justify-center transition active:scale-90"
-                  >
-                    {isToday ? (
-                      <span className="absolute top-0 text-[0.5rem] font-bold uppercase tracking-wide" style={{ color: "var(--muted)" }}>
-                        сегодня
-                      </span>
-                    ) : null}
-                    <span
-                      className="relative flex h-9 w-9 items-center justify-center rounded-full text-[0.9375rem] tabular-nums"
-                      style={{ background: bg, color, border, fontWeight: isToday ? 800 : 500 }}
-                    >
-                      {i + 1}
-                      {heart ? (
-                        <span className="absolute -right-2 -top-1.5 rounded-full p-[1px]" style={{ background: "var(--surface)" }}>
-                          <IntimacyHeart kind={heart} size={16} />
-                        </span>
-                      ) : null}
-                    </span>
-                    <span className="mt-0.5 h-1 w-1 rounded-full" style={{ background: days.has(d) ? "var(--accent)" : "transparent" }} />
-                  </button>
+                    label={long(d)}
+                  />
                 );
               })}
             </div>
@@ -159,6 +142,22 @@ export default function FemCalendar() {
 
       <p className="mt-1 px-2 text-center text-[0.6875rem]" style={{ color: "var(--muted)" }}>
         Нажмите на день, чтобы отметить месячные или самочувствие
+      </p>
+      <p className="mt-1.5 flex flex-wrap justify-center gap-x-3 gap-y-1 px-2 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+        Точки под числом:
+        {(
+          [
+            [DOT.mood, "настроение"],
+            [DOT.symptoms, "симптомы"],
+            [DOT.tests, "тесты и t°"],
+            [DOT.note, "заметка"],
+          ] as const
+        ).map(([c, l]) => (
+          <span key={l} className="flex items-center gap-1">
+            <span className="h-1.5 w-1.5 rounded-full" style={{ background: c }} />
+            {l}
+          </span>
+        ))}
       </p>
 
       {away ? (
@@ -196,10 +195,10 @@ export default function FemCalendar() {
   );
 }
 
-function Legend({ style, label }: { style: React.CSSProperties; label: string }) {
+function Legend({ style, label, wide }: { style: React.CSSProperties; label: string; wide?: boolean }) {
   return (
     <span className="flex items-center gap-1">
-      <span className="h-2.5 w-2.5 rounded-full" style={style} />
+      <span className={`h-2.5 rounded-full ${wide ? "w-4" : "w-2.5"}`} style={style} />
       {label}
     </span>
   );

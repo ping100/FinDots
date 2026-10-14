@@ -6,6 +6,7 @@ import { FEM_GRADIENT } from "@/lib/fem/cycle";
 import { BUY_ITEMS, EMOJI_CHOICES, STATUSES, ago, packCustom, signalText, statusOf } from "@/lib/fem/together";
 import { Sheet } from "@/components/ui";
 import { useFem, type FemSignal, type SignalKind } from "./DataProvider";
+import { burst, centerOf } from "@/lib/fem/fx";
 
 /** Просьбы и сердечки живут 12 часов — дальше гаснут сами. */
 const LIFE = 12 * 3_600_000;
@@ -297,7 +298,11 @@ export function OwnTogether() {
 function Ask({ emoji, label, onClick, disabled }: { emoji: string; label: string; onClick: () => void; disabled?: boolean }) {
   return (
     <button
-      onClick={onClick}
+      onClick={(e) => {
+        const { x, y } = centerOf(e);
+        burst(x, y, emoji);
+        onClick();
+      }}
       disabled={disabled}
       className="flex flex-col items-center gap-1 rounded-2xl px-1 py-3 text-center text-[0.75rem] font-medium leading-tight transition active:scale-95 disabled:opacity-60"
       style={{ background: "var(--surface-2)" }}
@@ -434,7 +439,11 @@ export function PartnerTogether({ name, status }: { name: string; status: string
       ) : null}
 
       <button
-        onClick={() => void send("heart", undefined, `${name} получит ваше «Думаю о тебе» ❤️`)}
+        onClick={(e) => {
+          const { x, y } = centerOf(e);
+          burst(x, y, "❤️", 5);
+          void send("heart", undefined, `${name} получит ваше «Думаю о тебе» ❤️`);
+        }}
         disabled={busy}
         className="fem-shine flex w-full items-center justify-center gap-2 rounded-3xl py-3.5 text-[0.9375rem] font-semibold text-white transition active:scale-[0.98] disabled:opacity-60"
         style={{ background: FEM_GRADIENT, boxShadow: "0 12px 26px -12px rgba(236,72,153,0.75), inset 0 1px 0 rgba(255,255,255,0.35)" }}

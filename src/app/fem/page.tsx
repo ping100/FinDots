@@ -13,6 +13,7 @@ import { useFem } from "@/components/fem/DataProvider";
 import { FemHeader } from "@/components/fem/Shell";
 import { CycleRing, DayHero, plural, useLearned } from "@/components/fem/parts";
 import { CheckIn } from "@/components/fem/CheckIn";
+import { burst, centerOf } from "@/lib/fem/fx";
 
 /**
  * Главный экран FemDots: фраза дня, кольцо цикла, одна главная кнопка
@@ -74,7 +75,13 @@ export default function FemToday() {
 
         {info.pregnancy ? null : (
         <button
-          onClick={act}
+          onClick={(e) => {
+            if (!info.current) {
+              const { x, y } = centerOf(e);
+              burst(x, y, "💧", 5);
+            }
+            void act();
+          }}
           disabled={busy}
           className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-[0.9375rem] font-semibold text-white transition active:scale-[0.98] disabled:opacity-60"
           style={
@@ -184,7 +191,13 @@ export default function FemToday() {
           </span>
           {!info.pack?.inBreak ? (
             <button
-              onClick={() => void saveDay(now, { pill: !days.get(now)?.pill })}
+              onClick={(e) => {
+                if (!days.get(now)?.pill) {
+                  const { x, y } = centerOf(e);
+                  burst(x, y, "💊");
+                }
+                void saveDay(now, { pill: !days.get(now)?.pill });
+              }}
               className="shrink-0 rounded-full px-3.5 py-2 text-[0.8125rem] font-semibold transition active:scale-95"
               style={
                 days.get(now)?.pill

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useId, useMemo, useState } from "react";
 import { today } from "@/lib/tasks/dates";
 import {
   FEM_COLOR,
@@ -56,6 +56,9 @@ export default function FemStats() {
 
   const avgCycle = averageCycle(periods, settings!.cycle_length);
   const avgPeriod = averagePeriod(periods, settings!.period_length);
+  // Разброс длины последних циклов (FIGO: до 7–9 дней — регулярный).
+  const recent = data.cycles.slice(-6).map((c) => c.length);
+  const spread = recent.length >= 2 ? Math.max(...recent) - Math.min(...recent) : null;
 
   if (periods.length === 0) {
     return (
@@ -79,9 +82,28 @@ export default function FemStats() {
       <FemHeader title="Итоги" sub="По вашим отметкам" />
 
       <div className="grid grid-cols-3 gap-2">
-        <Tile value={`${avgCycle}`} unit={plural(avgCycle, "день", "дня", "дней")} label="средний цикл" />
-        <Tile value={`${avgPeriod}`} unit={plural(avgPeriod, "день", "дня", "дней")} label="месячные" />
-        <Tile value={`${data.cycles.length}`} unit={plural(data.cycles.length, "цикл", "цикла", "циклов")} label="отмечено" />
+        <Tile
+          index={0}
+          bg="linear-gradient(150deg, #f472b6, #a855f7)"
+          label="Средний цикл"
+          value={`${avgCycle}`}
+          unit={plural(avgCycle, "день", "дня", "дней")}
+        />
+        <Tile
+          index={1}
+          bg="linear-gradient(150deg, #fb7185, #f97316)"
+          label="Месячные"
+          value={`${avgPeriod}`}
+          unit={plural(avgPeriod, "день", "дня", "дней")}
+        />
+        <Tile
+          index={2}
+          bg="linear-gradient(150deg, #2dd4bf, #0284c7)"
+          label="Регулярность"
+          value={spread == null ? "—" : spread <= 9 ? "Ровный" : "Скачет"}
+          unit={spread == null ? "нужно 3 цикла" : `разброс ${spread} ${plural(spread, "день", "дня", "дней")}`}
+          small
+        />
       </div>
 
       <MyCycles />
@@ -152,24 +174,20 @@ function TempChart() {
     <div className="fem-card mt-3 rounded-3xl p-4">
       <p className="text-[0.9375rem] font-semibold">Базальная температура</p>
       <p className="mb-2 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-        {ov ? `Скачок найден — овуляция ~${short(ov)}` : "Скачок после овуляции ещё не виден"}
+        {ov ? `Скачок найден — овуляция ~${short(ov)}` : "Скачок после овуляции ещё не виден"} · нажмите на график — покажу значение
       </p>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ overflow: "visible" }}>
+      <SmoothChart
+        W={W}
+        H={H}
+        color={FEM_COLOR}
+        format={(v) => `${v.toFixed(2).replace(".", ",")}°`}
+        pts={temps.map((t) => ({ x: x(t.day), y: y(t.temp), day: t.day, value: t.temp }))}
+      >
         {cover != null ? (
           <line x1={8} x2={W - 8} y1={y(cover)} y2={y(cover)} stroke="var(--muted)" strokeDasharray="4 4" strokeWidth={1} opacity={0.6} />
         ) : null}
         {ov ? <line x1={x(ov)} x2={x(ov)} y1={4} y2={H - 4} stroke="#14b8a6" strokeWidth={2} strokeDasharray="2 3" /> : null}
-        <polyline
-          fill="none"
-          stroke={FEM_COLOR}
-          strokeWidth={2}
-          strokeLinejoin="round"
-          points={temps.map((t) => `${x(t.day)},${y(t.temp)}`).join(" ")}
-        />
-        {temps.map((t) => (
-          <circle key={t.day} cx={x(t.day)} cy={y(t.temp)} r={4} fill="var(--surface)" stroke={FEM_COLOR} strokeWidth={2} />
-        ))}
-      </svg>
+      </SmoothChart>
       <div className="mt-1 flex justify-between text-[0.625rem] tabular-nums" style={{ color: "var(--muted)" }}>
         <span>{short(from)}</span>
         <span>
@@ -181,15 +199,126 @@ function TempChart() {
   );
 }
 
-function Tile({ value, unit, label }: { value: string; unit: string; label: string }) {
+/** Яркая плитка сверху — как карточки «Сегодня для вас»: перелив, блик, кружок Dots. */
+function Tile({
+  bg,
+  label,
+  value,
+  unit,
+  index,
+  small,
+}: {
+  bg: string;
+  label: string;
+  value: string;
+  unit: string;
+  index: number;
+  small?: boolean;
+}) {
   return (
-    <div className="fem-card rounded-2xl px-3 py-3 text-center">
-      <span className="block text-[1.375rem] font-bold leading-tight tabular-nums">{value}</span>
-      <span className="block text-[0.6875rem]">{unit}</span>
-      <span className="block text-[0.625rem]" style={{ color: "var(--muted)" }}>
-        {label}
-      </span>
+    <div
+      className="animate-lift relative overflow-hidden rounded-2xl px-3 pb-3 pt-2.5 text-white"
+      style={{
+        background: bg,
+        boxShadow: "0 12px 22px -14px rgba(124,58,237,0.65), inset 0 1px 0 rgba(255,255,255,0.35)",
+        animationDelay: `${index * 70}ms`,
+      }}
+    >
+      <span className="pointer-events-none absolute inset-x-0 top-0 h-1/2" style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.18), transparent)" }} />
+      <span className="pointer-events-none absolute -bottom-6 -right-6 h-16 w-16 rounded-full bg-white/15" />
+      <span className="relative block text-[0.625rem] font-medium opacity-90">{label}</span>
+      <span className={`relative mt-1 block font-bold leading-tight tabular-nums ${small ? "text-[1.0625rem]" : "text-[1.625rem]"}`}>{value}</span>
+      <span className="relative block text-[0.625rem] opacity-85">{unit}</span>
     </div>
+  );
+}
+
+/** Плавная линия через точки (Катмулл — Ром → кривые Безье). */
+function smoothPath(pts: [number, number][]): string {
+  if (pts.length < 2) return "";
+  let d = `M${pts[0][0]},${pts[0][1]}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] ?? pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] ?? p2;
+    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6];
+    const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
+    d += ` C${c1[0]},${c1[1]} ${c2[0]},${c2[1]} ${p2[0]},${p2[1]}`;
+  }
+  return d;
+}
+
+/**
+ * График-линия: плавная кривая, мягкая заливка под ней, точки. Нажатие —
+ * ближайшая точка увеличивается и показывает значение и дату.
+ */
+function SmoothChart({
+  pts,
+  W,
+  H,
+  color,
+  format,
+  children,
+}: {
+  pts: { x: number; y: number; day: string; value: number }[];
+  W: number;
+  H: number;
+  color: string;
+  format: (v: number) => string;
+  children?: React.ReactNode;
+}) {
+  const id = useId().replace(/:/g, "");
+  const [sel, setSel] = useState<number | null>(null);
+  const line = smoothPath(pts.map((p) => [p.x, p.y]));
+  const area = `${line} L${pts[pts.length - 1].x},${H} L${pts[0].x},${H} Z`;
+  const p = sel != null ? pts[sel] : null;
+  return (
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      className="w-full cursor-pointer"
+      style={{ overflow: "visible", touchAction: "pan-y" }}
+      onClick={(e) => {
+        const box = e.currentTarget.getBoundingClientRect();
+        const x = ((e.clientX - box.left) / box.width) * W;
+        let best = 0;
+        for (let i = 1; i < pts.length; i++) if (Math.abs(pts[i].x - x) < Math.abs(pts[best].x - x)) best = i;
+        setSel(sel === best ? null : best);
+      }}
+    >
+      <defs>
+        <linearGradient id={`${id}-fill`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity={0.32} />
+          <stop offset="100%" stopColor={color} stopOpacity={0} />
+        </linearGradient>
+      </defs>
+      <path d={area} fill={`url(#${id}-fill)`} className="animate-fade" />
+      {children}
+      <path d={line} fill="none" stroke={color} strokeWidth={2.5} strokeLinecap="round" className="chart-draw" pathLength={1} />
+      {pts.map((q, i) => (
+        <circle
+          key={q.day}
+          cx={q.x}
+          cy={q.y}
+          r={sel === i ? 6 : 3.5}
+          fill={sel === i ? color : "var(--surface)"}
+          stroke={color}
+          strokeWidth={2}
+          style={{ transition: "r 160ms" }}
+        />
+      ))}
+      {p ? (
+        <g style={{ pointerEvents: "none" }}>
+          <line x1={p.x} x2={p.x} y1={p.y + 8} y2={H} stroke={color} strokeDasharray="2 3" opacity={0.6} />
+          <g transform={`translate(${Math.min(Math.max(p.x, 34), W - 34)}, ${Math.max(p.y - 28, -18)})`}>
+            <rect x={-34} y={-12} width={68} height={24} rx={12} fill={color} />
+            <text textAnchor="middle" dominantBaseline="central" fontSize={10.5} fontWeight={700} fill="#fff">
+              {format(p.value)} · {short(p.day)}
+            </text>
+          </g>
+        </g>
+      ) : null}
+    </svg>
   );
 }
 
@@ -312,12 +441,13 @@ function WeightChart() {
         {diff != null ? ` · ${diff > 0 ? "+" : ""}${String(diff).replace(".", ",")} кг за месяц` : ""}
         {" · "}к месячным вес часто подрастает на 0,5–2 кг из-за воды — это нормально
       </p>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ overflow: "visible" }}>
-        <polyline fill="none" stroke="#a78bfa" strokeWidth={2} strokeLinejoin="round" points={pts.map((p) => `${x(p.day)},${y(p.w)}`).join(" ")} />
-        {pts.map((p) => (
-          <circle key={p.day} cx={x(p.day)} cy={y(p.w)} r={3.5} fill="var(--surface)" stroke="#a78bfa" strokeWidth={2} />
-        ))}
-      </svg>
+      <SmoothChart
+        W={W}
+        H={H}
+        color="#a78bfa"
+        format={(v) => `${String(v).replace(".", ",")} кг`}
+        pts={pts.map((p) => ({ x: x(p.day), y: y(p.w), day: p.day, value: p.w }))}
+      />
       <div className="mt-1 flex justify-between text-[0.625rem] tabular-nums" style={{ color: "var(--muted)" }}>
         <span>{short(from)}</span>
         <span>{short(now)}</span>

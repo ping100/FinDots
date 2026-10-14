@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Icon } from "@/lib/icons";
 import { today } from "@/lib/tasks/dates";
-import { PHASE_COLOR, buildMarks, type CycleInfo } from "@/lib/fem/cycle";
+import { buildMarks, type CycleInfo } from "@/lib/fem/cycle";
+import { CalendarCell, DOT, bandOf } from "./CalendarCell";
 import { long } from "@/lib/fem/format";
 import { Sheet } from "@/components/ui";
 import { useFem } from "./DataProvider";
@@ -14,7 +15,6 @@ const MONTHS = [
   "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
   "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь",
 ];
-const TEAL = "#14b8a6";
 const iso = (y: number, m: number, d: number) =>
   `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 
@@ -27,12 +27,20 @@ export function PartnerCalendar({ info }: { info: CycleInfo }) {
   const { partner } = useFem();
   const now = today();
   const [shift, setShift] = useState(0);
+  // Куда листали: 1 — вперёд, -1 — назад (для направления анимации).
+  const [dir, setDir] = useState(0);
+  const swipe = useRef<{ x: number; y: number } | null>(null);
+  const go = (step: number) => {
+    setDir(step);
+    setShift((s) => s + step);
+  };
   const [picked, setPicked] = useState<string | null>(null);
   const marks = useMemo(() => (partner ? buildMarks(partner.periods, info, now) : new Map()), [partner, info, now]);
   const hearts = useMemo(
     () => new Map((partner?.intimacy ?? []).map((x) => [x.day, { kinds: x.kinds ?? ["sex"], protected: x.protected }])),
     [partner],
   );
+  const symptomDays = useMemo(() => new Set((partner?.symptom_days ?? []).map((x) => x.day)), [partner]);
   if (!partner) return null;
 
   const base = new Date();
@@ -48,17 +56,32 @@ export function PartnerCalendar({ info }: { info: CycleInfo }) {
   return (
     <div className="fem-card mt-3 rounded-3xl p-3">
       <div className="mb-1 flex items-center justify-between px-1">
-        <button onClick={() => setShift((s) => s - 1)} aria-label="Раньше" className="p-1" style={{ color: "var(--accent)" }}>
+        <button onClick={() => go(-1)} aria-label="Раньше" className="p-1" style={{ color: "var(--accent)" }}>
           <Icon name="chevron-left" size={20} />
         </button>
         <span className="text-[0.9375rem] font-semibold">
           {MONTHS[m]} {y !== base.getFullYear() ? y : ""}
         </span>
-        <button onClick={() => setShift((s) => s + 1)} aria-label="Позже" className="p-1" style={{ color: "var(--accent)" }}>
+        <button onClick={() => go(1)} aria-label="Позже" className="p-1" style={{ color: "var(--accent)" }}>
           <Icon name="chevron-right" size={20} />
         </button>
       </div>
-      <div className="grid grid-cols-7">
+      {/* Листается пальцем вбок: месяц уезжает в сторону, новый въезжает. */}
+      <div
+        className="overflow-hidden"
+        style={{ touchAction: "pan-y" }}
+        onPointerDown={(e) => {
+          swipe.current = { x: e.clientX, y: e.clientY };
+        }}
+        onPointerUp={(e) => {
+          const st = swipe.current;
+          swipe.current = null;
+          if (!st) return;
+          const dx = e.clientX - st.x;
+          if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(e.clientY - st.y)) go(dx < 0 ? 1 : -1);
+        }}
+      >
+      <div key={shift} className={`grid grid-cols-7 ${dir > 0 ? "animate-month-next" : dir < 0 ? "animate-month-prev" : ""}`}>
         {HEADS.map((h) => (
           <span key={h} className="pb-1 text-center text-[0.625rem]" style={{ color: "var(--muted)" }}>
             {h}
@@ -70,44 +93,28 @@ export function PartnerCalendar({ info }: { info: CycleInfo }) {
         {Array.from({ length: count }, (_, i) => {
           const d = iso(y, m, i + 1);
           const mark = marks.get(d);
-          const isToday = d === now;
+          const band = bandOf(mark);
+          const col = (lead + i) % 7;
+          const prev = i > 0 ? bandOf(marks.get(iso(y, m, i))) : null;
+          const next = i < count - 1 ? bandOf(marks.get(iso(y, m, i + 2))) : null;
           const heart = heartOf(hearts.get(d));
-          let bg = isToday ? "var(--surface-2)" : "transparent";
-          let color = "var(--text)";
-          let border = "none";
-          if (mark?.period) {
-            bg = PHASE_COLOR.period;
-            color = "#fff";
-          } else if (mark?.predicted) {
-            border = `2px dotted ${PHASE_COLOR.period}`;
-            color = PHASE_COLOR.period;
-          } else if (mark?.ovulation) {
-            border = `2px dotted ${TEAL}`;
-            color = TEAL;
-          } else if (mark?.fertile) {
-            color = TEAL;
-          }
           return (
-            <button
+            <CalendarCell
               key={d}
-              onClick={() => heart && setPicked(d)}
-              aria-label={long(d)}
-              className="flex h-11 items-center justify-center transition active:scale-90"
-            >
-              <span
-                className="relative flex h-9 w-9 items-center justify-center rounded-full text-[0.875rem] tabular-nums"
-                style={{ background: bg, color, border, fontWeight: isToday ? 800 : 500 }}
-              >
-                {i + 1}
-                {heart ? (
-                  <span className="absolute -right-2 -top-1.5 rounded-full p-[1px]" style={{ background: "var(--surface)" }}>
-                    <IntimacyHeart kind={heart} size={16} />
-                  </span>
-                ) : null}
-              </span>
-            </button>
+              n={i + 1}
+              band={band}
+              capStart={col === 0 || prev !== band}
+              capEnd={col === 6 || next !== band}
+              ovulation={!!mark?.ovulation && !mark.period}
+              today={d === now}
+              heart={heart}
+              dots={symptomDays.has(d) ? [DOT.symptoms] : []}
+              onClick={heart ? () => setPicked(d) : undefined}
+              label={long(d)}
+            />
           );
         })}
+      </div>
       </div>
       {monthHasHearts ? (
         <p className="mt-1 text-center text-[0.6875rem]" style={{ color: "var(--muted)" }}>

@@ -218,8 +218,8 @@ export function CycleHistory() {
           <button
             key={c.from}
             onClick={() => setOpen({ from: c.from, to: c.to, title })}
-            className="flex w-full items-start gap-3 px-4 py-3 text-left"
-            style={{ borderTop: i ? "1px solid var(--border)" : undefined }}
+            className="animate-lift flex w-full items-start gap-3 px-4 py-3 text-left"
+            style={{ borderTop: i ? "1px solid var(--border)" : undefined, animationDelay: `${i * 90}ms` }}
           >
             {/* Длина цикла — пузырём, как кружки в остальных Dots. */}
             <span
@@ -245,9 +245,17 @@ export function CycleHistory() {
               <span className="mt-1.5 flex flex-wrap items-center gap-[2px]">
                 {Array.from({ length: c.length }, (_, k) => {
                   const x = dayOf(c, k);
+                  // Текущий цикл «насыпается» кружок за кружком.
+                  const pop = c.current ? { className: "dot-pop", style: { animationDelay: `${200 + k * 22}ms` } } : null;
                   return x.heart ? (
-                    <span key={k} className="flex h-3 w-3 items-center justify-center">
-                      <IntimacyHeart kind={x.heart} size={12} />
+                    <span key={k} className={`flex h-3 w-3 items-center justify-center ${pop?.className ?? ""}`} style={pop?.style}>
+                      <span className="heart-glow flex" style={{ animationDelay: `${(k % 5) * 0.4}s` }}>
+                        <IntimacyHeart kind={x.heart} size={12} />
+                      </span>
+                    </span>
+                  ) : pop ? (
+                    <span key={k} className={pop.className} style={pop.style}>
+                      <Dot color={x.color} size={x.size} ring={x.ring} today={x.today} />
                     </span>
                   ) : (
                     <Dot key={k} color={x.color} size={x.size} ring={x.ring} today={x.today} />

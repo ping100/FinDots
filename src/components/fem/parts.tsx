@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useId, useMemo, useState } from "react";
+import { Children, isValidElement, useEffect, useId, useMemo, useState } from "react";
+import { burst, centerOf } from "@/lib/fem/fx";
 import { Icon } from "@/lib/icons";
 import {
   FEM_GRADIENT,
@@ -429,19 +430,38 @@ export function plural(n: number, one: string, few: string, many: string) {
   return many;
 }
 
+/** Смайлик плашки — первый <span> с коротким текстом. */
+function emojiOf(children: React.ReactNode): string | null {
+  for (const ch of Children.toArray(children)) {
+    if (isValidElement<{ children?: unknown }>(ch) && typeof ch.props.children === "string" && ch.props.children.length <= 4) {
+      return ch.props.children;
+    }
+  }
+  return null;
+}
+
 /** Нажимаемая плашка выбора. */
 export function Pill({
   on,
   onClick,
   children,
+  fx,
 }: {
   on: boolean;
   onClick: () => void;
   children: React.ReactNode;
+  /** Что вылетит при отметке; по умолчанию — смайлик самой плашки или сердечко. */
+  fx?: string;
 }) {
   return (
     <button
-      onClick={onClick}
+      onClick={(e) => {
+        if (!on) {
+          const { x, y } = centerOf(e);
+          burst(x, y, fx ?? emojiOf(children) ?? "💗");
+        }
+        onClick();
+      }}
       aria-pressed={on}
       className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[0.8125rem] transition active:scale-95"
       style={{
@@ -538,6 +558,7 @@ export function DayLog({
           {FLOWS.map((f) => (
             <Pill
               key={f.value}
+              fx="💧"
               on={entry.flow === f.value}
               onClick={() => {
                 void saveDay(day, { flow: entry.flow === f.value ? null : f.value });

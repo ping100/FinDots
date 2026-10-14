@@ -76,12 +76,22 @@ function el(tag: string, a: Record<string, string | number> = {}, parent?: Eleme
  * Круг цикла на главной — в виде, выбранном в настройках. Цветок по умолчанию; на
  * гормональной контрацепции и в беременность — всегда классическое кольцо.
  */
-export function CycleDial({ info, size = 280 }: { info: CycleInfo; size?: number }) {
+export function CycleDial({ info, size: guess = 280 }: { info: CycleInfo; size?: number }) {
   const { profile } = useFem();
   const style: DialStyle = profile?.fem_ring ?? "flower";
   const d = cycleDays(info);
   const [picked, setPicked] = useState<Picked>(null);
   const [known, learn] = useLearned("fem.hint.ring");
+  // Размер — от ширины карточки, чтобы круг занимал её почти целиком.
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  const [width, setWidth] = useState<number | null>(null);
+  useEffect(() => {
+    const node = boxRef.current;
+    if (!node) return;
+    const ro = new ResizeObserver(([e]) => setWidth(Math.round(e.contentRect.width)));
+    ro.observe(node);
+    return () => ro.disconnect();
+  }, []);
   useEffect(() => {
     const t = picked === null ? undefined : setTimeout(() => setPicked(null), 5000);
     return () => clearTimeout(t);
@@ -91,23 +101,31 @@ export function CycleDial({ info, size = 280 }: { info: CycleInfo; size?: number
     setPicked((x) => (JSON.stringify(x) === JSON.stringify(p) ? null : p));
   };
 
+  const w = width ?? guess;
   if (style === "ring" || !d.usable) {
     return (
-      <div className="relative">
-        <CycleRing info={info} size={Math.round(size * 0.84)} />
+      <div ref={boxRef} className="relative w-full">
+        <CycleRing info={info} size={Math.round(Math.min(w * 0.82, 300))} />
       </div>
     );
   }
+  const flower = style === "flower";
+  // Цветок рисует лепестки примерно на 3/4 своего поля (запас под пыльцу
+  // и пик цветения) — поэтому поле шире карточки, а лишнее по краям пусто.
+  const size = Math.round(flower ? Math.min(w * 1.22, 470) : Math.min(w * 0.94, 360));
+  const height = Math.round(flower ? size * 0.88 : size);
   const Body = style === "beads" ? Beads : style === "comet" ? Comet : style === "petals" ? Petals : Flower;
   return (
     <>
-      <div className="relative mx-auto" style={{ width: size, height: size }}>
-        <Body d={d} size={size} pick={pick} late={info.late > 0} />
-        <DialCenter info={info} d={d} picked={picked} onClear={() => setPicked(null)} size={size} disk={style === "flower"} />
+      <div ref={boxRef} className="relative w-full" style={{ height }}>
+        <div className="absolute left-1/2" style={{ width: size, height: size, top: (height - size) / 2, transform: "translateX(-50%)" }}>
+          <Body d={d} size={size} pick={pick} late={info.late > 0} />
+          <DialCenter info={info} d={d} picked={picked} onClear={() => setPicked(null)} size={size} disk={flower} />
+        </div>
       </div>
       {!known ? (
         <p className="animate-lift mt-1 text-center text-[0.75rem] font-medium" style={{ color: "var(--accent)" }}>
-          👆 Нажмите на {style === "petals" ? "лепесток — покажу фазу" : style === "flower" ? "лепесток — покажу, что это за день" : "круг — покажу, что это за день"}
+          👆 Нажмите на {style === "petals" ? "лепесток — покажу фазу" : flower ? "лепесток — покажу, что это за день" : "круг — покажу, что это за день"}
         </p>
       ) : null}
     </>
@@ -161,7 +179,7 @@ function DialCenter({
             <span className="h-2 w-2 rounded-full" style={{ background: color }} />
             {TITLE[phase]}
           </span>
-          <span className="mt-0.5 font-bold tabular-nums leading-tight" style={{ fontSize: disk ? "0.9375rem" : "1.25rem" }}>
+          <span className="mt-0.5 font-bold tabular-nums leading-tight" style={{ fontSize: disk ? Math.max(15, size * 0.045) : "1.25rem" }}>
             {"day" in picked ? short(d.dateOf(picked.day)) : range(d.dateOf(picked.from), d.dateOf(picked.to))}
           </span>
           <span className="text-[0.625rem] leading-tight" style={{ color: "var(--muted)" }}>
@@ -176,7 +194,7 @@ function DialCenter({
           >
             {big}
           </span>
-          <span className="mt-0.5 max-w-[6rem] font-semibold leading-tight" style={{ fontSize: disk ? "0.625rem" : "0.8125rem" }}>
+          <span className="mt-0.5 font-semibold leading-tight" style={{ fontSize: disk ? Math.max(10, size * 0.03) : "0.8125rem", maxWidth: disk ? size * 0.26 : "6rem" }}>
             {small}
           </span>
           {!disk ? (

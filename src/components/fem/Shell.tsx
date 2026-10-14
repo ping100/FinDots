@@ -29,12 +29,12 @@ export function FemShell({ children }: { children: ReactNode }) {
 
   // Ссылка-приглашение открывается всегда — даже до первого входа в FemDots.
   if (pathname.startsWith("/fem/join")) {
-    return <div className="fem-theme min-h-dvh pt-safe">{children}</div>;
+    return <div className="fem-theme min-h-dvh overflow-x-clip pt-safe">{children}</div>;
   }
   // Своего цикла нет: партнёр видит цикл своей девушки, остальные — знакомство.
   if (!settings) {
     return (
-      <div className="fem-theme min-h-dvh pt-safe">
+      <div className="fem-theme min-h-dvh overflow-x-clip pt-safe">
         {partner ? <Backdrop /> : null}
         {partner ? <PartnerScreen /> : <Onboarding />}
       </div>
@@ -42,7 +42,7 @@ export function FemShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="fem-theme min-h-dvh pt-safe">
+    <div className="fem-theme min-h-dvh overflow-x-clip pt-safe">
       <Backdrop />
       {error ? (
         <p className="mx-4 mt-3 rounded-2xl px-4 py-2 text-xs" style={{ background: "var(--danger)", color: "#fff" }}>

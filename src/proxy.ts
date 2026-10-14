@@ -16,6 +16,8 @@ const PUBLIC_PATHS = [
   "/api/models",
   "/api/reminders",
   "/api/support-reply",
+  // Зовёт сама база (уведомления админу); маршрут сам проверяет секрет.
+  "/api/admin-alert",
   "/api/fem-signal",
 ];
 

@@ -340,8 +340,12 @@ function Flower({ d, size, pick, late }: BodyProps) {
     const phases: Phase[] = ["period", "follicular", "fertile", "ovulation", "luteal"];
     defs.innerHTML =
       phases
-        .map(
-          (p) => `<linearGradient id="${uid}-${p}" x1="0" y1="1" x2="0" y2="0">
+        .map((p) =>
+          p === "ovulation"
+            ? // Овуляция — глубокий бирюзовый, чтобы не сливаться с фертильными.
+              `<linearGradient id="${uid}-${p}" x1="0" y1="1" x2="0" y2="0">
+                <stop offset="0%" stop-color="#0f766e"/><stop offset="60%" stop-color="#14b8a6"/><stop offset="100%" stop-color="#99f6e4"/></linearGradient>`
+            : `<linearGradient id="${uid}-${p}" x1="0" y1="1" x2="0" y2="0">
             <stop offset="0%" stop-color="${PHASE_COLOR[p]}"/>
             <stop offset="100%" style="stop-color: color-mix(in srgb, ${PHASE_COLOR[p]} 68%, #fff)"/></linearGradient>`,
         )
@@ -352,9 +356,13 @@ function Flower({ d, size, pick, late }: BodyProps) {
     el("ellipse", { cx: C, cy: C + 14 * k0, rx: C * 0.86, ry: C * 0.8, fill: `url(#${uid}-shade)` }, svg);
     const aura = el("circle", { cx: C, cy: C, r: C * 0.95, fill: `url(#${uid}-aura)`, opacity: 0 }, svg);
     const back = el("g", {}, svg);
+    const ovGlow = el("path", { fill: "#14b8a6", opacity: 0.55, filter: `url(#${uid}-glow)` }, svg);
     const glow = el("path", { fill: late ? PHASE_COLOR.late : "#ec4899", opacity: 0.45, filter: `url(#${uid}-glow)` }, svg);
     const front = el("g", {}, svg);
     const veinsG = el("g", { style: "pointer-events:none" }, svg);
+    // Звёздочка на кончике лепестка овуляции.
+    const ovStarG = el("g", { style: "pointer-events:none" }, svg);
+    const ovStar = el("path", { d: "M0 -7 L1.8 -1.8 L7 0 L1.8 1.8 L0 7 L-1.8 1.8 L-7 0 L-1.8 -1.8 Z", fill: "#fff", stroke: "#14b8a6", "stroke-width": 1 }, ovStarG);
     const stamenG = el("g", { style: "pointer-events:none" }, svg);
     const fx = el("g", { style: "pointer-events:none" }, svg);
     const backs = Array.from({ length: N }, (_, i) => el("path", { fill: PHASE_COLOR[phaseOf(i + 1)] }, back));
@@ -363,6 +371,9 @@ function Flower({ d, size, pick, late }: BodyProps) {
       p.addEventListener("click", () => pick({ day: i + 1 }));
       return p;
     });
+    // Овуляция и сегодня — поверх соседей, чтобы их не перекрывало.
+    if (ov >= 1 && ov <= N) front.appendChild(fronts[ov - 1]);
+    if (day >= 1 && day <= N) front.appendChild(fronts[day - 1]);
     const veins = Array.from({ length: N }, () => el("path", { fill: "none", stroke: "#fff", "stroke-linecap": "round" }, veinsG));
     const STAMENS = 18;
     const stamens = Array.from({ length: STAMENS }, (_, i) =>
@@ -399,15 +410,16 @@ function Flower({ d, size, pick, late }: BodyProps) {
         const isToday = k === day;
         const past = k < day;
         const wave = reduce ? 1 : 1 + 0.03 * Math.sin(s * 1.6 - i * 0.45);
-        const len = (78 + (isToday ? 18 : 0) + (k === ov ? 6 : 0)) * k0 * o * wave;
-        const w = 15 * k0 * wide * (isToday ? 1.15 : 1) * narrow;
+        const isOv = k === ov;
+        const len = (78 + (isToday ? 18 : 0) + (isOv ? 16 : 0)) * k0 * o * wave;
+        const w = 15 * k0 * wide * (isToday ? 1.15 : isOv ? 1.25 : 1) * narrow;
         const a = ((k - 0.5) / N) * 360 + curl * 28 * g + sway;
         const tr = `translate(${C} ${C}) rotate(${a}) translate(0 ${-R0 + 6 * k0})`;
         fronts[i].setAttribute("d", petalD(len, w));
         fronts[i].setAttribute("transform", tr);
-        fronts[i].setAttribute("opacity", String(isToday ? 1 : past ? 1 : 0.5 + 0.12 * o));
-        fronts[i].setAttribute("stroke", isToday ? "#fff" : "rgba(255,255,255,0.5)");
-        fronts[i].setAttribute("stroke-width", String((isToday ? 2.5 : 0.6) * k0));
+        fronts[i].setAttribute("opacity", String(isToday || isOv ? 1 : past ? 1 : 0.5 + 0.12 * o));
+        fronts[i].setAttribute("stroke", isToday || isOv ? "#fff" : "rgba(255,255,255,0.5)");
+        fronts[i].setAttribute("stroke-width", String((isToday ? 2.5 : isOv ? 1.8 : 0.6) * k0));
         veins[i].setAttribute("d", `M0 ${-len * 0.14} Q ${w * 0.18} ${-len * 0.5} 0 ${-len * 0.8}`);
         veins[i].setAttribute("transform", tr);
         veins[i].setAttribute("stroke-opacity", String(past || isToday ? 0.5 : 0.25));
@@ -420,6 +432,14 @@ function Flower({ d, size, pick, late }: BodyProps) {
         if (isToday) {
           glow.setAttribute("d", petalD(len + 6 * k0, w + 4 * k0));
           glow.setAttribute("transform", tr);
+        }
+        if (isOv) {
+          ovGlow.setAttribute("d", petalD(len + 8 * k0, w + 6 * k0));
+          ovGlow.setAttribute("transform", tr);
+          ovGlow.setAttribute("opacity", String((0.45 + (reduce ? 0 : 0.2 * Math.sin(s * 2.4))) * g));
+          ovStarG.setAttribute("transform", tr);
+          const tw = reduce ? 1 : 0.8 + 0.35 * Math.sin(s * 3.2);
+          ovStar.setAttribute("transform", `translate(0 ${-len - 5 * k0}) rotate(${reduce ? 0 : s * 40}) scale(${k0 * tw * g})`);
         }
       }
       for (let i = 0; i < STAMENS; i++) {

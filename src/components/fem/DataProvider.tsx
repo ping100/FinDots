@@ -183,7 +183,7 @@ export function FemProvider({ children }: { children: ReactNode }) {
       const shares = reloadShares().catch(() => undefined);
       const intim = supabase
         .from("fem_intimacy")
-        .select("day, protected, kinds")
+        .select("day, protected, kinds, shared")
         .eq("active", true)
         .then((res) => {
           if (!res.error)
@@ -191,7 +191,11 @@ export function FemProvider({ children }: { children: ReactNode }) {
               new Map(
                 (res.data ?? []).map((x) => [
                   x.day as string,
-                  { protected: x.protected as boolean | null, kinds: (x.kinds ?? ["sex"]) as Intim["kinds"] },
+                  {
+                    protected: x.protected as boolean | null,
+                    kinds: (x.kinds ?? ["sex"]) as Intim["kinds"],
+                    shared: (x.shared as boolean | null) ?? true,
+                  },
                 ]),
               ),
             );
@@ -486,7 +490,15 @@ export function FemProvider({ children }: { children: ReactNode }) {
       const res = await supabase
         .from("fem_intimacy")
         .upsert(
-          { owner_id: userId, day, protected: v?.protected ?? null, kinds: v?.kinds ?? [], added_by: userId, active: !!v },
+          {
+            owner_id: userId,
+            day,
+            protected: v?.protected ?? null,
+            kinds: v?.kinds ?? [],
+            shared: v?.shared ?? true,
+            added_by: userId,
+            active: !!v,
+          },
           { onConflict: "owner_id,day" },
         );
       fail(res.error?.message);

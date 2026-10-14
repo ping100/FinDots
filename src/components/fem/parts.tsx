@@ -30,7 +30,7 @@ import {
 import { phraseOf } from "@/lib/fem/phrases";
 import { range, short } from "@/lib/fem/format";
 import { addDays, today } from "@/lib/tasks/dates";
-import { inputClass, inputStyle } from "@/components/ui";
+import { Switch, inputClass, inputStyle } from "@/components/ui";
 import { useFem } from "./DataProvider";
 
 /** «−  28 дней  +» — число с подписью. */
@@ -576,9 +576,28 @@ export function DayLog({
 
       {has("intimacy") ? (
       <>
-      <Group title="Близость вдвоём" hint={share?.partner_name ? `видно и ${share.partner_name}` : undefined}>
+      <Group
+        title="Близость вдвоём"
+        hint={share?.partner_name ? (intim && intim.shared === false ? "только вам" : "видно и партнёру") : undefined}
+      >
         <IntimacyPicker value={intim} onChange={(v) => void setIntimacy(day, v)} />
       </Group>
+      {/* Отметку можно оставить только себе — без объяснений почему. */}
+      {share?.partner_name && intim ? (
+        <div className="-mt-2 flex items-center gap-3 rounded-2xl px-3.5 py-2.5" style={{ background: "var(--surface-2)" }}>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[0.8125rem] font-medium">Показывать партнёру</span>
+            <span className="block text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
+              {intim.shared === false ? "Сердечко видно только вам — в прогнозе отметка всё равно учитывается" : `Сердечко появится и в календаре у ${share.partner_name}`}
+            </span>
+          </span>
+          <Switch
+            checked={intim.shared !== false}
+            onChange={(on) => void setIntimacy(day, { ...intim, shared: on })}
+            label="Показывать партнёру"
+          />
+        </div>
+      ) : null}
       <Group title="Только для вас">
         {SEX_TAGS.map((t) => (
           <Pill key={t.value} on={entry.tags.includes(t.value)} onClick={() => toggleTag(t.value)}>
@@ -960,11 +979,13 @@ export function IntimacyPicker({ value, onChange }: { value: Intim | null; onCha
     const same = sexOn && value?.protected === prot;
     const rest = kinds.filter((k) => k !== "sex");
     const next: IntimKind[] = same ? rest : [...rest, "sex"];
-    onChange(next.length ? { kinds: next, protected: same ? null : prot } : null);
+    onChange(next.length ? { kinds: next, protected: same ? null : prot, shared: value?.shared ?? true } : null);
   };
   const toggle = (k: IntimKind) => {
     const next = kinds.includes(k) ? kinds.filter((x) => x !== k) : [...kinds, k];
-    onChange(next.length ? { kinds: next, protected: next.includes("sex") ? (value?.protected ?? null) : null } : null);
+    onChange(
+      next.length ? { kinds: next, protected: next.includes("sex") ? (value?.protected ?? null) : null, shared: value?.shared ?? true } : null,
+    );
   };
   return (
     <>

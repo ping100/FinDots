@@ -555,6 +555,8 @@ export interface Intim {
   kinds: IntimKind[];
   /** Для «sex»: с защитой (true), без (false), не сказано (null). */
   protected: boolean | null;
+  /** Видна ли отметка партнёру; по умолчанию — да. */
+  shared?: boolean;
 }
 
 export const SHARED_KINDS: { value: Exclude<IntimKind, "sex">; label: string }[] = [

@@ -32,6 +32,12 @@ export interface AdminUser {
   /** Разрешён ли ИИ-разбор — ключ теперь общий, это просто переключатель. */
   access_ai: boolean;
   access_fem: boolean;
+  /** Пользуется ли FemDots — только да/нет: данные о здоровье админ не видит. */
+  fem?: boolean;
+  /** Включены ли вода или сон в Todots, или отмечалась вода. */
+  wellness?: boolean;
+  /** На скольких устройствах разрешены уведомления. */
+  push_devices?: number;
 }
 
 export interface AdminOverview {
@@ -46,6 +52,9 @@ export interface AdminOverview {
     active_30d: number;
     money_users: number;
     tasks_users: number;
+    fem_users?: number;
+    wellness_users?: number;
+    push_users?: number;
     transactions: number;
     tasks: number;
   };
@@ -154,6 +163,19 @@ export const VIEWS = {
     title: "Пользуются задачами",
     chip: "Задачи",
     test: (u) => u.tasks_open + u.tasks_done > 0,
+  },
+  fem: { label: "FemDots пользуются", title: "Пользуются FemDots", chip: "FemDots", test: (u) => !!u.fem },
+  wellness: {
+    label: "Вода и сон",
+    title: "Пользуются водой и сном",
+    chip: "Вода и сон",
+    test: (u) => !!u.wellness,
+  },
+  push: {
+    label: "С уведомлениями",
+    title: "Уведомления включены",
+    chip: "Уведомления",
+    test: (u) => (u.push_devices ?? 0) > 0,
   },
 } satisfies Record<string, { label: string; title: string; chip: string; test: (u: AdminUser, now: number) => boolean }>;
 

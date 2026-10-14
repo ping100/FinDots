@@ -6,7 +6,7 @@ import { Icon } from "@/lib/icons";
 import { Loader } from "@/components/Loader";
 import { Denied, GeneratedAt, Problem, RefreshButton, UserCard, useOverview } from "@/components/admin/shared";
 import { UserActionsSheet } from "@/components/admin/UserActionsSheet";
-import { VIEWS, countView, type ViewId } from "@/lib/admin";
+import { VIEWS, countView, type AdminUser, type ViewId } from "@/lib/admin";
 
 /**
  * Один список пользователей: все, онлайн, новые, активные, по приложениям.
@@ -23,6 +23,7 @@ export function ViewScreen({ initial }: { initial: ViewId }) {
   // (reload), и лист должен показать уже новое состояние, а не снимок
   // на момент открытия.
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
   const { data, denied, problem, busy, reload } = useOverview();
   const selected = selectedId ? (data?.users.find((u) => u.id === selectedId) ?? null) : null;
 
@@ -31,8 +32,15 @@ export function ViewScreen({ initial }: { initial: ViewId }) {
 
   const now = data ? new Date(data.generated_at).getTime() : 0;
   // Сверху — кто был недавно: их и хочется видеть первыми.
+  // Поиск — по имени, почте (и Google), номеру «ID 12» или просто «12».
+  const q = query.trim().toLowerCase().replace(/^id\s*/, "");
+  const matches = (u: AdminUser) =>
+    !q ||
+    [u.display_name, u.email, u.google_email].some((v) => v?.toLowerCase().includes(q)) ||
+    String(u.number ?? "") === q;
   const users = (data?.users ?? [])
     .filter((u) => VIEWS[view].test(u, now))
+    .filter((u) => matches(u))
     .sort((a, b) => (b.last_seen ?? "").localeCompare(a.last_seen ?? ""));
 
   return (
@@ -81,6 +89,25 @@ export function ViewScreen({ initial }: { initial: ViewId }) {
           );
         })}
       </nav>
+
+      <label
+        className="mb-3 flex items-center gap-2 rounded-2xl px-3 py-2.5"
+        style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+      >
+        <Icon name="search" size={16} style={{ color: "var(--muted)" }} />
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Имя, почта или ID"
+          className="min-w-0 flex-1 bg-transparent text-[0.9375rem] outline-none"
+          inputMode="search"
+        />
+        {query ? (
+          <button onClick={() => setQuery("")} aria-label="Очистить поиск" style={{ color: "var(--muted)" }}>
+            <Icon name="close" size={16} />
+          </button>
+        ) : null}
+      </label>
 
       {problem ? <Problem text={problem} /> : null}
 

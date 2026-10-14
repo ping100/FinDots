@@ -127,7 +127,8 @@ function Totals({ data }: { data: AdminOverview }) {
         ))}
       </div>
       <p className="mt-2 px-1 text-[0.75rem] leading-snug" style={{ color: "var(--muted)" }}>
-        Деньгами пользуются {inline("money")} · задачами {inline("tasks")}. Всего{" "}
+        Деньгами пользуются {inline("money")} · задачами {inline("tasks")} · FemDots {inline("fem")} ·
+        водой и сном {inline("wellness")}. Уведомления включены у {inline("push")}. Всего{" "}
         {t.transactions} {plural(t.transactions, "операция", "операции", "операций")} и {t.tasks}{" "}
         {plural(t.tasks, "задача", "задачи", "задач")}.
       </p>

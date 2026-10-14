@@ -297,7 +297,7 @@ export function UserActionsSheet({
             <div className="overflow-hidden rounded-2xl" style={{ border: "1px solid var(--danger)" }}>
               <ActionRow
                 label="Очистить базу"
-                hint="Удалить все кошельки, категории, операции и задачи — насовсем"
+                hint="Удалить данные всех приложений — аккаунт останется"
                 danger
                 onClick={() => setStage("wipe")}
               />
@@ -315,7 +315,7 @@ export function UserActionsSheet({
           phraseNeeded={stage === "wipe" ? WIPE_PHRASE : DELETE_PHRASE}
           description={
             stage === "wipe"
-              ? `Удалятся насовсем: кошельки, накопления, долги, категории, операции и задачи «${title}». Аккаунт и вход не тронем.`
+              ? `Удалятся насовсем все данные «${title}» во всех приложениях: кошельки, накопления, долги, категории, операции и курсы Findots; задачи, вода и сон Todots; записи FemDots и связь с партнёром. Аккаунт, вход, отзывы и переписку с поддержкой не тронем.`
               : `Учётная запись «${title}», вход и все данные исчезнут навсегда. Отменить нельзя.`
           }
           submitLabel={stage === "wipe" ? "Очистить базу насовсем" : "Удалить аккаунт насовсем"}

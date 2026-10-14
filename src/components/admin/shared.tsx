@@ -199,6 +199,20 @@ export function UserCard({
                 ? `${user.ai_calls} ${plural(user.ai_calls, "раз", "раза", "раз")}`
                 : "доступ закрыт"}
             </span>
+            <span>
+              <span style={{ color: "var(--muted)" }}>FemDots: </span>
+              {user.fem ? "пользуется" : "нет"}
+            </span>
+            <span>
+              <span style={{ color: "var(--muted)" }}>Вода и сон: </span>
+              {user.wellness ? "включены" : "нет"}
+            </span>
+            <span className="col-span-2">
+              <span style={{ color: "var(--muted)" }}>Уведомления: </span>
+              {user.push_devices
+                ? `включены на ${user.push_devices} ${plural(user.push_devices, "устройстве", "устройствах", "устройствах")}`
+                : "выключены — пуши не дойдут"}
+            </span>
             <span className="col-span-2 flex min-w-0 items-center gap-1.5">
               <span className="shrink-0" style={{ color: "var(--muted)" }}>Google:</span>
               {user.google_email ? (

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Icon } from "@/lib/icons";
 import { PHASE_COLOR, type CycleInfo, type Goal, type Phase } from "@/lib/fem/cycle";
 import { chanceOf } from "@/lib/fem/phrases";
@@ -64,6 +65,24 @@ export function PartnerToday({
   goal: Goal | null;
   onAbout: () => void;
 }) {
+  // Раскрыто ли — запоминаем на телефоне.
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    try {
+      setOpen(localStorage.getItem("fem.partnerToday.open") === "1");
+    } catch {
+      // Нет памяти — свёрнуто.
+    }
+  }, []);
+  const toggle = () =>
+    setOpen((v) => {
+      try {
+        localStorage.setItem("fem.partnerToday.open", v ? "0" : "1");
+      } catch {
+        // Не запомнили — не страшно.
+      }
+      return !v;
+    });
   const phase = info.phase;
   if (!phase) return null;
   const chance = chanceOf(phase);
@@ -132,8 +151,30 @@ export function PartnerToday({
         ) : null}
       </div>
 
-      <List title="Что делать" items={todo} good />
-      <List title="Чего не делать" items={notTodo} />
+      {/* Советы — свёрнуты: сводка короткая, раскрыть одним нажатием. */}
+      <button
+        onClick={toggle}
+        aria-expanded={open}
+        className="mt-3 flex w-full items-center gap-2 rounded-2xl px-3 py-2.5 text-left transition active:scale-[0.98]"
+        style={{ background: "var(--surface-2)" }}
+      >
+        <span className="flex -space-x-1">
+          <Dot good />
+          <Dot />
+        </span>
+        <span className="min-w-0 flex-1 text-[0.8125rem] font-medium">
+          {open ? "Свернуть советы" : `Что делать и чего не делать · ${todo.length + notTodo.length}`}
+        </span>
+        <Icon name="chevron-down" size={16} className="shrink-0 opacity-50 transition-transform" style={{ transform: open ? "rotate(180deg)" : undefined }} />
+      </button>
+      {open ? (
+        <div className="animate-expand">
+          <div>
+            <List title="Что делать" items={todo} good />
+            <List title="Чего не делать" items={notTodo} />
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -170,5 +211,17 @@ function List({ title, items, good }: { title: string; items: string[]; good?: b
         ))}
       </ul>
     </div>
+  );
+}
+
+function Dot({ good }: { good?: boolean }) {
+  const tone = good ? "#14b8a6" : "#f43f5e";
+  return (
+    <span
+      className="flex h-5 w-5 items-center justify-center rounded-full"
+      style={{ background: `color-mix(in srgb, ${tone} 18%, var(--surface))`, color: tone, boxShadow: "0 0 0 2px var(--surface-2)" }}
+    >
+      <Icon name={good ? "check" : "close"} size={11} />
+    </span>
   );
 }

@@ -10,7 +10,7 @@ import { Sheet, Switch } from "@/components/ui";
 import { useFem } from "./DataProvider";
 import { FemHeader } from "./Shell";
 import { DayHero, plural } from "./parts";
-import { CycleDial, flowerStage } from "./CycleDial";
+import { CycleDial, DialStyleRow, flowerStage } from "./CycleDial";
 import { PartnerTogether } from "./Together";
 import { PartnerCalendar } from "./PartnerCalendar";
 import { ForecastCard } from "./Insights";
@@ -236,6 +236,9 @@ export function PartnerScreen() {
             </span>
           </span>
           <Switch checked={partner.remind} onChange={(v) => void setPartnerRemind(v)} label="Напоминать мне" />
+        </div>
+        <div className="px-4 py-3" style={{ borderTop: "1px solid var(--border)" }}>
+          <DialStyleRow />
         </div>
       </div>
 

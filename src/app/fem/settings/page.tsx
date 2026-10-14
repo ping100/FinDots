@@ -11,7 +11,7 @@ import { createClient } from "@/lib/supabase/client";
 import { disablePush } from "@/lib/pushClient";
 import { CURRENT_BUILD, applyUpdate, buildMoment, serverBuild } from "@/lib/update";
 import { useFem } from "@/components/fem/DataProvider";
-import { DIAL_STYLES, DialStylePicker } from "@/components/fem/CycleDial";
+import { DialStyleRow } from "@/components/fem/CycleDial";
 import { FemHeader } from "@/components/fem/Shell";
 import { Stepper } from "@/components/fem/parts";
 import { PartnerJoin, PartnerShare } from "@/components/fem/PartnerShare";
@@ -472,34 +472,5 @@ function Row({
       </span>
       <Switch checked={on} onChange={onChange} label={title} />
     </div>
-  );
-}
-
-/** «Вид круга цикла · Цветок ›» — открывает выбор с картинками. */
-function DialStyleRow() {
-  const { profile, saveProfile } = useFem();
-  const [open, setOpen] = useState(false);
-  const cur = profile?.fem_ring ?? "flower";
-  return (
-    <>
-      <button onClick={() => setOpen(true)} className="flex w-full items-center gap-2 text-left">
-        <span className="min-w-0 flex-1 text-[0.8125rem]" style={{ color: "var(--muted)" }}>
-          Вид круга цикла на главной
-        </span>
-        <span className="text-[0.9375rem] font-semibold" style={{ color: "var(--accent)" }}>
-          {DIAL_STYLES.find((d) => d.id === cur)?.label}
-        </span>
-        <Icon name="chevron-right" size={16} className="opacity-40" />
-      </button>
-      <Sheet open={open} title="Вид круга цикла" onClose={() => setOpen(false)}>
-        <DialStylePicker
-          value={cur}
-          onChange={(v) => {
-            void saveProfile({ fem_ring: v === "flower" ? null : v });
-            setOpen(false);
-          }}
-        />
-      </Sheet>
-    </>
   );
 }

@@ -73,7 +73,7 @@ function el(tag: string, a: Record<string, string | number> = {}, parent?: Eleme
 }
 
 /**
- * Круг цикла на главной — в выбранном виде. Цветок по умолчанию; на
+ * Круг цикла на главной — в виде, выбранном в настройках. Цветок по умолчанию; на
  * гормональной контрацепции и в беременность — всегда классическое кольцо.
  */
 export function CycleDial({ info, size = 280 }: { info: CycleInfo; size?: number }) {
@@ -95,7 +95,6 @@ export function CycleDial({ info, size = 280 }: { info: CycleInfo; size?: number
     return (
       <div className="relative">
         <CycleRing info={info} size={Math.round(size * 0.84)} />
-        <DialStyleButton />
       </div>
     );
   }
@@ -105,7 +104,6 @@ export function CycleDial({ info, size = 280 }: { info: CycleInfo; size?: number
       <div className="relative mx-auto" style={{ width: size, height: size }}>
         <Body d={d} size={size} pick={pick} late={info.late > 0} />
         <DialCenter info={info} d={d} picked={picked} onClear={() => setPicked(null)} size={size} disk={style === "flower"} />
-        <DialStyleButton />
       </div>
       {!known ? (
         <p className="animate-lift mt-1 text-center text-[0.75rem] font-medium" style={{ color: "var(--accent)" }}>
@@ -192,23 +190,31 @@ function DialCenter({
   );
 }
 
-/** Кнопка-палитра в углу круга: выбрать вид. */
-function DialStyleButton() {
+/** Строка настроек «Вид круга цикла · [картинка] Цветок ›» — открывает выбор. */
+export function DialStyleRow({ className = "" }: { className?: string }) {
   const { profile, saveProfile } = useFem();
   const [open, setOpen] = useState(false);
   const cur: DialStyle = profile?.fem_ring ?? "flower";
   return (
     <>
-      <button
-        onClick={() => setOpen(true)}
-        aria-label="Вид круга цикла"
-        className="absolute -right-1 -top-3 flex h-9 w-9 items-center justify-center rounded-full transition active:scale-90"
-        style={{ background: "var(--surface-2)", color: "var(--muted)" }}
-      >
-        <Icon name="palette" size={17} />
+      <button onClick={() => setOpen(true)} className={`flex w-full items-center gap-3 text-left ${className}`}>
+        <DialThumb kind={cur} />
+        <span className="min-w-0 flex-1">
+          <span className="block text-[0.9375rem]">Вид круга цикла</span>
+          <span className="block text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
+            {DIAL_STYLES.find((d) => d.id === cur)?.label} · {DIAL_STYLES.find((d) => d.id === cur)?.hint.toLowerCase()}
+          </span>
+        </span>
+        <Icon name="chevron-right" size={16} className="shrink-0 opacity-40" />
       </button>
       <Sheet open={open} title="Вид круга цикла" onClose={() => setOpen(false)}>
-        <DialStylePicker value={cur} onChange={(v) => void saveProfile({ fem_ring: v === "flower" ? null : v })} />
+        <DialStylePicker
+          value={cur}
+          onChange={(v) => {
+            void saveProfile({ fem_ring: v === "flower" ? null : v });
+            setOpen(false);
+          }}
+        />
       </Sheet>
     </>
   );

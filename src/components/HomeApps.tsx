@@ -1,10 +1,12 @@
 "use client";
 
-import { Fragment, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "@/lib/icons";
 import { createClient } from "@/lib/supabase/client";
-import { HomeCard } from "./HomeCard";
 import { HomeAdminCard } from "./HomeAdminCard";
+import { Orbit } from "./home/Orbit";
+import { HomeSummary } from "./home/HomeSummary";
+import { SunPath } from "./home/SunPath";
 import { Sheet, Switch } from "./ui";
 
 /** Приложения Dots на развилке. Какие показывать — выбирают шестерёнкой. */
@@ -17,6 +19,9 @@ export const APPS = [
     hint: "Сколько есть, сколько ушло и сколько можно потратить сегодня",
     icon: "wallet",
     color: "#22c55e",
+    hi: "#86efac",
+    lo: "#15803d",
+    summary: "Сколько можно тратить сегодня",
   },
   {
     id: "tasks",
@@ -26,6 +31,9 @@ export const APPS = [
     hint: "Что сделать сегодня, что переносится и что горит",
     icon: "list",
     color: "#60a5fa",
+    hi: "#bfdbfe",
+    lo: "#1d4ed8",
+    summary: "Сколько задач осталось и что дальше",
   },
   {
     id: "fem",
@@ -35,27 +43,37 @@ export const APPS = [
     hint: "Календарь цикла: прогноз месячных, овуляция и самочувствие",
     icon: "flower",
     color: "#ec4899",
+    hi: "#fbcfe8",
+    lo: "#be185d",
+    summary: "День цикла и сколько до месячных",
   },
 ] as const;
 
 const KEY = "dots.home.apps";
 const DEFAULT = ["money", "tasks"];
+/** Сводка на главной — на этом телефоне: её видит всякий, кто смотрит на экран. */
+const SUMMARY_KEY = "dots.home.summary";
 
 /**
- * Карточки приложений и шестерёнка в углу: в ней включают и выключают
- * приложения на развилке. Выбор хранится в профиле — на другом телефоне
- * будет тот же; в памяти телефона — копия, чтобы карточки не мигали.
+ * Орбита приложений и шестерёнка в углу: в ней включают и выключают
+ * приложения на развилке и сводку под орбитой. Какие приложения — в
+ * профиле (на другом телефоне будет тот же выбор) и копией в памяти
+ * телефона, чтобы орбита не мигала. Сводка — только в памяти телефона.
+ *
+ * Сводка выключена — орбита крупная, посередине, под ней дуга солнца.
+ * Включена — орбита меньше и выше, под ней строки сводки.
  */
 export function HomeApps({ delay }: { delay: number }) {
-  // null — ещё не знаем, какие включены: не рисуем ничего, чтобы плитки не
-  // появлялись вразнобой (сначала две по умолчанию, потом третья).
+  // null — ещё не знаем, какие включены: не рисуем ничего, чтобы шары не
+  // появлялись вразнобой (сначала два по умолчанию, потом третий).
   const [enabled, setEnabled] = useState<string[] | null>(null);
-  // Когда показать первую плитку: задержка считается от открытия страницы.
+  const [summary, setSummary] = useState<string[]>([]);
+  // Когда показать орбиту: задержка считается от открытия страницы.
   const mountedAt = useRef(0);
   const [start, setStart] = useState(0);
   const [userId, setUserId] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
-  // Средние оценки приложений: null — ещё не пришли (строку не рисуем).
+  // Средние оценки приложений: null — ещё не пришли.
   const [ratings, setRatings] = useState<Map<string, { average: number; total: number }> | null>(null);
 
   useEffect(() => {
@@ -66,6 +84,8 @@ export function HomeApps({ delay }: { delay: number }) {
         return apps;
       });
     try {
+      const saved = JSON.parse(localStorage.getItem(SUMMARY_KEY) ?? "null");
+      if (Array.isArray(saved)) setSummary(saved);
       const cached = JSON.parse(localStorage.getItem(KEY) ?? "null");
       if (Array.isArray(cached) && cached.length) show(cached);
     } catch {
@@ -105,57 +125,65 @@ export function HomeApps({ delay }: { delay: number }) {
     if (userId) await createClient().from("profiles").update({ apps_enabled: ordered }).eq("id", userId);
   };
 
+  const toggleSummary = (id: string, on: boolean) => {
+    const next = on ? [...summary.filter((x) => x !== id), id] : summary.filter((x) => x !== id);
+    setSummary(next);
+    try {
+      localStorage.setItem(SUMMARY_KEY, JSON.stringify(next));
+    } catch {
+      // Не запомнится — до перезагрузки всё равно работает.
+    }
+  };
+
   const shown = enabled ? APPS.filter((a) => enabled.includes(a.id)) : [];
-  // Что было на экране при первом показе — включённые потом шестерёнкой
-  // раздвигают место плавно.
-  const initial = useRef<Set<string> | null>(null);
-  if (!initial.current && enabled) initial.current = new Set(shown.map((a) => a.id));
+  const summed = shown.filter((a) => summary.includes(a.id));
+  const compact = summed.length > 0;
 
   return (
     <>
       <button
         onClick={() => setOpen(true)}
-        aria-label="Какие приложения показывать"
-        className="animate-fade fixed right-4 z-30 flex h-10 w-10 items-center justify-center rounded-full transition active:scale-90"
-        style={{
-          top: "calc(env(safe-area-inset-top) + 12px)",
-          background: "var(--surface)",
-          border: "1px solid var(--border)",
-          color: "var(--muted)",
-        }}
+        aria-label="Приложения и сводка на главной"
+        className="glass animate-fade fixed right-4 z-30 flex h-10 w-10 items-center justify-center rounded-full transition active:scale-90"
+        style={{ top: "calc(env(safe-area-inset-top) + 12px)", color: "var(--ink-2)" }}
       >
         <Icon name="gear" size={19} />
       </button>
 
-      {/* Место под плитки держим заранее, чтобы низ страницы не прыгал. */}
-      <div className="space-y-3" style={{ minHeight: enabled ? undefined : 2 * 84 + 12 }}>
-        {shown.map((app, index) => {
-          const late = !initial.current?.has(app.id);
-          const card = (
-            <HomeCard
-              href={app.href}
-              title={app.what}
-              hint={app.hint}
-              icon={app.icon}
-              color={app.color}
-              delay={late ? 0 : start + index * 110}
-              rating={ratings ? (ratings.get(app.id) ?? null) : undefined}
-            />
-          );
-          return late ? (
-            <div key={app.href} className="animate-expand">
-              {card}
+      {/* Место под орбиту держим заранее, чтобы низ страницы не прыгал. */}
+      <div className={`flex flex-1 flex-col ${compact ? "" : "justify-center"}`} style={{ minHeight: enabled ? undefined : 340 }}>
+        {enabled ? (
+          <>
+            <div className={compact ? "mt-4" : "my-auto pt-4"}>
+              <Orbit apps={shown} compact={compact} delay={start} ratings={ratings} />
             </div>
-          ) : (
-            <Fragment key={app.href}>{card}</Fragment>
-          );
-        })}
-        {enabled ? <HomeAdminCard delay={start + shown.length * 110} /> : null}
+            {compact ? (
+              <div className="mt-1">
+                <HomeSummary apps={summed} delay={start + 200} />
+              </div>
+            ) : (
+              <div className="mt-2 space-y-3">
+                <SunPath delay={start + 450} />
+                <button
+                  onClick={() => setOpen(true)}
+                  className="glass animate-lift mx-auto flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[0.8125rem] font-medium transition active:scale-95"
+                  style={{ color: "var(--ink-2)", animationDelay: `${start + 550}ms` }}
+                >
+                  <Icon name="plus" size={15} />
+                  Сводка на главной
+                </button>
+              </div>
+            )}
+            <div className="mt-4 space-y-3">
+              <HomeAdminCard />
+            </div>
+          </>
+        ) : null}
       </div>
 
-      <Sheet open={open} title="Приложения" onClose={() => setOpen(false)}>
+      <Sheet open={open} title="Главная" onClose={() => setOpen(false)}>
         <p className="mb-3 text-[0.8125rem] leading-snug" style={{ color: "var(--muted)" }}>
-          Какие показывать на главной. Выключенное приложение просто прячется — данные в нём остаются.
+          Какие приложения кружат на орбите. Выключенное просто прячется — данные в нём остаются.
         </p>
         <div className="mb-3 overflow-hidden rounded-2xl" style={{ background: "var(--surface-2)" }}>
           {APPS.map((app, i) => {
@@ -184,6 +212,30 @@ export function HomeApps({ delay }: { delay: number }) {
               </div>
             );
           })}
+        </div>
+
+        <p className="mb-1 mt-5 text-[0.9375rem] font-semibold">Сводка на главной</p>
+        <p className="mb-3 text-[0.8125rem] leading-snug" style={{ color: "var(--muted)" }}>
+          Главное из приложения — прямо под орбитой, без захода внутрь. Её видит любой, кто смотрит на экран,
+          поэтому включается отдельно и только на этом телефоне.
+        </p>
+        <div className="mb-3 overflow-hidden rounded-2xl" style={{ background: "var(--surface-2)" }}>
+          {shown.map((app, i) => (
+            <div
+              key={app.id}
+              className="flex items-center gap-3 px-4 py-3"
+              style={{ borderTop: i ? "1px solid var(--border)" : undefined }}
+            >
+              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: app.color }} />
+              <span className="min-w-0 flex-1">
+                <span className="block text-[0.9375rem]">{app.name}</span>
+                <span className="mt-0.5 block text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
+                  {app.summary}
+                </span>
+              </span>
+              <Switch checked={summary.includes(app.id)} onChange={(v) => toggleSummary(app.id, v)} label={`Сводка ${app.name}`} />
+            </div>
+          ))}
         </div>
       </Sheet>
     </>

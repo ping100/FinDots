@@ -1,16 +1,16 @@
 import Link from "next/link";
-import { Logo } from "@/components/Logo";
 import { HomeApps } from "@/components/HomeApps";
 import { Greeting } from "@/components/Greeting";
 import { HomeWidgets } from "@/components/HomeWidgets";
+import { HomeSky } from "@/components/home/Sky";
+import { SKY_SCRIPT } from "@/lib/sky";
 
 /**
  * Развилка: одна учётная запись, несколько приложений Dots.
  *
- * Страница нарочно лёгкая — ни данных, ни провайдеров. Человек попадает
- * сюда сразу после входа, и тянуть ради пары кнопок кошельки с операциями
- * незачем. Всё, что ей нужно, уже проверено: без входа сюда не пускает
- * проверка в proxy. Какие приложения показывать — шестерёнка (HomeApps).
+ * Небо по времени суток, приветствие, погода с курсом и орбита — шары
+ * приложений медленно кружат вокруг знака Dots. Сводка под орбитой
+ * включается в шестерёнке (HomeApps). Без входа сюда не пускает proxy.
  */
 export default async function Home({
   searchParams,
@@ -21,54 +21,37 @@ export default async function Home({
   const deniedName = { money: "Деньги", tasks: "Задачи", fem: "Цикл" }[denied ?? ""] ?? null;
 
   return (
-    <div className="auth-glow mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center px-6 py-8">
-      {/* Поля сверху и над ссылкой внизу делят свободное место поровну:
-          развилка остаётся посередине, а ссылка прижата к низу. */}
-      <div className="mb-7 mt-auto flex flex-col items-center text-center">
-        <Logo size={64} animated="long" />
-        <h1
-          className="animate-lift mt-4 text-[1.75rem] font-semibold tracking-tight"
-          style={{ animationDelay: "700ms" }}
-        >
-          Dots
-        </h1>
+    // Скрипт красит небо до первой отрисовки — иначе мелькнёт чужое время суток.
+    <HomeSky script={<script dangerouslySetInnerHTML={{ __html: SKY_SCRIPT }} />}>
+      <div
+        className="mx-auto flex min-h-dvh w-full max-w-sm flex-col px-5 pb-6"
+        style={{ paddingTop: "calc(env(safe-area-inset-top) + 60px)" }}
+      >
         <Greeting />
-        {/* Сначала — что снаружи (погода, курс), потом вопрос «куда»: он
-            ведёт к кнопкам разделов прямо под ним. */}
-        <HomeWidgets delay={780} />
+        <HomeWidgets delay={380} />
+
+        {deniedName ? (
+          <p className="glass mt-4 rounded-2xl px-4 py-3 text-center text-sm leading-snug" style={{ color: "#ef4444" }}>
+            Доступ к разделу «{deniedName}» закрыт
+          </p>
+        ) : null}
+
+        <HomeApps delay={450} />
+
         <p
-          className="animate-lift mt-5 text-sm leading-snug"
-          style={{ color: "var(--muted)", animationDelay: "840ms" }}
+          className="animate-lift mt-5 text-center text-[0.75rem] leading-snug"
+          style={{ color: "var(--ink-2)", animationDelay: "1100ms" }}
         >
-          Куда пойдём?
+          Один вход — все приложения Dots
         </p>
+        <Link
+          href="/privacy"
+          className="animate-lift mt-1.5 self-center text-[0.6875rem] underline decoration-dotted underline-offset-2"
+          style={{ color: "var(--ink-2)", animationDelay: "1150ms" }}
+        >
+          Политика конфиденциальности
+        </Link>
       </div>
-
-      {deniedName ? (
-        <p
-          className="mb-4 rounded-2xl px-4 py-3 text-center text-sm leading-snug"
-          style={{ background: "var(--surface)", color: "var(--danger)" }}
-        >
-          Доступ к разделу «{deniedName}» закрыт
-        </p>
-      ) : null}
-
-      <HomeApps delay={850} />
-
-      <p
-        className="animate-lift mt-6 text-center text-xs leading-snug"
-        style={{ color: "var(--muted)", animationDelay: "1060ms" }}
-      >
-        Учётная запись одна на все приложения — вошли один раз и пользуетесь всеми.
-      </p>
-
-      <Link
-        href="/privacy"
-        className="animate-lift mt-auto self-center pt-8 text-[0.6875rem] underline decoration-dotted underline-offset-2"
-        style={{ color: "var(--muted)", animationDelay: "1110ms" }}
-      >
-        Политика конфиденциальности
-      </Link>
-    </div>
+    </HomeSky>
   );
 }

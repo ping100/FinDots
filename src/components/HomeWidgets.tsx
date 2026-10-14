@@ -16,10 +16,20 @@ import { DEFAULT_SHOWN, crossRate, formatRate, labelFor, perFor, useOfficialRate
  * появляются сразу, а свежие данные подтягиваются следом.
  */
 
-type Weather = { temp: number; code: number; day: boolean; city: string; at: number };
+/** sun — восход и закат на сегодня и завтра, местное время «2026-10-14T07:41». */
+export type Weather = {
+  temp: number;
+  code: number;
+  day: boolean;
+  city: string;
+  at: number;
+  sun?: { rise: string[]; set: string[] };
+};
 type Shown = { codes: string[]; base: string };
 
-const WEATHER_KEY = "dots.home.weather";
+export const WEATHER_KEY = "dots.home.weather";
+/** Погода обновилась — дуга солнца под орбитой перечитывает память. */
+export const WEATHER_EVENT = "dots:weather";
 const SHOWN_KEY = "dots.home.shown";
 const FRESH_MS = 30 * 60_000;
 
@@ -67,9 +77,12 @@ function describe(code: number, day: boolean): { icon: string; text: string } {
 
 async function loadWeather(lat: number, lon: number, city: string): Promise<Weather> {
   const res = await fetch(
-    `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,is_day&timezone=auto`,
+    `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,is_day&daily=sunrise,sunset&forecast_days=2&timezone=auto`,
   );
-  const json = (await res.json()) as { current?: { temperature_2m: number; weather_code: number; is_day: number } };
+  const json = (await res.json()) as {
+    current?: { temperature_2m: number; weather_code: number; is_day: number };
+    daily?: { sunrise?: string[]; sunset?: string[] };
+  };
   if (!json.current) throw new Error("нет погоды");
   return {
     temp: Math.round(json.current.temperature_2m),
@@ -77,6 +90,7 @@ async function loadWeather(lat: number, lon: number, city: string): Promise<Weat
     day: json.current.is_day === 1,
     city,
     at: Date.now(),
+    sun: json.daily?.sunrise && json.daily.sunset ? { rise: json.daily.sunrise, set: json.daily.sunset } : undefined,
   };
 }
 
@@ -117,7 +131,8 @@ export function HomeWidgets({ delay = 0 }: { delay?: number }) {
     if (cachedW) setWeather(cachedW);
     if (cachedS) setShown(cachedS);
 
-    if (!cachedW || Date.now() - cachedW.at > FRESH_MS) void refreshWeather(false);
+    // Без восхода и заката — запись от прошлой версии, обновляем сразу.
+    if (!cachedW || !cachedW.sun || Date.now() - cachedW.at > FRESH_MS) void refreshWeather(false);
     const supabase = createClient();
     void supabase.auth.getSession().then(async ({ data }) => {
       const id = data.session?.user.id;
@@ -148,6 +163,7 @@ export function HomeWidgets({ delay = 0 }: { delay?: number }) {
       const next = await loadWeather(lat, lon, city);
       setWeather(next);
       write(WEATHER_KEY, next);
+      window.dispatchEvent(new Event(WEATHER_EVENT));
     } catch {
       // Без сети — останется то, что было в памяти.
     } finally {
@@ -176,17 +192,16 @@ export function HomeWidgets({ delay = 0 }: { delay?: number }) {
         <button
           onClick={() => void refreshWeather(true)}
           aria-label={`Погода: ${weather.city}, ${weather.temp}°, ${sky.text}. Нажмите, чтобы обновить по месту`}
-          className="flex h-9 items-center gap-1.5 rounded-full pl-2 pr-3 text-[0.8125rem] transition active:scale-95"
-          style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+          className="glass flex h-9 items-center gap-1.5 rounded-full pl-2 pr-3 text-[0.8125rem] transition active:scale-95"
         >
-          <span style={{ color: weather.day && sky.icon.includes("sun") ? "#f59e0b" : "var(--accent)" }}>
+          <span style={{ color: weather.day && sky.icon.includes("sun") ? "#f59e0b" : sky.icon === "moon" ? "#fcd34d" : "var(--ink-2)" }}>
             <Icon name={sky.icon} size={18} />
           </span>
           <span className="font-semibold tabular-nums">
             {weather.temp > 0 ? "+" : ""}
             {weather.temp}°
           </span>
-          <span className="max-w-[7rem] truncate" style={{ color: "var(--muted)" }}>
+          <span className="max-w-[7rem] truncate" style={{ color: "var(--ink-2)" }}>
             {locating ? "ищу…" : weather.city}
           </span>
         </button>
@@ -194,13 +209,12 @@ export function HomeWidgets({ delay = 0 }: { delay?: number }) {
 
       {rates.length ? (
         <span
-          className="flex h-9 items-center gap-2.5 rounded-full px-3 text-[0.8125rem] tabular-nums"
-          style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+          className="glass flex h-9 items-center gap-2.5 rounded-full px-3 text-[0.8125rem] tabular-nums"
           aria-label={`Курс Нацбанка: ${rates.map((r) => `${r.code} ${formatRate(r.value)}`).join(", ")}`}
         >
           {rates.map((r, i) => (
             <span key={r.code} className="flex items-center gap-2.5">
-              {i > 0 ? <span className="h-3.5 w-px" style={{ background: "var(--border)" }} /> : null}
+              {i > 0 ? <span className="h-3.5 w-px" style={{ background: "var(--glass-line)" }} /> : null}
               <Rate sign={labelFor(r.code)} value={r.value} change={r.change} />
             </span>
           ))}
@@ -215,7 +229,7 @@ function Rate({ sign, value, change }: { sign: string; value: number; change?: n
   const moved = change && Math.abs(change) >= 0.005 ? change : 0;
   return (
     <span className="flex items-center gap-1">
-      <span style={{ color: "var(--muted)" }}>{sign}</span>
+      <span style={{ color: "var(--ink-2)" }}>{sign}</span>
       <span className="font-semibold">{formatRate(value)}</span>
       {moved ? (
         <span

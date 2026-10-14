@@ -1,28 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { Icon } from "@/lib/icons";
 import { useIsAdmin } from "@/lib/useIsAdmin";
-import { HomeCard } from "./HomeCard";
 import { unreadSupport } from "./admin/SupportCard";
 
 /**
- * Третья дверь на развилке — только для админа. Прятать её — удобство, а
+ * Вход в админку на развилке — только для админа: небольшая стеклянная
+ * плашка под орбитой, с числом новых обращений. Прятать её — удобство, а
  * не защита: сводку отдаёт база и сама проверяет, кто спрашивает.
  */
-export function HomeAdminCard({ delay }: { delay: number }) {
+export function HomeAdminCard() {
   const admin = useIsAdmin();
   const [unread, setUnread] = useState(0);
-  // Карточка появляется после ответа базы — позже остальных. Задержку её
-  // появления считаем от открытия страницы, а не от своего появления, иначе
-  // она ждала бы ещё раз и выскакивала последней с паузой.
-  const mountedAt = useRef(0);
-  const [wait, setWait] = useState<number | null>(null);
-  useEffect(() => {
-    mountedAt.current = performance.now();
-  }, []);
-  useEffect(() => {
-    if (admin && wait === null) setWait(Math.max(0, delay - (performance.now() - mountedAt.current)));
-  }, [admin, delay, wait]);
 
   // Новые обращения видно прямо с развилки — не заходя в админку.
   useEffect(() => {
@@ -34,22 +25,21 @@ export function HomeAdminCard({ delay }: { delay: number }) {
     };
   }, [admin]);
 
-  if (!admin || wait === null) return null;
+  if (!admin) return null;
   return (
-    // Раздвигает место плавно, а не толкает список вниз рывком.
-    <div className="animate-expand">
-    <HomeCard
+    <Link
       href="/admin"
-      title="Админка"
-      hint={
-        unread > 0
-          ? `Новых обращений: ${unread}`
-          : "Пользователи, кто онлайн, обращения, лимиты Supabase и Vercel"
-      }
-      icon="shield"
-      color="#8b5cf6"
-      delay={wait}
-    />
-    </div>
+      className="glass animate-fade mx-auto flex h-10 w-max items-center gap-2 rounded-full pl-1.5 pr-3.5 text-[0.8125rem] font-semibold transition active:scale-95"
+    >
+      <span className="flex h-7 w-7 items-center justify-center rounded-full text-white" style={{ background: "#8b5cf6" }}>
+        <Icon name="shield" size={15} />
+      </span>
+      Админка
+      {unread > 0 ? (
+        <span className="rounded-full px-1.5 py-px text-[0.6875rem] tabular-nums text-white" style={{ background: "#ef4444" }}>
+          {unread} {unread === 1 ? "новое" : "новых"}
+        </span>
+      ) : null}
+    </Link>
   );
 }

@@ -14,6 +14,8 @@ import { CycleDial, DialStyleRow, flowerStage } from "./CycleDial";
 import { PartnerTogether } from "./Together";
 import { PartnerCalendar } from "./PartnerCalendar";
 import { ForecastCard } from "./Insights";
+import { THEMES } from "@/lib/look";
+import { TEXT_SCALES } from "@/lib/textScale";
 
 /** Фаза — глазами партнёра: что происходит и как поддержать. */
 const PARTNER_PHASE: Record<Phase, { title: string; about: string; tips: string[] }> = {
@@ -71,7 +73,7 @@ const PARTNER_PHASE: Record<Phase, { title: string; about: string; tips: string[
  * она поделилась; отключиться можно в любой момент.
  */
 export function PartnerScreen() {
-  const { partner, leavePartner, setPartnerRemind, profile } = useFem();
+  const { partner, leavePartner, setPartnerRemind, profile, saveProfile } = useFem();
   const now = today();
   const [confirm, setConfirm] = useState(false);
   const [prefs, setPrefs] = useState(false);
@@ -263,6 +265,41 @@ export function PartnerScreen() {
           </div>
         </div>
 
+        <p className="mb-1.5 mt-4 px-1 text-xs font-semibold" style={{ color: "var(--muted)" }}>
+          Оформление — общее для всех приложений Dots
+        </p>
+        <div className="space-y-3 rounded-2xl px-4 py-3.5" style={{ background: "var(--surface-2)" }}>
+          <div>
+            <p className="mb-2 text-[0.8125rem]" style={{ color: "var(--muted)" }}>
+              Тема
+            </p>
+            <div className="flex gap-2">
+              {THEMES.map(({ id, label }) => (
+                <LookChoice key={id} on={(profile?.theme ?? "system") === id} onClick={() => void saveProfile({ theme: id })}>
+                  {label}
+                </LookChoice>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="mb-2 text-[0.8125rem]" style={{ color: "var(--muted)" }}>
+              Размер шрифта
+            </p>
+            <div className="flex gap-2">
+              {TEXT_SCALES.map((item) => (
+                <LookChoice
+                  key={item.id}
+                  on={(profile?.text_scale ?? "medium") === item.id}
+                  onClick={() => void saveProfile({ text_scale: item.id })}
+                  fontSize={`${0.875 * item.factor}rem`}
+                >
+                  {item.label}
+                </LookChoice>
+              ))}
+            </div>
+          </div>
+        </div>
+
         <button
           onClick={async () => {
             if (!confirm) {
@@ -439,5 +476,24 @@ function Tag({ children }: { children: React.ReactNode }) {
     <span className="rounded-full px-3 py-1.5 text-[0.8125rem]" style={{ background: "var(--surface-2)" }}>
       {children}
     </span>
+  );
+}
+
+/** Кнопка выбора темы или размера шрифта — как в настройках у неё. */
+function LookChoice({ on, onClick, fontSize, children }: { on: boolean; onClick: () => void; fontSize?: string; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      aria-pressed={on}
+      className="min-w-0 flex-1 rounded-xl px-1.5 py-2.5 font-medium transition active:scale-95"
+      style={{
+        fontSize: fontSize ?? "0.875rem",
+        background: on ? "var(--surface)" : "transparent",
+        color: on ? "var(--accent)" : "var(--text)",
+        border: `1px solid ${on ? "var(--accent)" : "var(--border)"}`,
+      }}
+    >
+      {children}
+    </button>
   );
 }

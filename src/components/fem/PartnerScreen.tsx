@@ -9,7 +9,8 @@ import { chanceOf } from "@/lib/fem/phrases";
 import { Sheet, Switch } from "@/components/ui";
 import { useFem } from "./DataProvider";
 import { FemHeader } from "./Shell";
-import { CycleRing, DayHero, plural } from "./parts";
+import { DayHero, plural } from "./parts";
+import { CycleFlower, flowerStage } from "./CycleFlower";
 import { PartnerTogether } from "./Together";
 import { PartnerCalendar } from "./PartnerCalendar";
 import { ForecastCard } from "./Insights";
@@ -173,7 +174,7 @@ export function PartnerScreen() {
 
       <div className="fem-card rounded-[28px] px-4 pb-5 pt-6">
         {info.lastStart ? (
-          <CycleRing info={info} size={220} />
+          <CycleFlower info={info} size={270} />
         ) : (
           <p className="py-10 text-center text-sm" style={{ color: "var(--muted)" }}>
             {name} ещё не отметила месячные — прогноз появится после первой отметки
@@ -182,6 +183,7 @@ export function PartnerScreen() {
         {phase && info.phase ? (
           <p className="mt-3 flex items-center justify-center gap-2 text-[0.8125rem] font-medium">
             <span className="h-2.5 w-2.5 rounded-full" style={{ background: PHASE_COLOR[info.phase] }} />
+            {flowerStage(info) ? `${flowerStage(info)} · ` : ""}
             {phase.title}
           </p>
         ) : null}

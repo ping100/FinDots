@@ -11,7 +11,8 @@ import { PartnerJoin } from "@/components/fem/PartnerShare";
 import { long, range, short } from "@/lib/fem/format";
 import { useFem } from "@/components/fem/DataProvider";
 import { FemHeader } from "@/components/fem/Shell";
-import { CycleRing, DayHero, plural, useLearned } from "@/components/fem/parts";
+import { DayHero, plural, useLearned } from "@/components/fem/parts";
+import { CycleFlower, flowerStage } from "@/components/fem/CycleFlower";
 import { CheckIn } from "@/components/fem/CheckIn";
 import { burst, centerOf } from "@/lib/fem/fx";
 
@@ -61,12 +62,13 @@ export default function FemToday() {
       {info.phase ? <DayHero phase={info.phase} day={now} who="own" goal={goal} /> : null}
 
       <div className="fem-card rounded-[28px] px-4 pb-5 pt-6">
-        <CycleRing info={info} size={232} />
+        <CycleFlower info={info} size={280} />
 
         {phase && info.phase ? (
           // Термин — мелко, под кольцом: главное уже сказано фразой дня.
           <p className="mt-3 text-center text-[0.75rem] leading-snug" style={{ color: "var(--muted)" }}>
             <span className="font-semibold" style={{ color: "var(--text)" }}>
+              {flowerStage(info) ? `${flowerStage(info)} · ` : ""}
               {phase.title}
             </span>{" "}
             · {phase.hint}
@@ -249,6 +251,7 @@ function FirstSteps({ partner }: { partner: string | null }) {
   const [known, learn] = useLearned("fem.hint.today");
   if (known) return null;
   const steps: [string, React.ReactNode][] = [
+    ["🌸", <>Цветок — ваш цикл: лепесток на каждый день, нажмите на любой. </>],
     ["🩸", <>Начались месячные — нажмите кнопку выше. Другой день — в <Link href="/fem/calendar" replace className="underline">календаре</Link>.</>],
     ["✍️", "Ниже — «Как вы сегодня?»: короткий опрос, пара нажатий в день делает прогноз точнее."],
     ["📊", <>Как прошёл цикл и что в норме — во вкладке <Link href="/fem/stats" replace className="underline">«Итоги»</Link>.</>],

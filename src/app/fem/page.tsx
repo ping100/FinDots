@@ -12,7 +12,7 @@ import { long, range, short } from "@/lib/fem/format";
 import { useFem } from "@/components/fem/DataProvider";
 import { FemHeader } from "@/components/fem/Shell";
 import { DayHero, plural, useLearned } from "@/components/fem/parts";
-import { CycleFlower, flowerStage } from "@/components/fem/CycleFlower";
+import { CycleDial, flowerStage } from "@/components/fem/CycleDial";
 import { CheckIn } from "@/components/fem/CheckIn";
 import { burst, centerOf } from "@/lib/fem/fx";
 
@@ -21,7 +21,7 @@ import { burst, centerOf } from "@/lib/fem/fx";
  * («начались» / «закончились»), ближайшие даты и самочувствие за сегодня.
  */
 export default function FemToday() {
-  const { settings, periods, days, partner, share, startPeriod, endPeriod, saveDay } = useFem();
+  const { settings, periods, days, partner, share, profile, startPeriod, endPeriod, saveDay } = useFem();
   const now = today();
   const info = useMemo(
     () => cycleInfo(periods, settings!, now, signalsFrom(days, settings)),
@@ -62,13 +62,13 @@ export default function FemToday() {
       {info.phase ? <DayHero phase={info.phase} day={now} who="own" goal={goal} /> : null}
 
       <div className="fem-card rounded-[28px] px-4 pb-5 pt-6">
-        <CycleFlower info={info} size={280} />
+        <CycleDial info={info} size={280} />
 
         {phase && info.phase ? (
           // Термин — мелко, под кольцом: главное уже сказано фразой дня.
           <p className="mt-3 text-center text-[0.75rem] leading-snug" style={{ color: "var(--muted)" }}>
             <span className="font-semibold" style={{ color: "var(--text)" }}>
-              {flowerStage(info) ? `${flowerStage(info)} · ` : ""}
+              {flowerStage(info, profile?.fem_ring ?? "flower") ? `${flowerStage(info, profile?.fem_ring ?? "flower")} · ` : ""}
               {phase.title}
             </span>{" "}
             · {phase.hint}

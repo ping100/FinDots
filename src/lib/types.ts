@@ -21,6 +21,8 @@ export interface Profile {
   shown_rates: string[];
   /** Пол — спрашивает FemDots при первом входе; null — ещё не спрашивал. */
   gender?: "female" | "male" | null;
+  /** Вид круга цикла в FemDots; null — цветок. */
+  fem_ring?: "flower" | "ring" | "beads" | "comet" | "petals" | null;
 }
 
 export interface ExchangeRate {

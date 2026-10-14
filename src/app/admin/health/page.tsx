@@ -36,7 +36,7 @@ export default function HealthPage() {
 
   return (
     <div className="pt-safe mx-auto w-full max-w-md px-4 pb-16">
-      <AdminHeader title="Проверка сервисов" busy={busy} onRefresh={() => void run()} />
+      <AdminHeader back="/admin/tech" title="Проверка сервисов" busy={busy} onRefresh={() => void run()} />
       {problem ? <Problem text={problem} /> : null}
       {checks ? (
         <p className="mb-3 px-1 text-[0.875rem] font-medium" style={{ color: bad ? COLOR.bad : COLOR.ok }}>

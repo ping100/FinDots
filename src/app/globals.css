@@ -981,3 +981,13 @@ input[type="date"]::-webkit-date-and-time-value {
   border: 1px solid rgba(255, 255, 255, 0.07);
   box-shadow: none;
 }
+
+/* Админка: кнопки действий в карточках «Сейчас». */
+.admin-pill {
+  background: var(--pill-bg);
+  color: var(--pill-fg);
+}
+.dark .admin-pill {
+  background: rgba(255, 255, 255, 0.08);
+  color: #e2e8f0;
+}

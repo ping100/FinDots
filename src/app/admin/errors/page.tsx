@@ -35,7 +35,7 @@ export default function ErrorsPage() {
 
   return (
     <div className="pt-safe mx-auto w-full max-w-md px-4 pb-16">
-      <AdminHeader title="Ошибки" busy={busy} onRefresh={reload} />
+      <AdminHeader back="/admin/tech" title="Ошибки" busy={busy} onRefresh={reload} />
       {problem ? <Problem text={problem} /> : null}
       <p className="mb-3 px-1 text-[0.75rem] leading-snug" style={{ color: "var(--muted)" }}>
         Сбои, которые приложение поймало у людей за 30 дней. Одинаковые собраны вместе. Нажмите на ошибку —

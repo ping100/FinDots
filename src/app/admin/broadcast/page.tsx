@@ -57,7 +57,7 @@ export default function BroadcastPage() {
 
   return (
     <div className="pt-safe mx-auto w-full max-w-md px-4 pb-16">
-      <AdminHeader title="Рассылка" />
+      <AdminHeader back="/admin/care" title="Рассылка" />
       {problem ? <Problem text={problem} /> : null}
 
       <div className="space-y-2.5 rounded-2xl p-4" style={{ background: "var(--surface)" }}>

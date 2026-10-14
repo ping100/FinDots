@@ -15,7 +15,7 @@ export default function LogPage() {
 
   return (
     <div className="pt-safe mx-auto w-full max-w-md px-4 pb-16">
-      <AdminHeader title="Журнал действий" busy={busy} onRefresh={reload} />
+      <AdminHeader back="/admin/tech" title="Журнал действий" busy={busy} onRefresh={reload} />
       {problem ? <Problem text={problem} /> : null}
       {data && data.length === 0 ? (
         <p className="rounded-2xl p-4 text-[0.8125rem]" style={{ background: "var(--surface)", color: "var(--muted)" }}>

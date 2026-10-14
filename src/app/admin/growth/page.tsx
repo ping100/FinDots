@@ -2,7 +2,7 @@
 
 import { Loader } from "@/components/Loader";
 import { Denied, Problem } from "@/components/admin/shared";
-import { AdminHeader, useAdminRpc } from "@/components/admin/Tools";
+import { AdminHeader, LinkCard, useAdminRpc } from "@/components/admin/Tools";
 
 interface Funnel {
   registered: number;
@@ -118,6 +118,9 @@ export default function GrowthPage() {
         Прочерк — этот срок ещё не наступил. Точные отметки о заходах копятся с 14 октября; до этого — по дням, когда
         человек что-то записывал. Хорошо для приложений-привычек: на следующий день — от 40%, через месяц — от 20%.
       </p>
+      <div className="mt-5">
+        <LinkCard href="/admin/features" icon="star" color="#ec4899" title="Функции" caption="Чем реально пользуются, а что не нужно" />
+      </div>
     </div>
   );
 }

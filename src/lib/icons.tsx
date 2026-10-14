@@ -17,6 +17,16 @@ const PATHS: Record<string, ReactNode> = {
   "chevron-down": <path d="M6 9.5l6 6 6-6" />,
   "chevron-right": <path d="M9.5 6l6 6-6 6" />,
   "chevron-left": <path d="M14.5 6l-6 6 6 6" />,
+  // Админке: люди, переписка, техника, рост.
+  users: (
+    <>
+      <circle cx="9" cy="8" r="3.5" />
+      <path d="M2.5 19a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 13.5a5.5 5.5 0 0 1 3.5 5.5" />
+    </>
+  ),
+  chat: <path d="M4.5 5h15v10.5H10L5.5 19.5v-4H4.5z" />,
+  wrench: <path d="M14.5 6.5a4 4 0 0 0 5 5L12 19a2.1 2.1 0 0 1-3-3l7.5-7.5a4 4 0 0 1-2-2z" />,
+  trend: <path d="M3 17l6-6 4 4 8-8M15 7h6v6" />,
   // Задачам: время дела и напоминание о нём.
   clock: (
     <>

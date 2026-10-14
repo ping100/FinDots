@@ -38,7 +38,7 @@ export default function NoticePage() {
 
   return (
     <div className="pt-safe mx-auto w-full max-w-md px-4 pb-16">
-      <AdminHeader title="Технические работы" />
+      <AdminHeader back="/admin/care" title="Технические работы" />
       <div
         className="mb-3 rounded-2xl px-4 py-3 text-[0.875rem] font-medium"
         style={current ? { background: "#fffbeb", color: "#92400e", border: "1px solid #f59e0b" } : { background: "var(--surface)" }}

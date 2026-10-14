@@ -108,8 +108,7 @@ export function LinkCard({
   return (
     <Link
       href={href}
-      className="mb-2 flex touch-manipulation items-center gap-3 rounded-2xl p-3.5 transition active:scale-[0.99] [&_*]:pointer-events-none"
-      style={{ background: "var(--surface)" }}
+      className="money-card mb-2 flex touch-manipulation items-center gap-3 rounded-[1.125rem] p-3.5 transition active:scale-[0.99] [&_*]:pointer-events-none"
     >
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white" style={{ background: color }}>
         <Icon name={icon} size={18} />
@@ -137,7 +136,6 @@ export function LinkCard({
 export function ToolCards() {
   const [errors, setErrors] = useState<ErrorGroup[] | null>(null);
   const [jobs, setJobs] = useState<{ bad: number; total: number } | null>(null);
-  const [notice, setNotice] = useState<string | null | undefined>(undefined);
   useEffect(() => {
     const supabase = createClient();
     void supabase.rpc("admin_errors").then(({ data }) => setErrors((data as ErrorGroup[] | null) ?? []));
@@ -145,7 +143,6 @@ export function ToolCards() {
       const list = ((data as { jobs?: { fails_24h: number; active: boolean }[] } | null)?.jobs ?? []);
       setJobs({ bad: list.filter((j) => j.fails_24h > 0 || !j.active).length, total: list.length });
     });
-    void supabase.rpc("app_notice").then(({ data }) => setNotice((data as string | null) ?? null));
   }, []);
   const fresh = errors?.filter((e) => Date.now() - new Date(e.last_at).getTime() < 86400000).length ?? 0;
   return (
@@ -175,16 +172,6 @@ export function ToolCards() {
         badgeColor="#ef4444"
       />
       <LinkCard href="/admin/health" icon="shield" color="#22c55e" title="Проверка сервисов" caption="База, курс, нейросеть, пуши — одной кнопкой" />
-      <LinkCard
-        href="/admin/notice"
-        icon="hammer"
-        color="#f59e0b"
-        title="Технические работы"
-        caption={notice === undefined ? "…" : notice ? "Включено — полосу видят все" : "Выключено"}
-        badge={notice ? 1 : undefined}
-        badgeColor="#f59e0b"
-      />
-      <LinkCard href="/admin/broadcast" icon="share" color="#8b5cf6" title="Рассылка" caption="Объявление всем — полосой и пушем" />
       <LinkCard href="/admin/log" icon="list" color="#64748b" title="Журнал действий" caption="Кто из админов что сделал" />
     </>
   );
@@ -229,7 +216,7 @@ export function AlertsCard() {
     setNote(res.ok ? (out.sent ? "Отправил — должно прийти через пару секунд" : "Не дошло — разрешите уведомления на этом телефоне") : out.error ?? "Не получилось");
   };
   return (
-    <div className="rounded-2xl p-4" style={{ background: "var(--surface)" }}>
+    <div className="money-card rounded-[1.125rem] p-4">
       <div className="flex items-center gap-3">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white" style={{ background: "#0ea5e9" }}>
           <Icon name="bell" size={18} />
@@ -283,7 +270,7 @@ export function ActivityCard() {
   const label = (iso: string) => new Date(iso + "T12:00:00").toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
 
   return (
-    <div className="rounded-2xl p-4" style={{ background: "var(--surface)" }}>
+    <div className="money-card rounded-[1.125rem] p-4">
       <div className="flex items-baseline justify-between gap-2">
         <p className="text-[0.9375rem] font-semibold">Активность</p>
         <p className="text-[0.6875rem] tabular-nums" style={{ color: "var(--muted)" }}>

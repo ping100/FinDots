@@ -86,7 +86,7 @@ export default function FeaturesPage() {
 
   return (
     <div className="pt-safe mx-auto w-full max-w-md px-4 pb-16">
-      <AdminHeader title="Функции" busy={busy} onRefresh={reload} />
+      <AdminHeader back="/admin/growth" title="Функции" busy={busy} onRefresh={reload} />
       {problem ? <Problem text={problem} /> : null}
       <p className="mb-3 px-1 text-[0.75rem] leading-snug" style={{ color: "var(--muted)" }}>
         Сколько людей пользуется каждой функцией — из тех, кто пользуется самим приложением. Пустая полоса —

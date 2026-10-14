@@ -4,57 +4,7 @@ import { Loader } from "@/components/Loader";
 import { Denied, Problem } from "@/components/admin/shared";
 import { AdminHeader, useAdminRpc } from "@/components/admin/Tools";
 import { sinceLabel } from "@/lib/admin";
-
-interface Job {
-  name: string;
-  schedule: string;
-  active: boolean;
-  last_start: string | null;
-  last_status: string | null;
-  last_message: string | null;
-  runs_24h: number;
-  fails_24h: number;
-}
-interface CronStatus {
-  jobs: Job[];
-  http_total_24h: number;
-  http_bad_24h: number;
-  http_last_bad: { at: string; status: number | null; text: string | null } | null;
-}
-
-/** Что делает каждая задача — по-человечески. */
-const NAMES: Record<string, string> = {
-  "task-reminders": "Напоминания о задачах",
-  "purge-cron-history": "Чистка журнала задач",
-  "bill-reminders": "Напоминания о платежах",
-  "wellness-reminders": "Вода и сон",
-  "carry-over-tasks": "Перенос несделанного на завтра",
-  "task-summaries": "Утренняя сводка задач",
-  "fem-reminders": "FemDots: напоминания",
-  "fem-partner-reminders": "FemDots: напоминания партнёру",
-  "fem-pill-nudges": "FemDots: таблетка",
-  "admin-watch": "Сторож админки (раз в час)",
-  "admin-daily": "Утренняя сводка админу",
-};
-
-/** «12 мин», «1 ч 35 мин», «2 дн» — точнее, чем «сегодня», когда счёт идёт на минуты. */
-function agoText(iso: string | null): string {
-  if (!iso) return "ни разу";
-  const min = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
-  if (min < 1) return "только что";
-  if (min < 60) return `${min} мин назад`;
-  if (min < 24 * 60) return `${Math.floor(min / 60)} ч ${min % 60 ? `${min % 60} мин ` : ""}назад`;
-  return `${Math.floor(min / 1440)} дн назад`;
-}
-
-/** Как часто задача должна запускаться, в минутах — по расписанию cron. */
-function everyMinutes(schedule: string): number {
-  const [m, h] = schedule.split(" ");
-  if (m === "*") return 1;
-  if (m.startsWith("*/")) return Number(m.slice(2)) || 60;
-  if (h === "*") return 60;
-  return 24 * 60;
-}
+import { JOB_NAMES as NAMES, agoText, everyMinutes, type CronStatus } from "@/lib/adminJobs";
 
 /**
  * Фоновые задачи: напоминания, переносы, сводки. Если одна сломается,
@@ -69,7 +19,7 @@ export default function JobsPage() {
 
   return (
     <div className="pt-safe mx-auto w-full max-w-md px-4 pb-16">
-      <AdminHeader title="Фоновые задачи" busy={busy} onRefresh={reload} />
+      <AdminHeader back="/admin/tech" title="Фоновые задачи" busy={busy} onRefresh={reload} />
       {problem ? <Problem text={problem} /> : null}
       <p className="mb-3 px-1 text-[0.75rem] leading-snug" style={{ color: "var(--muted)" }}>
         Работают по расписанию, без участия людей. Красное — сломалось или встало: напоминания могут не приходить.

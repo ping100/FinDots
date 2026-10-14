@@ -33,7 +33,7 @@ export function SupportCard() {
         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white"
         style={{ background: "#0ea5e9" }}
       >
-        <Icon name="bell" size={18} />
+        <Icon name="chat" size={18} />
       </span>
       <span className="min-w-0 flex-1">
         <span className="block text-[0.9375rem] font-medium">Обращения</span>

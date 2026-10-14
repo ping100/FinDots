@@ -25,6 +25,7 @@ export function TaskCard({
   settling,
   onSwipeLeft,
   leftLabel = "Завтра",
+  hideTime,
 }: {
   task: Task;
   category: TaskCategory | undefined;
@@ -37,6 +38,8 @@ export function TaskCard({
   /** Свайп влево — перенести (подпись — куда). Вправо — то же, что галочка. */
   onSwipeLeft?: () => void;
   leftLabel?: string;
+  /** Время показано на ленте дня слева — здесь только колокольчик. */
+  hideTime?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: task.id,
@@ -108,7 +111,7 @@ export function TaskCard({
         onOpen();
       }}
       // Перенесённая сама задача качнётся при появлении: «я тут со вчера».
-      className={`relative select-none overflow-hidden rounded-xl ${
+      className={`relative select-none overflow-hidden rounded-2xl ${
         task.carried_from && !task.done && !overdue ? "animate-nudge" : ""
       } ${settling ? "animate-complete" : ""}`}
       style={{
@@ -142,10 +145,10 @@ export function TaskCard({
       ) : null}
 
       <div
-        className="relative flex items-center gap-2.5 rounded-xl px-2.5 py-1.5"
+        // Фон и тень — в теме (globals.css, .dots-task): белая карточка
+        // в светлой, матовое стекло в тёмной.
+        className="dots-task relative flex items-center gap-3 rounded-2xl px-3 py-2.5"
         style={{
-          background: "var(--surface)",
-          border: "1px solid var(--border)",
           transform: dx ? `translateX(${dx}px)` : undefined,
           transition: snapping ? "transform 260ms cubic-bezier(.22,1,.36,1)" : undefined,
         }}
@@ -156,13 +159,14 @@ export function TaskCard({
             e.stopPropagation();
             onToggle();
           }}
-          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-white transition active:scale-90 ${
+          className={`flex h-[1.625rem] w-[1.625rem] shrink-0 items-center justify-center rounded-full text-white transition active:scale-90 ${
             settling ? "animate-pop" : ""
           }`}
           style={{
             background: task.done ? color : "transparent",
-            border: `2px solid ${color}`,
+            border: `2.5px solid ${color}`,
             color: task.done ? "#fff" : "transparent",
+            boxShadow: `0 0 12px -4px ${color}`,
           }}
         >
           <Icon name="check" size={12} />
@@ -172,7 +176,7 @@ export function TaskCard({
           {/* Зачёркивание — линией, которая прочерчивается слева направо,
               а не мгновенным line-through. */}
           <p
-            className="min-w-0 flex-1 truncate text-sm font-medium"
+            className="min-w-0 flex-1 truncate text-[0.9375rem] font-medium"
             style={{
               color: task.done ? "var(--muted)" : "var(--text)",
               backgroundImage: "linear-gradient(currentColor, currentColor)",
@@ -213,8 +217,8 @@ export function TaskCard({
             </span>
           ) : null}
           {task.time ? (
-            <span className="flex shrink-0 items-center gap-1 text-xs tabular-nums" style={{ color: "var(--muted)" }}>
-              {task.time.slice(0, 5)}
+            <span className="flex shrink-0 items-center gap-1 text-xs font-semibold tabular-nums" style={{ color: "var(--muted)" }}>
+              {hideTime ? null : task.time.slice(0, 5)}
               {/* Колокольчик — единственное, что отличает «просто во столько»
                   от «дёрни меня во столько». */}
               {task.remind ? (

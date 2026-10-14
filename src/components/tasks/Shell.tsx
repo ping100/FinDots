@@ -49,7 +49,8 @@ export function Shell({ children }: { children: ReactNode }) {
 
   return (
     <AddContext.Provider value={register}>
-      <div className="min-h-dvh pt-safe">
+      {/* Тема общая с Findots: светлая «Аврора», тёмная «Ночь». */}
+      <div className="money-theme min-h-dvh pt-safe">
         {error ? (
           <p
             className="mx-4 mt-3 rounded-2xl px-4 py-2 text-xs"
@@ -102,8 +103,8 @@ export function Shell({ children }: { children: ReactNode }) {
                     aria-label="Новая задача"
                     className="mx-1.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white transition-transform duration-100 active:scale-90"
                     style={{
-                      background: "var(--accent)",
-                      boxShadow: "0 4px 12px color-mix(in srgb, var(--accent) 45%, transparent)",
+                      background: "linear-gradient(135deg, #06b6d4, #7c3aed)",
+                      boxShadow: "0 6px 18px -4px rgba(124, 58, 237, 0.6)",
                     }}
                   >
                     <Icon name="plus" size={24} />

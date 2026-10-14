@@ -24,8 +24,7 @@ import { TaskList } from "@/components/tasks/TaskList";
 import { QuickAdd } from "@/components/tasks/QuickAdd";
 import { WellnessCard } from "@/components/tasks/WellnessCard";
 import { AppSwitchPill } from "@/components/AppSwitch";
-import { DayProgress, EmptyDay, TimeGroups } from "@/components/tasks/DayParts";
-import { Icon } from "@/lib/icons";
+import { CategoryTiles, DayHero, EmptyDay, Timeline } from "@/components/tasks/DayParts";
 
 export default function TodayPage() {
   const { tasks, categories, toggleDone, saveTask, deleteTask, rescheduleTask, rescheduleMany } = useStore();
@@ -186,41 +185,30 @@ export default function TodayPage() {
     >
       <div className="mx-auto w-full max-w-md px-4 pb-32">
         <header className="flex items-center justify-between py-3">
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-xl font-semibold">{dayLabel(selected)}</h1>
-            <DayProgress done={dayTasks.filter((t) => t.done).length} total={dayTasks.length} />
-          </div>
+          <h1 className="text-[1.75rem] font-extrabold tracking-tight">{dayLabel(selected)}</h1>
           <AppSwitchPill />
         </header>
+
+        {/* Сводка дня — по всем задачам дня, без фильтра категории. */}
+        <DayHero
+          tasks={tasks.filter((t) => t.date === selected)}
+          categories={categories}
+          isToday={selected === now}
+          past={selected < now}
+        />
 
         <Calendar selected={selected} onSelect={setSelected} loadedDates={loadedDates} />
 
         {selected === today() ? <WellnessCard /> : null}
 
-        {liveCategories.length > 0 ? (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {liveCategories.map((c) => {
-              const on = categoryFilter === c.id;
-              return (
-                <button
-                  key={c.id}
-                  onClick={() => setCategoryFilter(on ? null : c.id)}
-                  aria-pressed={on}
-                  className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm text-white transition"
-                  style={{
-                    background: c.color,
-                    opacity: categoryFilter && !on ? 0.4 : 1,
-                    outline: on ? "2px solid var(--text)" : "none",
-                    outlineOffset: 2,
-                  }}
-                >
-                  <Icon name={c.icon} size={13} />
-                  {c.name}
-                </button>
-              );
-            })}
-          </div>
-        ) : null}
+        <div className="mt-3">
+          <CategoryTiles
+            categories={liveCategories}
+            tasks={tasks.filter((t) => t.date === selected)}
+            filter={categoryFilter}
+            onFilter={setCategoryFilter}
+          />
+        </div>
 
         <div className="mt-4 space-y-5">
           {overdue.length > 0 ? (
@@ -261,10 +249,12 @@ export default function TodayPage() {
           ) : null}
 
           {untimed.length || timed.length ? (
-            <TimeGroups
+            <Timeline
               untimed={untimed}
               timed={timed}
-              render={(list) => (
+              categories={categories}
+              showNow={selected === now}
+              render={(list, opts) => (
                 <TaskList
                   tasks={list}
                   categories={categories}
@@ -273,6 +263,7 @@ export default function TodayPage() {
                   settling={settling}
                   onSwipeLeft={postpone}
                   swipeLabel={postponeLabel}
+                  hideTime={opts?.hideTime}
                 />
               )}
             />

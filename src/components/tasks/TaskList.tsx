@@ -13,6 +13,7 @@ export function TaskList({
   settling,
   onSwipeLeft,
   swipeLabel,
+  hideTime,
 }: {
   tasks: Task[];
   categories: TaskCategory[];
@@ -25,6 +26,8 @@ export function TaskList({
   /** Свайп влево: перенести. Без него карточки не свайпаются. */
   onSwipeLeft?: (task: Task) => void;
   swipeLabel?: (task: Task) => string;
+  /** На ленте дня время уже стоит слева — в карточке не дублируем. */
+  hideTime?: boolean;
 }) {
   if (tasks.length === 0) {
     return empty ? (
@@ -35,7 +38,7 @@ export function TaskList({
   }
 
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
       {tasks.map((task) => (
         <TaskCard
           key={task.id}
@@ -47,6 +50,7 @@ export function TaskList({
           settling={settling?.has(task.id)}
           onSwipeLeft={onSwipeLeft ? () => onSwipeLeft(task) : undefined}
           leftLabel={swipeLabel?.(task)}
+          hideTime={hideTime}
         />
       ))}
     </div>

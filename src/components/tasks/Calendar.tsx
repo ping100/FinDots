@@ -239,10 +239,16 @@ function useStrip(selected: string, onTitle: (date: string) => void) {
 
   const cell = () => (box.current?.clientWidth ?? 0) / VISIBLE;
 
+  // День посередине ленты — чтобы вернуть его, если браузер сдвинет ленту сам.
+  const middleRef = useRef(selected);
+  const quietUntil = useRef(0);
+
+
   const scrollTo = useCallback(
     (date: string, smooth: boolean) => {
       const index = days.indexOf(date);
       if (index < 0 || !box.current) return;
+      middleRef.current = date;
       // Нужный день — посередине экрана.
       box.current.scrollTo({ left: (index - 3) * cell(), behavior: smooth ? "smooth" : "auto" });
     },
@@ -255,14 +261,52 @@ function useStrip(selected: string, onTitle: (date: string) => void) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- только при смене ленты
   }, [center]);
 
+  // Ширина ленты бывает нулевой в момент первого показа (страница ещё не
+  // разложена) — тогда scrollTo выше уводил её в самое начало, на полгода
+  // назад. Как только ширина появилась или поменялась (поворот экрана),
+  // встаём на выбранный день заново.
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
+  useEffect(() => {
+    const el = box.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    let width = el.clientWidth;
+    const watcher = new ResizeObserver(() => {
+      if (el.clientWidth === width || el.clientWidth === 0) return;
+      width = el.clientWidth;
+      scrollTo(selectedRef.current, false);
+    });
+    watcher.observe(el);
+    return () => watcher.disconnect();
+  }, [scrollTo]);
+
+
+  // Окно поменяло размер (поворот, клавиатура, панель браузера) — Chrome
+  // при этом заново «примагничивает» ленту и может бросить её в самое
+  // начало, на полгода назад. Возвращаем тот день, что был посередине.
+  useEffect(() => {
+    const onResize = () => {
+      const keep = middleRef.current;
+      quietUntil.current = performance.now() + 500;
+      requestAnimationFrame(() => requestAnimationFrame(() => scrollTo(keep, false)));
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [scrollTo]);
+
   const frame = useRef(0);
   const onScroll = () => {
     cancelAnimationFrame(frame.current);
     frame.current = requestAnimationFrame(() => {
       const el = box.current;
-      if (!el) return;
-      const first = Math.round(el.scrollLeft / cell());
+      // Без ширины номер дня не посчитать (0 / 0) — заголовок упал бы на
+      // «нет даты». Сразу после смены размера окна — тоже ждём: это сдвиг
+      // от браузера, а не от пальца.
+      if (!el || cell() <= 0 || performance.now() < quietUntil.current) return;
+      const first = Math.max(0, Math.round(el.scrollLeft / cell()));
       const middle = days[Math.min(days.length - 1, first + 3)];
+      if (!middle) return;
+      middleRef.current = middle;
       onTitle(middle);
       const todayIndex = days.indexOf(t);
       setShowsToday(todayIndex >= first && todayIndex < first + VISIBLE);

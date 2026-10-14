@@ -38,6 +38,8 @@ export interface AdminUser {
   wellness?: boolean;
   /** На скольких устройствах разрешены уведомления. */
   push_devices?: number;
+  /** Сам админ. */
+  is_admin?: boolean;
 }
 
 export interface AdminOverview {
@@ -171,6 +173,7 @@ export const VIEWS = {
     chip: "Вода и сон",
     test: (u) => !!u.wellness,
   },
+  admins: { label: "Админы", title: "Админы", chip: "Админы", test: (u) => !!u.is_admin },
   push: {
     label: "С уведомлениями",
     title: "Уведомления включены",

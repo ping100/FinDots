@@ -8,6 +8,7 @@ import { buildMoment } from "@/lib/update";
 import { SupportCard } from "@/components/admin/SupportCard";
 import { ReviewsCard } from "@/components/admin/ReviewsCard";
 import { AiCard } from "@/components/admin/AiCard";
+import { ActivityCard, ToolCards } from "@/components/admin/Tools";
 import { Denied, GeneratedAt, OnlineDot, Problem, RefreshButton, useOverview } from "@/components/admin/shared";
 import {
   LINKS,
@@ -56,6 +57,9 @@ export default function AdminPage() {
         <>
           <Heading first>Пользователи</Heading>
           <Totals data={data} />
+          <div className="mt-3">
+            <ActivityCard />
+          </div>
           <div className="mt-6">
             <SupportCard />
           </div>
@@ -65,6 +69,8 @@ export default function AdminPage() {
           <div className="mt-3">
             <AiCard />
           </div>
+          <Heading>Техническое</Heading>
+          <ToolCards />
           <SupabaseLimits data={data} />
           <VercelBlock built={built} />
           <GeneratedAt iso={data.generated_at} />

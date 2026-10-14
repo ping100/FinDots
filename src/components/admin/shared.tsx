@@ -140,6 +140,14 @@ export function UserCard({
             </span>
           ) : null}
           {user.display_name || user.email || "без имени"}
+          {user.is_admin ? (
+            <span
+              className="shrink-0 rounded-full px-1.5 py-0.5 text-[0.625rem] font-medium text-white"
+              style={{ background: "#8b5cf6" }}
+            >
+              админ
+            </span>
+          ) : null}
           {user.banned ? (
             <span
               className="shrink-0 rounded-full px-1.5 py-0.5 text-[0.625rem] font-medium text-white"

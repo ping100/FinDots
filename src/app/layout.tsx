@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Onest } from "next/font/google";
 import { BottomBanners } from "@/components/BottomBanners";
+import { ErrorReporter } from "@/components/ErrorReporter";
 import { ConsentGate } from "@/components/ConsentGate";
 import { NoEdgeSwipe } from "@/components/NoEdgeSwipe";
 import { Presence } from "@/components/Presence";
@@ -85,6 +86,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ViewportHeal />
         <ThemeSync />
         <ConsentGate />
+        <ErrorReporter />
       </body>
     </html>
   );

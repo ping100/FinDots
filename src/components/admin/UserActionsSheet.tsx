@@ -65,6 +65,12 @@ export function UserActionsSheet({
 
   const supabase = createClient();
   const userId = user?.id;
+  /** Запись в журнал действий. Не получилось — само действие уже сделано, молчим. */
+  const log = (action: string, target: string, details?: string) =>
+    supabase.rpc("admin_log_add", { p_action: action, p_target: target, p_details: details ?? null }).then(
+      () => undefined,
+      () => undefined,
+    );
 
   // Переписка грузится только когда лист открыт на этом экране — не на
   // каждый чих, и заново при переключении на другого человека.
@@ -95,6 +101,8 @@ export function UserActionsSheet({
         p_fem: fem,
       });
       if (error) throw new Error(error.message);
+      const closed = [!money && "Findots", !tasks && "Todots", !fem && "FemDots", !ai && "ИИ"].filter(Boolean);
+      await log("Доступ к приложениям", id, closed.length ? `закрыто: ${closed.join(", ")}` : "открыто всё");
     });
   };
 
@@ -104,6 +112,7 @@ export function UserActionsSheet({
     return run("banned", async () => {
       const { error } = await supabase.rpc("admin_set_banned", { p_user_id: id, p_banned: banned });
       if (error) throw new Error(error.message);
+      await log(banned ? "Заблокирован вход" : "Разблокирован вход", id);
     });
   };
 
@@ -116,6 +125,7 @@ export function UserActionsSheet({
         redirectTo: `${location.origin}/auth/callback?next=${encodeURIComponent("/set-password")}`,
       });
       if (error) throw new Error(error.message);
+      if (user) await log("Письмо для смены пароля", user.id);
       setNote("Письмо со ссылкой для смены пароля отправлено");
     });
   };
@@ -129,6 +139,7 @@ export function UserActionsSheet({
         p_password: newPassword,
       });
       if (error) throw new Error(error.message);
+      await log("Задан пароль", id);
       setStage("main");
       setNote("Пароль сохранён — сообщите его пользователю");
     });
@@ -140,6 +151,7 @@ export function UserActionsSheet({
     return run("wipe", async () => {
       const { error } = await supabase.rpc("admin_wipe_user_data", { p_user_id: id });
       if (error) throw new Error(error.message);
+      await log("Очищена база", id);
       setStage("main");
       setPhrase("");
       setNote("База очищена");
@@ -152,9 +164,41 @@ export function UserActionsSheet({
     return run("delete", async () => {
       // Фото переписки — в хранилище, удаление учётной записи их не заберёт.
       await removeThreadAttachments(supabase, id).catch(() => undefined);
+      // В журнал — до удаления: потом имя уже не найти.
+      await log("Удалён аккаунт", id);
       const { error } = await supabase.rpc("admin_delete_user", { p_user_id: id });
       if (error) throw new Error(error.message);
       close();
+    });
+  };
+
+  const testPush = () => {
+    if (!user) return;
+    const id = user.id;
+    return run("push", async () => {
+      const res = await fetch("/api/admin/push-test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: id }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { sent?: number; total?: number; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Не получилось");
+      await log("Тестовое уведомление", id, `доставлено ${data.sent} из ${data.total}`);
+      setNote(
+        data.sent
+          ? `Отправлено на ${data.sent} из ${data.total} — спросите, пришло ли`
+          : "Не дошло ни на одно устройство — уведомления у человека, скорее всего, отключены в телефоне",
+      );
+    });
+  };
+
+  const setAdmin = (on: boolean) => {
+    if (!user) return;
+    const id = user.id;
+    return run("admin", async () => {
+      const { error } = await supabase.rpc("admin_set_admin", { p_user_id: id, p_on: on });
+      if (error) throw new Error(error.message);
+      setNote(on ? "Теперь это админ — ему откроется админка" : "Права админа сняты");
     });
   };
 
@@ -286,6 +330,24 @@ export function UserActionsSheet({
               label="Написать сообщение"
               hint="Придёт как сообщение от администрации, с уведомлением"
               onClick={() => setStage("message")}
+              first={false}
+            />
+            <ActionRow
+              label="Тестовое уведомление"
+              hint={
+                user.push_devices
+                  ? "Проверить, доходят ли пуши до телефона"
+                  : "Уведомления у человека не включены — отправлять некуда"
+              }
+              busy={busy === "push"}
+              onClick={user.push_devices ? testPush : () => setNote("Уведомления у человека не включены")}
+              first={false}
+            />
+            <ActionRow
+              label={user.is_admin ? "Снять права админа" : "Сделать админом"}
+              hint={user.is_admin ? "Админка перестанет открываться" : "Откроется вся админка — давайте только тем, кому доверяете"}
+              busy={busy === "admin"}
+              onClick={() => setAdmin(!user.is_admin)}
               first={false}
             />
           </div>

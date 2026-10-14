@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { MoodIcon, SymptomIcon } from "./FemIcons";
 import { Icon } from "@/lib/icons";
 import { PHASE_COLOR, type CycleInfo, type Goal, type Phase } from "@/lib/fem/cycle";
 import { chanceOf } from "@/lib/fem/phrases";
@@ -141,11 +142,31 @@ export function PartnerToday({
       <div className="mt-3 grid grid-cols-2 gap-2">
         {when ? <Stat label={when[0]} value={when[1]} color={info.late > 0 ? PHASE_COLOR.late : PHASE_COLOR.period} /> : null}
         <Stat label="Шанс беременности" value={chance.label.toLowerCase()} color={chance.level >= 2 ? PHASE_COLOR.ovulation : "var(--muted)"} />
-        {mood ? <Stat label="Настроение" value={`${mood.emoji} ${mood.label.toLowerCase()}`} color="#f59e0b" /> : null}
+        {mood ? (
+          <Stat
+            label="Настроение"
+            value={
+              <span className="flex items-center gap-1.5">
+                <MoodIcon value={mood.value} size={18} />
+                {mood.label.toLowerCase()}
+              </span>
+            }
+            color="#f59e0b"
+          />
+        ) : null}
         {real.length ? (
           <Stat
             label="Самочувствие"
-            value={real.length === 1 ? `${real[0].emoji} ${real[0].label.toLowerCase()}` : real.slice(0, 2).map((s) => s.emoji).join(" ") + ` ${real.length} ${plural(real.length, "отметка", "отметки", "отметок")}`}
+            value={
+              <span className="flex items-center gap-1.5">
+                <span className="flex -space-x-1">
+                  {real.slice(0, 3).map((s) => (
+                    <SymptomIcon key={s.value} value={s.value} size={18} />
+                  ))}
+                </span>
+                {real.length === 1 ? real[0].label.toLowerCase() : `${real.length} ${plural(real.length, "отметка", "отметки", "отметок")}`}
+              </span>
+            }
             color="#a855f7"
           />
         ) : null}
@@ -179,7 +200,7 @@ export function PartnerToday({
   );
 }
 
-function Stat({ label, value, color }: { label: string; value: string; color: string }) {
+function Stat({ label, value, color }: { label: string; value: React.ReactNode; color: string }) {
   return (
     <div className="min-w-0 rounded-2xl px-3 py-2" style={{ background: "var(--surface-2)" }}>
       <span className="flex items-center gap-1.5 text-[0.625rem] font-medium uppercase tracking-wide" style={{ color: "var(--muted)" }}>

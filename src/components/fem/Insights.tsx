@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { SymptomIcon } from "./FemIcons";
 import { addDays, today } from "@/lib/tasks/dates";
 import { FEM_GRADIENT, PREG_TESTS, SYMPTOMS, symptomForecast, type CycleInfo, type FemPeriod } from "@/lib/fem/cycle";
 import { short } from "@/lib/fem/format";
@@ -56,7 +57,7 @@ export function ForecastCard({
           const sym = symptomOf(f.value);
           return (
             <div key={f.value} className="flex items-start gap-2.5">
-              <span className="text-lg leading-6">{sym?.emoji}</span>
+              <SymptomIcon value={f.value} size={24} />
               <span className="min-w-0 flex-1">
                 <span className="block text-sm font-medium">{sym?.label ?? f.value}</span>
                 <span className="block text-[0.75rem] leading-snug" style={{ color: "var(--muted)" }}>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useMemo, useState } from "react";
+import { MoodIcon, SymptomIcon } from "@/components/fem/FemIcons";
 import { today } from "@/lib/tasks/dates";
 import {
   FEM_COLOR,
@@ -127,7 +128,7 @@ export default function FemStats() {
           <div className="mt-2.5 space-y-2">
             {data.top.map((t) => (
               <div key={t.key} className="flex items-center gap-2.5 text-sm">
-                <span className="w-5 text-center">{t.emoji}</span>
+                {t.key.startsWith("mood:") ? <MoodIcon value={t.key.slice(5)} size={20} /> : <SymptomIcon value={t.key} size={20} />}
                 <span className="w-32 shrink-0 truncate">{t.label}</span>
                 <span className="h-2 flex-1 overflow-hidden rounded-full" style={{ background: "var(--surface-2)" }}>
                   <span

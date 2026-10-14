@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { SymptomIcon } from "./FemIcons";
 import { Icon } from "@/lib/icons";
 import { today } from "@/lib/tasks/dates";
 import { SYMPTOMS, buildMarks, type CycleInfo } from "@/lib/fem/cycle";
@@ -148,7 +149,7 @@ export function PartnerCalendar({ info }: { info: CycleInfo }) {
                   const sym = SYMPTOMS.find((x) => x.value === v);
                   return (
                     <div key={v} className="flex items-start gap-2.5 rounded-2xl px-3.5 py-2.5 text-sm" style={{ background: "var(--surface-2)" }}>
-                      <span className="text-base leading-5">{sym?.emoji}</span>
+                      <SymptomIcon value={v} size={22} />
                       <span className="min-w-0 flex-1">
                         <span className="block">{sym?.label ?? v}</span>
                         {CARE[v] ? (

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { MoodIcon, SymptomIcon } from "./FemIcons";
 import { Icon } from "@/lib/icons";
 import { FEM_GRADIENT, FLOWS, MOODS, PHASE_COLOR, SEX_TAGS, SYMPTOMS } from "@/lib/fem/cycle";
 import { Sheet } from "@/components/ui";
@@ -53,13 +54,13 @@ export function CheckIn({ day, showFlow }: { day: string; showFlow: boolean }) {
       key: "mood",
       // Несколько отметок за день — счётчик у названия, значение — последнее.
       label: (entry?.mood_log?.length ?? 0) > 1 ? `Настроение · ${entry!.mood_log!.length}` : "Настроение",
-      icon: mood ? mood.emoji : "🙂",
+      icon: <MoodIcon value={mood?.value ?? "calm"} size={30} muted={!mood} />,
       value: mood?.label ?? null,
     },
     {
       key: "body",
       label: "Симптомы",
-      icon: symptoms[0]?.emoji ?? "🩺",
+      icon: <SymptomIcon value={symptoms.find((x) => x!.value !== "ok")?.value ?? symptoms[0]?.value ?? "ok"} size={30} muted={!symptoms.length} />,
       value:
         symptoms.length === 0
           ? null

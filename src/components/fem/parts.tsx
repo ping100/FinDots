@@ -2,6 +2,7 @@
 
 import { Children, isValidElement, useEffect, useId, useMemo, useState } from "react";
 import { burst, centerOf } from "@/lib/fem/fx";
+import { MoodIcon, SymptomIcon } from "./FemIcons";
 import { Icon } from "@/lib/icons";
 import {
   FEM_GRADIENT,
@@ -634,7 +635,7 @@ export function DayLog({
       <Group title="Симптомы">
         {body.map((x) => (
           <Pill key={x.value} on={entry.symptoms.includes(x.value)} onClick={() => toggleSymptom(x.value)}>
-            <span>{x.emoji}</span>
+            <SymptomIcon value={x.value} size={20} />
             {x.label}
           </Pill>
         ))}
@@ -659,7 +660,7 @@ export function DayLog({
                         <span className="w-10 text-[0.75rem] tabular-nums" style={{ color: "var(--muted)" }}>
                           {timeOf(x.at)}
                         </span>
-                        <span className="text-base">{m?.emoji}</span>
+                        <MoodIcon value={x.mood} size={20} />
                         <span className="min-w-0 flex-1 text-[0.8125rem]">{m?.label ?? x.mood}</span>
                         <button
                           onClick={() => {
@@ -692,7 +693,7 @@ export function DayLog({
                     onSingle?.();
                   }}
                 >
-                  <span>{m.emoji}</span>
+                  <MoodIcon value={m.value} size={20} />
                   {m.label}
                 </Pill>
               ))}
@@ -711,7 +712,7 @@ export function DayLog({
                   if (mood) onSingle?.();
                 }}
               >
-                <span>{m.emoji}</span>
+                <MoodIcon value={m.value} size={20} />
                 {m.label}
               </Pill>
             ))}
@@ -732,7 +733,7 @@ export function DayLog({
           <Group title="Пищеварение">
             {digestion.map((x) => (
               <Pill key={x.value} on={entry.symptoms.includes(x.value)} onClick={() => toggleSymptom(x.value)}>
-                <span>{x.emoji}</span>
+                <SymptomIcon value={x.value} size={20} />
                 {x.label}
               </Pill>
             ))}

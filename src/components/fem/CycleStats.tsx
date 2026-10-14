@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { MoodIcon, SymptomIcon } from "./FemIcons";
 import { Icon } from "@/lib/icons";
 import { addDays, today } from "@/lib/tasks/dates";
 import {
@@ -294,17 +295,17 @@ function CycleDetails({ from, to }: { from: string; to: string }) {
   for (const d of inCycle) for (const m of moodsOf(d)) moods.set(m, (moods.get(m) ?? 0) + 1);
   const stress = inCycle.filter((d) => d.tags.includes("o:stress")).length;
   const lh = inCycle.find((d) => d.lh === "pos");
-  const rows = [
+  const rows: { key: string; icon: React.ReactNode; text: string }[] = [
     ...[...count].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([v, n]) => {
       const s = SYMPTOMS.find((x) => x.value === v);
-      return `${s?.emoji ?? ""} ${s?.label ?? v} — ${n}`;
+      return { key: `s:${v}`, icon: <SymptomIcon value={v} size={22} />, text: `${s?.label ?? v} — ${n}` };
     }),
     ...[...moods].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([v, n]) => {
       const m = MOODS.find((x) => x.value === v);
-      return `${m?.emoji ?? ""} ${m?.label ?? v} — ${n}`;
+      return { key: `m:${v}`, icon: <MoodIcon value={v} size={22} />, text: `${m?.label ?? v} — ${n}` };
     }),
-    ...(stress ? [`⚡ Стресс — ${stress}`] : []),
-    ...(lh ? [`✅ Положительный тест на овуляцию — ${short(lh.day)}`] : []),
+    ...(stress ? [{ key: "stress", icon: <span className="w-[22px] text-center">⚡</span>, text: `Стресс — ${stress}` }] : []),
+    ...(lh ? [{ key: "lh", icon: <span className="w-[22px] text-center">✅</span>, text: `Положительный тест на овуляцию — ${short(lh.day)}` }] : []),
   ];
   return (
     <div className="space-y-2 pb-3">
@@ -313,8 +314,9 @@ function CycleDetails({ from, to }: { from: string; to: string }) {
       </p>
       {rows.length ? (
         rows.map((r) => (
-          <p key={r} className="rounded-2xl px-3.5 py-2.5 text-sm" style={{ background: "var(--surface-2)" }}>
-            {r}
+          <p key={r.key} className="flex items-center gap-2.5 rounded-2xl px-3.5 py-2 text-sm" style={{ background: "var(--surface-2)" }}>
+            {r.icon}
+            {r.text}
           </p>
         ))
       ) : (

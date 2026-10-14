@@ -68,7 +68,7 @@ export function useAttention(data: AdminOverview | null) {
       done();
     });
     void supabase.rpc("app_notice").then(({ data: text }) => {
-      setNotice((text as string | null) ?? null);
+      setNotice(typeof text === "string" && text.trim() ? text : null);
       done();
     });
     // Проверка сервисов — самая долгая (ходит во внешние API): не держим пульт.

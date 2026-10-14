@@ -18,7 +18,8 @@ export function NoticeBanner() {
     const supabase = createClient();
     const load = () =>
       void supabase.rpc("app_notice").then(
-        ({ data }) => setMessage((data as string | null) ?? null),
+        // Только непустая строка — любой другой ответ значит «работ нет».
+        ({ data }) => setMessage(typeof data === "string" && data.trim() ? data : null),
         () => undefined,
       );
     load();

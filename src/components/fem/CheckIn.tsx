@@ -12,7 +12,7 @@ type Topic = "flow" | "mood" | "body" | "love" | "more";
 /** Темы дня: заголовок листа, подсказка и какие разделы дневника в нём. */
 const TOPICS: Record<Topic, { title: string; hint: string; only: LogSection[] }> = {
   flow: { title: "Как идут месячные?", hint: "Выберите — лист закроется сам", only: ["flow"] },
-  mood: { title: "Какое настроение?", hint: "Выберите — лист закроется сам", only: ["mood"] },
+  mood: { title: "Какое настроение?", hint: "Отметьте, как вы сейчас, — за день можно несколько раз", only: ["mood"] },
   body: { title: "Как самочувствие?", hint: "Можно выбрать несколько", only: ["symptoms"] },
   love: { title: "Близость", hint: "Общее видно партнёру, личное — только вам", only: ["intimacy"] },
   more: { title: "Ещё за сегодня", hint: "Выделения, тесты, температура, вес, заметка", only: ["more", "note"] },
@@ -49,7 +49,13 @@ export function CheckIn({ day, showFlow }: { day: string; showFlow: boolean }) {
     (entry?.temp != null ? 1 : 0) + (entry?.weight != null ? 1 : 0) + (entry?.preg_test ? 1 : 0) + (entry?.note ? 1 : 0);
 
   const tiles: { key: Topic; label: string; icon: React.ReactNode; value: string | null }[] = [
-    { key: "mood", label: "Настроение", icon: mood ? mood.emoji : "🙂", value: mood?.label ?? null },
+    {
+      key: "mood",
+      // Несколько отметок за день — счётчик у названия, значение — последнее.
+      label: (entry?.mood_log?.length ?? 0) > 1 ? `Настроение · ${entry!.mood_log!.length}` : "Настроение",
+      icon: mood ? mood.emoji : "🙂",
+      value: mood?.label ?? null,
+    },
     {
       key: "body",
       label: "Симптомы",

@@ -82,6 +82,20 @@ export interface FemDay {
   tags: string[];
   weight: number | null;
   preg_test: "none" | "neg" | "faint" | "pos" | null;
+  /** Настроение за день по времени; mood — последнее из них. */
+  mood_log?: MoodMark[];
+}
+
+export interface MoodMark {
+  /** Когда отмечено, ISO. */
+  at: string;
+  mood: string;
+}
+
+/** Все настроения дня: лента, а у старых дней — единственное mood. */
+export function moodsOf(d: Pick<FemDay, "mood" | "mood_log">): string[] {
+  if (d.mood_log?.length) return d.mood_log.map((x) => x.mood);
+  return d.mood ? [d.mood] : [];
 }
 
 export type Flow = "spotting" | "light" | "medium" | "heavy";

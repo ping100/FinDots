@@ -12,6 +12,7 @@ import {
   cycleHealth,
   cycleLengths,
   daysBetween,
+  moodsOf,
   tempShift,
   type FemDay,
   type FemPeriod,
@@ -62,8 +63,8 @@ export function reviewLastCycle(periods: FemPeriod[], days: FemDay[], settings: 
   };
   const sym = count(inCycle, (d) => d.symptoms.filter((s) => s !== "ok"));
   const symOld = count(olderDays, (d) => d.symptoms.filter((s) => s !== "ok"));
-  const moods = inCycle.filter((d) => d.mood);
-  const goodShare = moods.length ? moods.filter((d) => GOOD.has(d.mood!)).length / moods.length : null;
+  const moods = inCycle.flatMap((d) => moodsOf(d));
+  const goodShare = moods.length ? moods.filter((m) => GOOD.has(m)).length / moods.length : null;
   const stress = inCycle.filter((d) => d.tags.includes("o:stress")).length;
   const illness = inCycle.filter((d) => d.tags.includes("o:illness")).length;
   const travel = inCycle.filter((d) => d.tags.includes("o:travel")).length;

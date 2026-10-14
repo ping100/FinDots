@@ -480,6 +480,12 @@ export function Pill({
  * день (выделения, близость, самочувствие, настроение), остальное —
  * свёрнуто в «Ещё». Всё нажатием, сохраняется сразу.
  */
+/** «09:10» — время отметки по часам телефона. */
+const timeOf = (iso: string) => {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+};
+
 /** Разделы дневника — по ним опрос «Как вы сегодня?» идёт шагами. */
 export type LogSection = "flow" | "mood" | "symptoms" | "intimacy" | "more" | "note";
 
@@ -497,6 +503,7 @@ export function DayLog({
   onSingle?: () => void;
 }) {
   const has = (sec: LogSection) => !only || only.includes(sec);
+  const isToday = day === today();
   const { days, saveDay, intimacy, setIntimacy, settings, periods, share } = useFem();
   const entry: FemDay = days.get(day) ?? {
     day,
@@ -513,6 +520,8 @@ export function DayLog({
     weight: null,
     preg_test: null,
   };
+  // Лента настроения; у старых дней без ленты — одно mood «без времени».
+  const moodLog = entry.mood_log?.length ? entry.mood_log : [];
   const [note, setNote] = useState(entry.note ?? "");
   useEffect(() => setNote(entry.note ?? ""), [day, entry.note]);
   const filledMore =
@@ -633,21 +642,81 @@ export function DayLog({
       ) : null}
 
       {has("mood") ? (
-      <Group title="Настроение">
-        {MOODS.map((m) => (
-          <Pill
-            key={m.value}
-            on={entry.mood === m.value}
-            onClick={() => {
-              void saveDay(day, { mood: entry.mood === m.value ? null : m.value });
-              if (entry.mood !== m.value) onSingle?.();
-            }}
-          >
-            <span>{m.emoji}</span>
-            {m.label}
-          </Pill>
-        ))}
-      </Group>
+        isToday ? (
+          // Сегодня настроение — лентой по времени: каждое нажатие добавляет
+          // отметку «сейчас», mood — последнее (его видит партнёр).
+          <>
+            {moodLog.length ? (
+              <div>
+                <span className="mb-1.5 block text-xs font-semibold" style={{ color: "var(--muted)" }}>
+                  Сегодня
+                </span>
+                <div className="space-y-1">
+                  {moodLog.map((x, i) => {
+                    const m = MOODS.find((mm) => mm.value === x.mood);
+                    return (
+                      <div key={x.at + i} className="flex items-center gap-2.5 rounded-xl px-3 py-1.5" style={{ background: "var(--surface-2)" }}>
+                        <span className="w-10 text-[0.75rem] tabular-nums" style={{ color: "var(--muted)" }}>
+                          {timeOf(x.at)}
+                        </span>
+                        <span className="text-base">{m?.emoji}</span>
+                        <span className="min-w-0 flex-1 text-[0.8125rem]">{m?.label ?? x.mood}</span>
+                        <button
+                          onClick={() => {
+                            const next = moodLog.filter((_, k) => k !== i);
+                            void saveDay(day, { mood_log: next, mood: next[next.length - 1]?.mood ?? null });
+                          }}
+                          aria-label={`Убрать «${m?.label ?? x.mood}» в ${timeOf(x.at)}`}
+                          className="p-1 text-[0.875rem] leading-none"
+                          style={{ color: "var(--muted)" }}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+            <Group title={moodLog.length ? "Как вы сейчас?" : "Настроение"}>
+              {MOODS.map((m) => (
+                <Pill
+                  key={m.value}
+                  on={entry.mood === m.value}
+                  onClick={() => {
+                    const last = moodLog[moodLog.length - 1];
+                    // То же настроение минуту назад — не дублируем.
+                    if (last && last.mood === m.value && Date.now() - Date.parse(last.at) < 60_000) return onSingle?.();
+                    const next = [...moodLog, { at: new Date().toISOString(), mood: m.value }];
+                    void saveDay(day, { mood_log: next, mood: m.value });
+                    onSingle?.();
+                  }}
+                >
+                  <span>{m.emoji}</span>
+                  {m.label}
+                </Pill>
+              ))}
+            </Group>
+          </>
+        ) : (
+          <Group title="Настроение">
+            {MOODS.map((m) => (
+              <Pill
+                key={m.value}
+                on={entry.mood === m.value}
+                onClick={() => {
+                  const mood = entry.mood === m.value ? null : m.value;
+                  // Прошлый день — одно настроение, без времени.
+                  void saveDay(day, { mood, mood_log: [] });
+                  if (mood) onSingle?.();
+                }}
+              >
+                <span>{m.emoji}</span>
+                {m.label}
+              </Pill>
+            ))}
+          </Group>
+        )
       ) : null}
 
       {!has("more") ? null : more || only ? (

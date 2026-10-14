@@ -10,6 +10,7 @@ import {
   SYMPTOMS,
   cycleInfo,
   daysBetween,
+  moodsOf,
   signalsFrom,
   type FemPeriod,
 } from "@/lib/fem/cycle";
@@ -290,7 +291,7 @@ function CycleDetails({ from, to }: { from: string; to: string }) {
   const count = new Map<string, number>();
   for (const d of inCycle) for (const s of d.symptoms) if (s !== "ok") count.set(s, (count.get(s) ?? 0) + 1);
   const moods = new Map<string, number>();
-  for (const d of inCycle) if (d.mood) moods.set(d.mood, (moods.get(d.mood) ?? 0) + 1);
+  for (const d of inCycle) for (const m of moodsOf(d)) moods.set(m, (moods.get(m) ?? 0) + 1);
   const stress = inCycle.filter((d) => d.tags.includes("o:stress")).length;
   const lh = inCycle.find((d) => d.lh === "pos");
   const rows = [

@@ -13,6 +13,7 @@ import {
   tempShift,
   ACTIVITY,
   PHASE_COLOR,
+  moodsOf,
   type Phase,
 } from "@/lib/fem/cycle";
 import { addDays } from "@/lib/tasks/dates";
@@ -42,7 +43,7 @@ export default function FemStats() {
     for (const [day, entry] of days) {
       if (daysBetween(day, now) > 92) continue;
       for (const s of entry.symptoms) counts.set(s, (counts.get(s) ?? 0) + 1);
-      if (entry.mood) counts.set(`mood:${entry.mood}`, (counts.get(`mood:${entry.mood}`) ?? 0) + 1);
+      for (const m of moodsOf(entry)) counts.set(`mood:${m}`, (counts.get(`mood:${m}`) ?? 0) + 1);
     }
     const top = [...counts]
       .sort((a, b) => b[1] - a[1])
@@ -344,9 +345,9 @@ function PhaseInsights() {
       if (!ph) continue;
       if (ph === "ovulation") ph = "fertile";
       const a = acc.get(ph) ?? { good: 0, moods: 0, desire: 0, desires: 0 };
-      if (d.mood) {
+      for (const m of moodsOf(d)) {
         a.moods++;
-        if (GOOD_MOODS.has(d.mood)) a.good++;
+        if (GOOD_MOODS.has(m)) a.good++;
       }
       const lvl = d.tags.map((t) => DESIRE_LEVEL[t]).find(Boolean);
       if (lvl) {

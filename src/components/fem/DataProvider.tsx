@@ -137,6 +137,7 @@ const EMPTY_DAY = {
   tags: [],
   weight: null,
   preg_test: null,
+  mood_log: [],
 };
 
 export function FemProvider({ children }: { children: ReactNode }) {
@@ -225,6 +226,7 @@ export function FemProvider({ children }: { children: ReactNode }) {
               symptoms: x.symptoms ?? [],
               meds: x.meds ?? [],
               tags: x.tags ?? [],
+              mood_log: Array.isArray(x.mood_log) ? x.mood_log : [],
               temp: x.temp == null ? null : Number(x.temp),
               weight: x.weight == null ? null : Number(x.weight),
             },

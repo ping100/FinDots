@@ -44,6 +44,8 @@ export function flowerStage(info: CycleInfo, style: DialStyle): string | null {
 }
 
 const NS = "http://www.w3.org/2000/svg";
+/** Лепестки дней задержки: основание и кончик. */
+const LATE_PETAL: [string, string] = ["#f59e0b", "#fde68a"];
 const lerp = (a: number, b: number, t: number) => a + (b - a) * Math.min(1, Math.max(0, t));
 const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
 const easeBack = (t: number) => 1 + 2.6 * Math.pow(t - 1, 3) + 1.6 * Math.pow(t - 1, 2);
@@ -360,6 +362,7 @@ function Flower({ d, size, pick, late }: BodyProps) {
         )
         .join("") +
       `<radialGradient id="${uid}-aura"><stop offset="0%" stop-color="${PHASE_COLOR.fertile}" stop-opacity=".5"/><stop offset="100%" stop-color="${PHASE_COLOR.fertile}" stop-opacity="0"/></radialGradient>
+       <linearGradient id="${uid}-late" x1="0" y1="1" x2="0" y2="0"><stop offset="0%" stop-color="${LATE_PETAL[0]}"/><stop offset="100%" stop-color="${LATE_PETAL[1]}"/></linearGradient>
        <radialGradient id="${uid}-wait"><stop offset="0%" stop-color="${PHASE_COLOR.late}" stop-opacity=".45"/><stop offset="100%" stop-color="${PHASE_COLOR.late}" stop-opacity="0"/></radialGradient>
        <radialGradient id="${uid}-shade"><stop offset="0%" stop-color="#ec4899" stop-opacity=".16"/><stop offset="100%" stop-color="#ec4899" stop-opacity="0"/></radialGradient>
        <filter id="${uid}-glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="${4 * k0}"/></filter>`;
@@ -402,19 +405,10 @@ function Flower({ d, size, pick, late }: BodyProps) {
     const wide = waiting ? 0.92 : ph === "period" ? 0.74 : ph === "follicular" ? lerp(0.8, 0.98, frac(pl + 1, fs - 1)) : ph === "luteal" ? lerp(1, 0.78, frac(fe + 1, N)) : 1.04;
     const bloomy = !waiting && (ph === "fertile" || ph === "ovulation");
     const shedding = !waiting && ph === "luteal" && N - day <= 5;
-    // Янтарная дуга задержки вокруг цветка: растёт с каждым днём.
-    const RA = C * 0.78;
-    const LA = 2 * Math.PI * RA;
-    let waitArc: Element | null = null;
-    let waitDot: Element | null = null;
-    if (waiting) {
-      el("circle", { cx: C, cy: C, r: RA, fill: "none", stroke: PHASE_COLOR.late, "stroke-opacity": 0.22, "stroke-width": 3 * k0, "stroke-dasharray": `${2 * k0} ${6 * k0}`, "stroke-linecap": "round" }, svg);
-      waitArc = el("circle", { cx: C, cy: C, r: RA, fill: "none", stroke: PHASE_COLOR.late, "stroke-width": 5 * k0, "stroke-linecap": "round", transform: `rotate(-90 ${C} ${C})`, "stroke-dasharray": `0.01 ${LA}` }, svg);
-      waitDot = el("g", {}, svg);
-      el("circle", { r: 13 * k0, fill: "#fff", stroke: PHASE_COLOR.late, "stroke-width": 3 * k0 }, waitDot);
-      const t = el("text", { "text-anchor": "middle", "dominant-baseline": "central", "font-size": 10.5 * k0, "font-weight": 800, fill: "#b45309" }, waitDot);
-      t.textContent = `+${lateDays}`;
-    }
+    // Задержка: каждый её день окрашивает по лепестку по кругу.
+    const todayK = waiting ? Math.min(lateDays, N) : day;
+    if (waiting) for (let k = 1; k <= todayK; k++) fronts[k - 1].setAttribute("fill", `url(#${uid}-late)`);
+    if (waiting) front.appendChild(fronts[todayK - 1]);
     const narrow = Math.sqrt(28 / Math.max(N, 24));
 
     type Part = { pollen: boolean; x: number; y: number; vx: number; vy: number; life: number; r: number; rot: number; vr: number; c: string };
@@ -430,7 +424,7 @@ function Flower({ d, size, pick, late }: BodyProps) {
       const sway = reduce ? 0 : Math.sin(s * 0.7) * 1.5;
       for (let i = 0; i < N; i++) {
         const k = i + 1;
-        const isToday = !waiting && k === day;
+        const isToday = k === todayK;
         const past = waiting || k < day;
         const wave = reduce ? 1 : 1 + 0.03 * Math.sin(s * 1.6 - i * 0.45);
         const isOv = k === ov;
@@ -473,12 +467,7 @@ function Flower({ d, size, pick, late }: BodyProps) {
         stamens[i].setAttribute("r", String((1.6 + 1.2 * o + (reduce ? 0 : 0.5 * Math.sin(s * 3 + i))) * k0 * g));
       }
       aura.setAttribute("opacity", String(bloomy || waiting ? (0.55 + 0.15 * Math.sin(s * (waiting ? 1.2 : 2))) * g : 0));
-      if (waitArc && waitDot) {
-        const f = Math.min(1, lateDays / N) * g;
-        waitArc.setAttribute("stroke-dasharray", `${Math.max(0.01, f * LA)} ${LA}`);
-        const a = f * Math.PI * 2 - Math.PI / 2;
-        waitDot.setAttribute("transform", `translate(${C + RA * Math.cos(a)} ${C + RA * Math.sin(a)}) scale(${g})`);
-      }
+
 
       if (!reduce && g > 0.6) {
         if (bloomy && Math.random() < (ph === "ovulation" ? 0.45 : 0.2)) {

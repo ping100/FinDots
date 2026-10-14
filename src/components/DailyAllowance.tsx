@@ -126,6 +126,7 @@ export function DailyAllowance() {
     return {
       daily,
       dayOfMonth: now.getDate(),
+      daysInMonth,
       avg: spentSoFar / now.getDate(),
       money,
       saved,
@@ -144,51 +145,72 @@ export function DailyAllowance() {
 
   return (
     <>
+      {/* Шапка: светлая — переливающийся градиент «Аврора», тёмная —
+          матовое стекло «Ночь» (globals.css, .money-hero). */}
       <button
         onClick={() => setExplain(true)}
-        className="mb-3 w-full rounded-2xl px-4 py-3 text-left transition-transform duration-100 active:scale-[0.99]"
-        style={{ background: "var(--surface)" }}
+        className="money-hero mb-3 w-full rounded-[1.75rem] px-5 pb-4 pt-4 text-left transition-transform duration-100 active:scale-[0.99]"
       >
-        <p className="text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-          Свободно
-        </p>
-        <p className="text-[1.625rem] font-bold leading-tight tabular-nums">
-          <AnimatedMoney value={data.money} currency={base} />
-        </p>
-        <p className="mt-0.5 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-          всего {formatMoney(data.total, base)}
-          {data.saved > 0 ? ` · отложено ${formatMoney(data.saved, base)}` : ""}
-        </p>
-        {/* Долги отдельной строкой: вместе с остальным они не помещаются, а
-            перенос посреди суммы читается плохо. */}
-        {data.owed > 0 ? (
-          <p className="text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-            долгов и кредитов на {formatMoney(data.owed, base)}
-          </p>
-        ) : null}
+        <span className="money-hero-blob a" aria-hidden />
+        <span className="money-hero-blob b" aria-hidden />
 
-        <div className="my-2.5 border-t" style={{ borderColor: "var(--border)" }} />
-
-        <p className="text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+        <p className="text-[0.8125rem] font-medium" style={{ color: "var(--muted)" }}>
           {data.short ? "Не хватает на обязательные платежи" : "Можно тратить сегодня"}
         </p>
         <p
-          className="text-[1.625rem] font-bold leading-tight tabular-nums"
-          style={{ color: data.short ? "var(--danger)" : "var(--text)" }}
+          className={`money-big text-[2.625rem] font-extrabold leading-[1.1] tracking-tight tabular-nums ${data.short ? "short" : ""}`}
+          style={{ color: data.short ? "var(--danger)" : undefined }}
         >
           <AnimatedMoney value={data.short ? data.obligations - data.money : data.perDay} currency={base} />
         </p>
-        <p className="mt-0.5 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-          осталось {data.daysLeft} {plural(data.daysLeft, "день", "дня", "дней")}
+        {/* Сколько месяца прошло — полоской, остаток дней — словами. */}
+        <div className="mt-2 flex items-center gap-2.5 text-[0.75rem]" style={{ color: "var(--muted)" }}>
+          <span className="shrink-0">
+            осталось {data.daysLeft} {plural(data.daysLeft, "день", "дня", "дней")}
+          </span>
+          <span className="money-days flex-1">
+            <span style={{ width: `${Math.round((data.dayOfMonth / data.daysInMonth) * 100)}%` }} />
+          </span>
           {data.spentToday > 0 ? (
-            <>
-              {" · сегодня "}
-              <span style={{ color: overspent ? "var(--danger)" : "var(--muted)" }}>
+            <span className="shrink-0 tabular-nums">
+              {"сегодня "}
+              <span style={{ color: overspent ? "var(--danger)" : "var(--text)", fontWeight: 600 }}>
                 {formatMoney(data.spentToday, base)}
               </span>
-            </>
+            </span>
           ) : null}
-        </p>
+        </div>
+
+        {/* Свободно и всего — стеклянная плашка под главной цифрой. */}
+        <div
+          className="mt-3.5 grid grid-cols-2 gap-3 rounded-2xl px-3.5 py-2.5"
+          style={{ background: "color-mix(in srgb, #fff 9%, transparent)", border: "1px solid var(--border)" }}
+        >
+          <div className="min-w-0">
+            <p className="text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+              Свободно
+            </p>
+            <p className="truncate text-[1.1875rem] font-bold leading-tight tabular-nums">
+              <AnimatedMoney value={data.money} currency={base} />
+            </p>
+          </div>
+          <div className="min-w-0">
+            <p className="text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+              Всего
+            </p>
+            <p className="truncate text-[1.1875rem] font-bold leading-tight tabular-nums">{formatMoney(data.total, base)}</p>
+          </div>
+          {data.saved > 0 || data.owed > 0 ? (
+            // Отложенное и долги — отдельной строкой: вместе с суммами они не
+            // помещаются, а перенос посреди числа читается плохо.
+            <p className="col-span-2 -mt-1.5 text-[0.6875rem] leading-snug tabular-nums" style={{ color: "var(--muted)" }}>
+              {data.saved > 0 ? `отложено ${formatMoney(data.saved, base)}` : ""}
+              {data.saved > 0 && data.owed > 0 ? " · " : ""}
+              {data.owed > 0 ? `долгов и кредитов на ${formatMoney(data.owed, base)}` : ""}
+            </p>
+          ) : null}
+        </div>
+
         <SpendSpark daily={data.daily} today={data.dayOfMonth} limit={data.short ? 0 : data.perDay} avg={data.avg} base={base} />
         <RatesLine
           base={base}
@@ -308,7 +330,7 @@ function SpendSpark({
   const max = Math.max(limit, ...daily) || 1;
   const y = (v: number) => H - Math.max(2, (v / max) * H);
   return (
-    <div className="mt-2.5">
+    <div className="mt-3">
       <div className="mb-1 flex items-baseline justify-between text-[0.6875rem]" style={{ color: "var(--muted)" }}>
         <span>Траты по дням</span>
         <span className="tabular-nums">в среднем {formatMoney(Math.round(avg), base as CurrencyCode)} в день</span>
@@ -333,7 +355,7 @@ function SpendSpark({
               width={4}
               height={H - y(v)}
               rx={1.5}
-              fill={v === 0 ? "var(--border)" : over ? SERIES.expense.color : "var(--muted)"}
+              fill={v === 0 ? "var(--border)" : over ? `var(--spark-over, ${SERIES.expense.color})` : "var(--spark, var(--muted))"}
               opacity={day === today || over ? 1 : 0.55}
             />
           );

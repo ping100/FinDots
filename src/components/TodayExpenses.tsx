@@ -40,7 +40,7 @@ export function TodayExpenses() {
   const total = items.reduce((sum, t) => sum + toBase(Number(t.amount), t.currency), 0);
 
   return (
-    <div className="mb-3 overflow-hidden rounded-2xl" style={{ background: "var(--surface)" }}>
+    <div className="money-card mb-3 overflow-hidden rounded-[1.375rem]">
       <button
         onClick={() => setCollapsed((v) => !v)}
         aria-expanded={!collapsed}

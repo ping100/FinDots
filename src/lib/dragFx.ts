@@ -58,6 +58,9 @@ function bounce(dropId: string) {
 
 /** Цвет волны — цвет самой цели, а у прозрачной (день календаря) — акцентный. */
 function discColor(el: HTMLElement): string {
+  // Кружок Findots закрашен градиентом — его цвет лежит в --c.
+  const own = el.style.getPropertyValue("--c").trim().match(/^#([\da-f]{2})([\da-f]{2})([\da-f]{2})/i);
+  if (own) return own.slice(1, 4).map((h) => parseInt(h, 16)).join(", ");
   const parts = getComputedStyle(el).backgroundColor.match(/[\d.]+/g) ?? [];
   if (parts.length >= 3 && (parts.length < 4 || Number(parts[3]) > 0)) return parts.slice(0, 3).join(", ");
   const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();

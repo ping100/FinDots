@@ -23,7 +23,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
   if (!ready) return <Loader />;
 
   return (
-    <div className="min-h-dvh pt-safe">
+    // money-theme — светлая «Аврора» и тёмная «Ночь» (globals.css).
+    <div className="money-theme min-h-dvh pt-safe">
       {/* Поверх любой вкладки: приветствие должно найти человека, куда бы
           он ни попал после регистрации. */}
       <Welcome />

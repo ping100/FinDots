@@ -250,14 +250,18 @@ export function Bubble({
       </span>
       <span
         data-disc
+        data-bubble
+        data-hl={highlighted ? "" : undefined}
         className="relative flex items-center justify-center rounded-full text-white"
         style={{
+          // Цвет — переменной: тема Findots рисует из него объём или неон.
+          ["--c" as string]: color,
           width: size,
           height: size,
           background: color,
-          boxShadow: highlighted
-            ? `0 0 0 3px var(--surface), 0 0 0 6px ${color}, 0 12px 26px ${color}77`
-            : "0 1px 2px rgba(0,0,0,0.12)",
+          // Обычная тень — в теме (globals.css), иначе встроенный стиль
+          // перебил бы и её, и волну «приземления» из dragFx.
+          boxShadow: highlighted ? `0 0 0 3px var(--surface), 0 0 0 6px ${color}, 0 12px 26px ${color}77` : undefined,
           // Под пальцем цель упруго раздувается — видно, куда упадёт.
           transform: highlighted ? "scale(1.14)" : undefined,
           transition: "transform 280ms cubic-bezier(.34,1.56,.64,1), box-shadow 200ms ease, opacity 150ms ease",
@@ -312,6 +316,7 @@ export function AddBubble({ size = 58 }: { size?: number }) {
     <div className="flex w-full flex-col items-center gap-0.5">
       <span className="h-[22px] text-[0.6875rem] leading-[1.05]">&nbsp;</span>
       <span
+        data-add
         className="flex items-center justify-center rounded-full border"
         style={{
           width: size,

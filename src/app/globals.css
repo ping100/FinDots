@@ -772,3 +772,148 @@ input[type="date"]::-webkit-date-and-time-value {
 .dark .fem-theme {
   --blob-alpha: 22%;
 }
+
+/* ─────────────────────────── Findots ───────────────────────────
+   Светлая тема — «Аврора»: прохладный фон, белые карточки с мягкой тенью,
+   шапка с переливающимся изумрудно-бирюзовым градиентом и объёмные кружки.
+   Тёмная — «Ночь»: почти чёрный фон с бирюзовым и фиолетовым свечением,
+   карточки из матового стекла и светящиеся кружки-неоны. */
+.money-theme {
+  --bg: #f3f5f9;
+  color: var(--text);
+  background:
+    radial-gradient(34rem 22rem at 110% -4%, rgba(16, 185, 129, 0.1), transparent 62%),
+    radial-gradient(30rem 26rem at -20% 40%, rgba(99, 102, 241, 0.07), transparent 62%),
+    var(--bg);
+  background-attachment: fixed;
+}
+.dark .money-theme {
+  --bg: #070a12;
+  --surface: #121826;
+  --surface-2: #1a2232;
+  --border: #232d40;
+  background:
+    radial-gradient(30rem 26rem at -24% 4%, rgba(8, 145, 178, 0.22), transparent 62%),
+    radial-gradient(30rem 26rem at 124% 22%, rgba(124, 58, 237, 0.2), transparent 62%),
+    radial-gradient(28rem 24rem at 50% 112%, rgba(8, 145, 178, 0.1), transparent 62%),
+    var(--bg);
+  background-attachment: fixed;
+}
+
+/* Карточки блоков. */
+.money-card {
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 10px 26px -14px rgba(15, 23, 42, 0.16);
+}
+.dark .money-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  box-shadow: none;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+/* Шапка «Свободно / можно тратить». Внутри свои цвета текста, поэтому
+   мини-график и строка курса перекрашиваются сами — через переменные. */
+.money-hero {
+  --text: #ffffff;
+  --muted: rgba(255, 255, 255, 0.8);
+  --border: rgba(255, 255, 255, 0.26);
+  --danger: #fecdd3;
+  --spark: rgba(255, 255, 255, 0.9);
+  --spark-over: #fda4af;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  color: var(--text);
+  background: linear-gradient(160deg, #059669 0%, #10b981 30%, #06b6d4 72%, #6366f1 118%);
+  box-shadow: 0 18px 40px -20px rgba(5, 150, 105, 0.7);
+}
+.dark .money-hero {
+  --text: #f1f5f9;
+  --muted: #94a3b8;
+  --border: rgba(255, 255, 255, 0.1);
+  --danger: #fb7185;
+  --spark: #22d3ee;
+  --spark-over: #f472b6;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow: 0 20px 50px -24px rgba(8, 145, 178, 0.45);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+/* Плывущие пятна света внутри шапки. */
+.money-hero-blob {
+  position: absolute;
+  z-index: -1;
+  border-radius: 9999px;
+  filter: blur(34px);
+  pointer-events: none;
+  animation: money-drift 11s ease-in-out infinite alternate;
+}
+.money-hero-blob.a { width: 15rem; height: 15rem; left: -5rem; top: 5rem; background: #a7f3d0; opacity: 0.5; }
+.money-hero-blob.b { width: 16rem; height: 16rem; right: -6rem; top: -5rem; background: #c4b5fd; opacity: 0.55; animation-delay: -5s; }
+.dark .money-hero-blob.a { background: #0891b2; opacity: 0.35; }
+.dark .money-hero-blob.b { background: #7c3aed; opacity: 0.35; }
+@keyframes money-drift {
+  to { transform: translate(1.5rem, 1.1rem) scale(1.15); }
+}
+/* Крупная цифра: в тёмной теме — переливом. */
+.dark .money-hero .money-big {
+  background: linear-gradient(90deg, #ffffff 35%, #a5f3fc 72%, #c4b5fd);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.dark .money-hero .money-big.short {
+  background: none;
+  color: var(--danger);
+}
+.money-days {
+  height: 5px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.25);
+  overflow: hidden;
+}
+.money-days > span {
+  display: block;
+  height: 100%;
+  border-radius: 9999px;
+  background: #fff;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.9);
+}
+.dark .money-days { background: rgba(255, 255, 255, 0.08); }
+.dark .money-days > span {
+  background: linear-gradient(90deg, #22d3ee, #a78bfa);
+  box-shadow: 0 0 10px rgba(34, 211, 238, 0.6);
+}
+
+/* Кружки: светлая — объёмные, с бликом и цветной тенью; тёмная — неон. */
+.money-theme [data-bubble] {
+  background: radial-gradient(circle at 32% 24%, color-mix(in srgb, var(--c) 62%, #fff), var(--c) 62%) !important;
+}
+.money-theme [data-bubble]:not([data-hl]) {
+  box-shadow: 0 10px 18px -9px var(--c), inset 0 -3px 6px color-mix(in srgb, var(--c) 70%, #000 30%);
+}
+.dark .money-theme [data-bubble] {
+  background: radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--c) 34%, transparent), color-mix(in srgb, var(--c) 10%, transparent) 72%) !important;
+  color: color-mix(in srgb, var(--c) 78%, #fff);
+}
+.dark .money-theme [data-bubble]:not([data-hl]) {
+  box-shadow: 0 0 22px -7px var(--c), inset 0 0 0 1.5px color-mix(in srgb, var(--c) 62%, transparent);
+}
+.money-theme [data-add] {
+  border: 2px dashed var(--border) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.dark .money-theme [data-add] {
+  border: 1.5px dashed rgba(255, 255, 255, 0.16) !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .money-hero-blob { animation: none; }
+}
+/* Кружок вне темы Findots — прежняя тонкая тень. */
+[data-bubble]:not([data-hl]) {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}

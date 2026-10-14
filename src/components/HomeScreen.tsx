@@ -960,15 +960,16 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="mb-3">
-      <div className="mb-1 flex items-center gap-2 px-1">
-        <button onClick={onToggle} className="flex items-center gap-2" aria-expanded={!collapsed}>
+    // Заголовок — внутри карточки: блок читается как одно целое.
+    <section className="money-card mb-3 rounded-[1.375rem] px-2 pb-2 pt-2.5">
+      <div className="flex items-center gap-2 px-2">
+        <button onClick={onToggle} className="flex min-h-7 items-center gap-2" aria-expanded={!collapsed}>
           <Icon
             name={collapsed ? "chevron-right" : "chevron-down"}
             size={15}
             style={{ color: "var(--muted)" }}
           />
-          <h2 className="text-[1.0625rem] font-semibold">{title}</h2>
+          <h2 className="text-[1.0625rem] font-bold">{title}</h2>
         </button>
         {action && !collapsed ? (
           <button
@@ -979,18 +980,17 @@ function Section({
             {action.label}
           </button>
         ) : null}
-        <span className="ml-auto text-[0.9375rem] font-semibold tabular-nums">{total}</span>
+        <span className="ml-auto text-[0.9375rem] font-bold tabular-nums" style={{ color: "color-mix(in srgb, var(--text) 72%, transparent)" }}>
+          {total}
+        </span>
       </div>
       {note && !collapsed ? (
-        <p className="mb-1.5 px-1 text-[0.6875rem]" style={{ color: "var(--accent)" }}>
+        <p className="mt-0.5 px-2 text-[0.6875rem]" style={{ color: "var(--accent)" }}>
           {note}
         </p>
       ) : null}
       {collapsed ? null : (
-        <div
-          className="flex items-center rounded-2xl px-2 py-1.5"
-          style={{ background: "var(--surface)" }}
-        >
+        <div className="mt-1 flex items-center px-0 py-0.5">
           {/* Пока блок пуст, рядом стоит подсказка, и делить остаток на пять
               колонок не под что: колонка выходит уже самого кружка, и тот
               вылезает за скруглённый угол карточки. Поэтому с подсказкой

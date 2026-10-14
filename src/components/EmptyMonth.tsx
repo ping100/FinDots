@@ -9,7 +9,7 @@ import { Logo } from "./Logo";
 export function EmptyMonth({ past, hasWallets, hasIncome }: { past: boolean; hasWallets: boolean; hasIncome: boolean }) {
   if (past) {
     return (
-      <div className="mb-3 flex items-center gap-3 rounded-2xl px-4 py-3" style={{ background: "var(--surface)" }}>
+      <div className="money-card mb-3 flex items-center gap-3 rounded-[1.375rem] px-4 py-3">
         <span style={{ opacity: 0.5 }}>
           <Logo size={34} />
         </span>
@@ -30,7 +30,7 @@ export function EmptyMonth({ past, hasWallets, hasIncome }: { past: boolean; has
   ];
 
   return (
-    <div className="mb-3 rounded-2xl px-4 py-4" style={{ background: "var(--surface)" }}>
+    <div className="money-card mb-3 rounded-[1.375rem] px-4 py-4">
       <div className="flex items-center gap-3">
         <Logo size={40} animated />
         <div>

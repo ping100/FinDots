@@ -30,7 +30,14 @@ export function CheckIn({ day, showFlow }: { day: string; showFlow: boolean }) {
   // Выбрали месячные или настроение — через миг сами переходим дальше.
   const auto = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => void (auto.current && clearTimeout(auto.current)), []);
-  const next = () => setStep((s) => (s === null ? null : s + 1 < steps.length ? s + 1 : null));
+  // Открыли сразу нужный шаг (кнопкой «Близость») — «Готово» его и закрывает.
+  const [single, setSingle] = useState(false);
+  const open = (i: number, one = false) => {
+    setSingle(one);
+    setStep(i);
+  };
+  const next = () => setStep((s) => (s === null || single ? null : s + 1 < steps.length ? s + 1 : null));
+  const loveStep = steps.findIndex((s) => s.key === "love");
   const onSingle = () => {
     if (auto.current) clearTimeout(auto.current);
     auto.current = setTimeout(next, 380);
@@ -68,7 +75,7 @@ export function CheckIn({ day, showFlow }: { day: string; showFlow: boolean }) {
         </span>
         {!empty ? (
           <button
-            onClick={() => setStep(0)}
+            onClick={() => open(0)}
             className="shrink-0 rounded-full px-3 py-1.5 text-[0.8125rem] font-medium transition active:scale-95"
             style={{ background: "var(--surface-2)", color: "var(--accent)" }}
           >
@@ -79,14 +86,14 @@ export function CheckIn({ day, showFlow }: { day: string; showFlow: boolean }) {
 
       {empty ? (
         <button
-          onClick={() => setStep(0)}
+          onClick={() => open(0)}
           className="fem-shine mt-3 flex w-full items-center justify-center gap-2 rounded-2xl py-3 text-[0.9375rem] font-semibold text-white transition active:scale-[0.98]"
           style={{ background: FEM_GRADIENT, boxShadow: "0 10px 22px -12px rgba(236,72,153,0.7)" }}
         >
           ✍️ Отметить самочувствие
         </button>
       ) : (
-        <button onClick={() => setStep(0)} className="mt-2.5 flex w-full flex-wrap gap-1.5 text-left" aria-label="Изменить отметки за сегодня">
+        <button onClick={() => open(0)} className="mt-2.5 flex w-full flex-wrap gap-1.5 text-left" aria-label="Изменить отметки за сегодня">
           {shown.map((c) => (
             <span key={c.key} className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[0.75rem]" style={{ background: "var(--surface-2)" }}>
               <span className="flex items-center">{c.icon}</span>
@@ -101,6 +108,17 @@ export function CheckIn({ day, showFlow }: { day: string; showFlow: boolean }) {
         </button>
       )}
 
+      {/* Быстрый вход в шаг «Близость» — например, вечером, когда утром
+          самочувствие уже отмечено. */}
+      <button
+        onClick={() => open(loveStep, true)}
+        className="mt-2.5 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[0.8125rem] font-medium transition active:scale-95"
+        style={{ background: "color-mix(in srgb, #ec4899 12%, var(--surface))", color: "var(--accent)" }}
+      >
+        {heart ? <IntimacyHeart kind={heart} size={15} /> : <span>💗</span>}
+        {heart ? "Близость отмечена — изменить" : "Была близость"}
+      </button>
+
       <Sheet
         open={cur !== null}
         title={cur?.title ?? ""}
@@ -108,7 +126,7 @@ export function CheckIn({ day, showFlow }: { day: string; showFlow: boolean }) {
         footer={
           cur && step !== null ? (
             <div className="flex gap-2">
-              {step > 0 ? (
+              {step > 0 && !single ? (
                 <button
                   onClick={() => setStep(step - 1)}
                   className="rounded-2xl px-4 py-3 text-sm font-medium"
@@ -122,7 +140,7 @@ export function CheckIn({ day, showFlow }: { day: string; showFlow: boolean }) {
                 className="flex-1 rounded-2xl py-3 text-sm font-semibold text-white"
                 style={{ background: FEM_GRADIENT }}
               >
-                {step + 1 < steps.length ? "Дальше" : "Готово"}
+                {step + 1 < steps.length && !single ? "Дальше" : "Готово"}
               </button>
             </div>
           ) : undefined
@@ -135,7 +153,7 @@ export function CheckIn({ day, showFlow }: { day: string; showFlow: boolean }) {
               {steps.map((s, i) => (
                 <button
                   key={s.key}
-                  onClick={() => setStep(i)}
+                  onClick={() => open(i)}
                   aria-label={s.title}
                   className="h-2 rounded-full transition-all"
                   style={{ width: i === step ? 22 : 8, background: i <= step ? "#ec4899" : "var(--surface-2)" }}

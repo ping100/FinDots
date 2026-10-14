@@ -10,6 +10,8 @@ import { useStore } from "@/components/DataProvider";
 import { IncomeExpenseChart, NetChart, SERIES, ShareBar } from "@/components/charts";
 import { Button } from "@/components/ui";
 import { SpendCalendar } from "@/components/SpendCalendar";
+import { ReportInsights } from "@/components/ReportInsights";
+import { buildInsights } from "@/lib/reportInsights";
 
 type Mode = "spent" | "calendar" | "earned" | "flow" | "net";
 
@@ -67,6 +69,11 @@ export default function AnalyticsPage() {
   // Секунды ожидания первых строк. Пустой экран без счётчика тянется вдвое
   // дольше, чем такой же с ним.
   const [aiWait, setAiWait] = useState(0);
+
+  const insights = useMemo(
+    () => buildInsights(transactions, categories, offset, toBase),
+    [transactions, categories, offset, toBase],
+  );
 
   const buckets = useMemo(
     () => buildBuckets(transactions, offset, grouping, toBase),
@@ -234,7 +241,11 @@ export default function AnalyticsPage() {
         </button>
       </div>
 
-      <div className="mb-4 grid grid-cols-3 rounded-2xl py-3" style={{ background: "var(--surface)" }}>
+      {/* Главное о месяце — истории, плитки и выводы. Графики — ниже. */}
+      <ReportInsights data={insights} base={base} current={offset === 0} />
+
+      <h2 className="mb-2 mt-6 px-1 text-[1.0625rem] font-bold">Подробно</h2>
+      <div className="money-card mb-4 grid grid-cols-3 rounded-[1.25rem] py-3">
         <Stat label="Доходы" value={formatMoney(stats.incomeTotal, base)} color={SERIES.income.color} />
         <Stat label="Расходы" value={formatMoney(stats.expenseTotal, base)} color={SERIES.expense.color} />
         <Stat
@@ -246,8 +257,7 @@ export default function AnalyticsPage() {
 
       {stats.fees > 0 || stats.prevFees > 0 ? (
         <div
-          className="-mt-2 mb-4 flex items-center gap-3 rounded-2xl px-4 py-3"
-          style={{ background: "var(--surface)" }}
+          className="money-card -mt-2 mb-4 flex items-center gap-3 rounded-[1.25rem] px-4 py-3"
         >
           <span
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
@@ -285,7 +295,7 @@ export default function AnalyticsPage() {
         ))}
       </div>
 
-      <div className="mb-4 rounded-2xl p-3" style={{ background: "var(--surface)" }}>
+      <div className="money-card mb-4 rounded-[1.25rem] p-3">
         {/* Подпись объясняет, что именно на графике — без неё режимы
             приходится угадывать по названию. */}
         <p className="mb-2.5 px-1 text-[0.75rem] leading-snug" style={{ color: "var(--muted)" }}>
@@ -348,7 +358,7 @@ export default function AnalyticsPage() {
             Таблица по периодам
           </button>
           {tableOpen ? (
-            <div className="overflow-hidden rounded-2xl" style={{ background: "var(--surface)" }}>
+            <div className="money-card overflow-hidden rounded-[1.25rem]">
               <div
                 className="flex gap-2 px-4 py-2 text-[0.6875rem]"
                 style={{ color: "var(--muted)", borderBottom: "1px solid var(--border)" }}

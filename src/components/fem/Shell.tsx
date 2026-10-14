@@ -84,7 +84,7 @@ export function FemShell({ children }: { children: ReactNode }) {
 }
 
 /** Шапка экранов FemDots: заголовок и кружок «домой» к развилке Dots. */
-export function FemHeader({ title, sub }: { title: string; sub?: string }) {
+export function FemHeader({ title, sub, action }: { title: string; sub?: string; action?: ReactNode }) {
   return (
     <header className="flex items-center justify-between gap-3 py-3">
       <div className="min-w-0">
@@ -95,6 +95,8 @@ export function FemHeader({ title, sub }: { title: string; sub?: string }) {
           </p>
         ) : null}
       </div>
+      <div className="flex shrink-0 items-center gap-2">
+      {action}
       <Link
         href="/"
         aria-label="На главную Dots"
@@ -106,6 +108,7 @@ export function FemHeader({ title, sub }: { title: string; sub?: string }) {
         </span>
         Dots
       </Link>
+      </div>
     </header>
   );
 }

@@ -74,6 +74,7 @@ export function PartnerScreen() {
   const { partner, leavePartner, setPartnerRemind, profile } = useFem();
   const now = today();
   const [confirm, setConfirm] = useState(false);
+  const [prefs, setPrefs] = useState(false);
   const [sheet, setSheet] = useState<"day" | "tips" | "chance" | "mood" | null>(null);
   const info = useMemo(
     () =>
@@ -99,7 +100,20 @@ export function PartnerScreen() {
 
   return (
     <div className="mx-auto w-full max-w-md px-4 pb-16">
-      <FemHeader title={`Цикл: ${name}`} sub="Партнёрский режим" />
+      <FemHeader
+        title={`Цикл: ${name}`}
+        sub="Партнёрский режим"
+        action={
+          <button
+            onClick={() => setPrefs(true)}
+            aria-label="Настройки"
+            className="flex h-10 w-10 items-center justify-center rounded-full transition active:scale-90"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--muted)" }}
+          >
+            <Icon name="gear" size={19} />
+          </button>
+        }
+      />
 
       {info.phase && !partner.paused ? <DayHero phase={info.phase} day={now} who="partner" goal={partner.goal} /> : null}
 
@@ -226,38 +240,44 @@ export function PartnerScreen() {
       </>
       )}
 
-      <div className="fem-card mt-3 overflow-hidden rounded-3xl">
-        <div className="flex items-center gap-3 px-4 py-3.5">
-          <span className="min-w-0 flex-1">
-            <span className="block text-[0.9375rem]">Напоминать мне</span>
-            <span className="mt-0.5 block text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
-              За 2 дня до месячных — чтобы быть внимательнее
-              {partner.pill_nudge ? ". И если она забудет таблетку" : ""}
-            </span>
-          </span>
-          <Switch checked={partner.remind} onChange={(v) => void setPartnerRemind(v)} label="Напоминать мне" />
-        </div>
-        <div className="px-4 py-3" style={{ borderTop: "1px solid var(--border)" }}>
-          <DialStyleRow />
-        </div>
-      </div>
-
-      <button
-        onClick={async () => {
-          if (!confirm) {
-            setConfirm(true);
-            return;
-          }
-          await leavePartner();
-        }}
-        className="mt-4 w-full rounded-2xl py-3 text-sm font-medium"
-        style={{ color: confirm ? "#fff" : "var(--danger)", background: confirm ? "var(--danger)" : "transparent" }}
-      >
-        {confirm ? "Нажмите ещё раз — отключиться" : "Отключиться от цикла"}
-      </button>
-      <p className="mt-2 px-4 text-center text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
+      <p className="mt-5 px-4 text-center text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
         Вы видите только то, чем {name} поделилась, и ничего не можете изменить. Прогноз — оценка, а не медицинский совет.
       </p>
+
+      {/* Настройки партнёра — в шапке, чтобы главный экран оставался чистым. */}
+      <Sheet open={prefs} title="Настройки" onClose={() => { setPrefs(false); setConfirm(false); }}>
+        <div className="pb-3">
+        <div className="overflow-hidden rounded-2xl" style={{ background: "var(--surface-2)" }}>
+          <div className="flex items-center gap-3 px-4 py-3.5">
+            <span className="min-w-0 flex-1">
+              <span className="block text-[0.9375rem]">Напоминать мне</span>
+              <span className="mt-0.5 block text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
+                За 2 дня до месячных — чтобы быть внимательнее
+                {partner.pill_nudge ? ". И если она забудет таблетку" : ""}
+              </span>
+            </span>
+            <Switch checked={partner.remind} onChange={(v) => void setPartnerRemind(v)} label="Напоминать мне" />
+          </div>
+          <div className="px-4 py-3" style={{ borderTop: "1px solid var(--border)" }}>
+            <DialStyleRow />
+          </div>
+        </div>
+
+        <button
+          onClick={async () => {
+            if (!confirm) {
+              setConfirm(true);
+              return;
+            }
+            await leavePartner();
+          }}
+          className="mt-3 w-full rounded-2xl py-3 text-sm font-medium"
+          style={{ color: confirm ? "#fff" : "var(--danger)", background: confirm ? "var(--danger)" : "transparent" }}
+        >
+          {confirm ? "Нажмите ещё раз — отключиться" : "Отключиться от цикла"}
+        </button>
+        </div>
+      </Sheet>
 
       <Sheet
         open={sheet !== null}

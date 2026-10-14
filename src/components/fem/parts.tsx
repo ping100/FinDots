@@ -460,7 +460,23 @@ export function Pill({
  * день (выделения, близость, самочувствие, настроение), остальное —
  * свёрнуто в «Ещё». Всё нажатием, сохраняется сразу.
  */
-export function DayLog({ day, showFlow = true }: { day: string; showFlow?: boolean }) {
+/** Разделы дневника — по ним опрос «Как вы сегодня?» идёт шагами. */
+export type LogSection = "flow" | "mood" | "symptoms" | "intimacy" | "more" | "note";
+
+export function DayLog({
+  day,
+  showFlow = true,
+  only,
+  onSingle,
+}: {
+  day: string;
+  showFlow?: boolean;
+  /** Показать только эти разделы (шаг опроса); без него — весь дневник. */
+  only?: LogSection[];
+  /** Выбрали вариант там, где он один (месячные, настроение), — можно идти дальше. */
+  onSingle?: () => void;
+}) {
+  const has = (sec: LogSection) => !only || only.includes(sec);
   const { days, saveDay, intimacy, setIntimacy, settings, periods, share } = useFem();
   const entry: FemDay = days.get(day) ?? {
     day,
@@ -517,10 +533,17 @@ export function DayLog({ day, showFlow = true }: { day: string; showFlow?: boole
 
   return (
     <div className="space-y-4">
-      {showFlow ? (
+      {showFlow && has("flow") ? (
         <Group title="Месячные">
           {FLOWS.map((f) => (
-            <Pill key={f.value} on={entry.flow === f.value} onClick={() => void saveDay(day, { flow: entry.flow === f.value ? null : f.value })}>
+            <Pill
+              key={f.value}
+              on={entry.flow === f.value}
+              onClick={() => {
+                void saveDay(day, { flow: entry.flow === f.value ? null : f.value });
+                if (entry.flow !== f.value) onSingle?.();
+              }}
+            >
               <span className="flex" style={{ color: entry.flow === f.value ? "#fff" : PHASE_COLOR.period }}>
                 {f.drops === 0 ? <span className="text-xs">•</span> : Array.from({ length: f.drops }, (_, i) => <Icon key={i} name="drop" size={11} />)}
               </span>
@@ -530,6 +553,8 @@ export function DayLog({ day, showFlow = true }: { day: string; showFlow?: boole
         </Group>
       ) : null}
 
+      {has("intimacy") ? (
+      <>
       <Group title="Близость вдвоём" hint={share?.partner_name ? `видно и ${share.partner_name}` : undefined}>
         <IntimacyPicker value={intim} onChange={(v) => void setIntimacy(day, v)} />
       </Group>
@@ -553,7 +578,10 @@ export function DayLog({ day, showFlow = true }: { day: string; showFlow?: boole
           первые 72 часа — посоветуйтесь с врачом или фармацевтом.
         </p>
       ) : null}
+      </>
+      ) : null}
 
+      {has("symptoms") ? (
       <Group title="Симптомы">
         {body.map((x) => (
           <Pill key={x.value} on={entry.symptoms.includes(x.value)} onClick={() => toggleSymptom(x.value)}>
@@ -562,17 +590,27 @@ export function DayLog({ day, showFlow = true }: { day: string; showFlow?: boole
           </Pill>
         ))}
       </Group>
+      ) : null}
 
+      {has("mood") ? (
       <Group title="Настроение">
         {MOODS.map((m) => (
-          <Pill key={m.value} on={entry.mood === m.value} onClick={() => void saveDay(day, { mood: entry.mood === m.value ? null : m.value })}>
+          <Pill
+            key={m.value}
+            on={entry.mood === m.value}
+            onClick={() => {
+              void saveDay(day, { mood: entry.mood === m.value ? null : m.value });
+              if (entry.mood !== m.value) onSingle?.();
+            }}
+          >
             <span>{m.emoji}</span>
             {m.label}
           </Pill>
         ))}
       </Group>
+      ) : null}
 
-      {more ? (
+      {!has("more") ? null : more || only ? (
         <>
           <Group title="Выделения">
             {DISCHARGE.map((t) => (
@@ -673,6 +711,7 @@ export function DayLog({ day, showFlow = true }: { day: string; showFlow?: boole
         </button>
       )}
 
+      {has("note") ? (
       <div>
         <span className="mb-1.5 block text-xs font-semibold" style={{ color: "var(--muted)" }}>
           Заметка
@@ -687,6 +726,7 @@ export function DayLog({ day, showFlow = true }: { day: string; showFlow?: boole
           onBlur={() => note !== (entry.note ?? "") && void saveDay(day, { note: note.trim() || null })}
         />
       </div>
+      ) : null}
     </div>
   );
 }

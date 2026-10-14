@@ -11,7 +11,8 @@ import { PartnerJoin } from "@/components/fem/PartnerShare";
 import { long, range, short } from "@/lib/fem/format";
 import { useFem } from "@/components/fem/DataProvider";
 import { FemHeader } from "@/components/fem/Shell";
-import { CycleRing, DayHero, DayLog, plural, useLearned } from "@/components/fem/parts";
+import { CycleRing, DayHero, plural, useLearned } from "@/components/fem/parts";
+import { CheckIn } from "@/components/fem/CheckIn";
 
 /**
  * Главный экран FemDots: фраза дня, кольцо цикла, одна главная кнопка
@@ -216,10 +217,7 @@ export default function FemToday() {
 
       <OwnTogether />
 
-      <div className="fem-card mt-3 rounded-3xl p-4">
-        <p className="mb-3 text-[0.9375rem] font-semibold">Как вы сегодня?</p>
-        <DayLog day={now} showFlow={!!info.current || (info.daysToNext != null && info.daysToNext <= 2)} />
-      </div>
+      <CheckIn day={now} showFlow={!!info.current || (info.daysToNext != null && info.daysToNext <= 2)} />
 
       <p className="mt-4 px-3 text-center text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
         {info.hormonal
@@ -239,7 +237,7 @@ function FirstSteps({ partner }: { partner: string | null }) {
   if (known) return null;
   const steps: [string, React.ReactNode][] = [
     ["🩸", <>Начались месячные — нажмите кнопку выше. Другой день — в <Link href="/fem/calendar" replace className="underline">календаре</Link>.</>],
-    ["✍️", "Ниже отмечайте, как вы сегодня, — пара нажатий в день делает прогноз точнее."],
+    ["✍️", "Ниже — «Как вы сегодня?»: короткий опрос, пара нажатий в день делает прогноз точнее."],
     ["📊", <>Как прошёл цикл и что в норме — во вкладке <Link href="/fem/stats" replace className="underline">«Итоги»</Link>.</>],
     partner
       ? ["💌", `${partner} подключён — просьбы и статус дня ниже, в карточке «Вы и ${partner}».`]

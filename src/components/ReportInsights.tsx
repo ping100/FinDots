@@ -147,11 +147,20 @@ function Stories({ data, base, current }: { data: Insights; base: CurrencyCode; 
     });
   }
   if (data.rise) {
-    cards.push({
-      kicker: "Что выросло",
-      title: `${data.rise.name}: +${Math.round(data.rise.delta * 100)}% к обычному`,
-      text: `${money(data.rise.now)} — обычно ${current ? "к этой дате " : ""}${money(data.rise.usual)}`,
-    });
+    const r = data.rise;
+    cards.push(
+      r.delta == null
+        ? {
+            kicker: "Новое в этом месяце",
+            title: `${r.name} — ${money(r.now)}`,
+            text: "Раньше на это почти не тратили",
+          }
+        : {
+            kicker: "Что выросло",
+            title: `${r.name}: +${Math.min(999, Math.round(r.delta * 100))}% к обычному`,
+            text: `${money(r.now)} — обычно ${current ? "к этой дате " : ""}${money(r.usual)}`,
+          },
+    );
   }
   if (data.earned > 0) {
     const saved = data.earned - data.spent;

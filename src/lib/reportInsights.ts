@@ -39,7 +39,8 @@ export interface Insights {
   regular: InsightItem[];
   weekdays: { label: string; avg: number }[] | null;
   /** Категория, выросшая сильнее всех к обычному месяцу. */
-  rise: { name: string; now: number; usual: number; delta: number } | null;
+  /** delta — доля роста; null — раньше на это почти не тратили (новая статья). */
+  rise: { name: string; now: number; usual: number; delta: number | null } | null;
   priciestDay: { day: number; amount: number; category: string | null } | null;
 }
 
@@ -332,12 +333,18 @@ export function buildInsights(
         if (c && !isFee(t)) usualBy.set(c.id, (usualBy.get(c.id) ?? 0) + value(t) / history.length);
       }
     }
+    // Мерило «заметно» — от трат месяца: обычные траты к этой дате могут
+    // быть нулём (в прошлые месяцы к этому числу ничего не тратили).
+    const ref = Math.max(usual.toDate, spent);
     for (const [id, amount] of nowBy) {
       const base = usualBy.get(id) ?? 0;
       // Мелочь не в счёт: «+300%» на 500 ₸ ничего не значит.
-      if (base < usual.toDate * 0.03 || amount - base < usual.toDate * 0.03) continue;
-      const delta = (amount - base) / base;
-      if (delta >= 0.15 && (!rise || amount - base > rise.now - rise.usual)) {
+      if (ref <= 0 || amount - base < ref * 0.05) continue;
+      // Почти ноль в прошлом — процент бессмыслен (деление на ноль даёт
+      // «Infinity%»), это просто новая статья расходов.
+      const delta = base < ref * 0.02 ? null : (amount - base) / base;
+      if (delta != null && delta < 0.15) continue;
+      if (!rise || amount - base > rise.now - rise.usual) {
         rise = { name: byId.get(id)?.name ?? "", now: amount, usual: base, delta };
       }
     }

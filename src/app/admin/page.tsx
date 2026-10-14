@@ -8,7 +8,7 @@ import { buildMoment } from "@/lib/update";
 import { SupportCard } from "@/components/admin/SupportCard";
 import { ReviewsCard } from "@/components/admin/ReviewsCard";
 import { AiCard } from "@/components/admin/AiCard";
-import { ActivityCard, ToolCards } from "@/components/admin/Tools";
+import { ActivityCard, AlertsCard, GrowthCards, ToolCards } from "@/components/admin/Tools";
 import { Denied, GeneratedAt, OnlineDot, Problem, RefreshButton, useOverview } from "@/components/admin/shared";
 import {
   LINKS,
@@ -70,7 +70,12 @@ export default function AdminPage() {
             <AiCard />
           </div>
           <Heading>Техническое</Heading>
+          <div className="mb-2">
+            <AlertsCard />
+          </div>
           <ToolCards />
+          <Heading>Рост</Heading>
+          <GrowthCards />
           <SupabaseLimits data={data} />
           <VercelBlock built={built} />
           <GeneratedAt iso={data.generated_at} />

@@ -133,13 +133,19 @@ export function LinkCard({
   );
 }
 
-/** Входы в ошибки, рассылку и журнал действий — для главной админки. */
+/** Входы в технические инструменты — для главной админки, с коротким статусом. */
 export function ToolCards() {
   const [errors, setErrors] = useState<ErrorGroup[] | null>(null);
+  const [jobs, setJobs] = useState<{ bad: number; total: number } | null>(null);
+  const [notice, setNotice] = useState<string | null | undefined>(undefined);
   useEffect(() => {
-    void createClient()
-      .rpc("admin_errors")
-      .then(({ data }) => setErrors((data as ErrorGroup[] | null) ?? []));
+    const supabase = createClient();
+    void supabase.rpc("admin_errors").then(({ data }) => setErrors((data as ErrorGroup[] | null) ?? []));
+    void supabase.rpc("admin_cron_status").then(({ data }) => {
+      const list = ((data as { jobs?: { fails_24h: number; active: boolean }[] } | null)?.jobs ?? []);
+      setJobs({ bad: list.filter((j) => j.fails_24h > 0 || !j.active).length, total: list.length });
+    });
+    void supabase.rpc("app_notice").then(({ data }) => setNotice((data as string | null) ?? null));
   }, []);
   const fresh = errors?.filter((e) => Date.now() - new Date(e.last_at).getTime() < 86400000).length ?? 0;
   return (
@@ -159,9 +165,104 @@ export function ToolCards() {
         badge={errors?.length || undefined}
         badgeColor="#ef4444"
       />
+      <LinkCard
+        href="/admin/jobs"
+        icon="repeat"
+        color="#0ea5e9"
+        title="Фоновые задачи"
+        caption={jobs === null ? "…" : jobs.bad ? `Проблемы: ${jobs.bad} из ${jobs.total}` : `Все ${jobs.total} работают`}
+        badge={jobs?.bad || undefined}
+        badgeColor="#ef4444"
+      />
+      <LinkCard href="/admin/health" icon="shield" color="#22c55e" title="Проверка сервисов" caption="База, курс, нейросеть, пуши — одной кнопкой" />
+      <LinkCard
+        href="/admin/notice"
+        icon="hammer"
+        color="#f59e0b"
+        title="Технические работы"
+        caption={notice === undefined ? "…" : notice ? "Включено — полосу видят все" : "Выключено"}
+        badge={notice ? 1 : undefined}
+        badgeColor="#f59e0b"
+      />
       <LinkCard href="/admin/broadcast" icon="share" color="#8b5cf6" title="Рассылка" caption="Объявление всем — полосой и пушем" />
       <LinkCard href="/admin/log" icon="list" color="#64748b" title="Журнал действий" caption="Кто из админов что сделал" />
     </>
+  );
+}
+
+/** Входы в аналитику роста. */
+export function GrowthCards() {
+  return (
+    <>
+      <LinkCard href="/admin/growth" icon="chart" color="#7c3aed" title="Рост" caption="Путь новичка и удержание по неделям" />
+      <LinkCard href="/admin/features" icon="star" color="#ec4899" title="Функции" caption="Чем реально пользуются, а что не нужно" />
+    </>
+  );
+}
+
+/**
+ * «Уведомления мне»: пуш админу о новом обращении, новой ошибке, низкой
+ * оценке, сбоях фоновых задач, полной базе и сводка в 9 утра.
+ */
+export function AlertsCard() {
+  const [on, setOn] = useState<boolean | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  useEffect(() => {
+    void createClient()
+      .rpc("admin_my_alerts")
+      .then(({ data }) => setOn(data !== false));
+  }, []);
+  const toggle = async () => {
+    const next = !on;
+    setOn(next);
+    await createClient().rpc("admin_set_alerts", { p_on: next });
+  };
+  const test = async () => {
+    setNote("Отправляю…");
+    const { data } = await createClient().auth.getUser();
+    const res = await fetch("/api/admin/push-test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: data.user?.id }),
+    });
+    const out = (await res.json().catch(() => ({}))) as { sent?: number; error?: string };
+    setNote(res.ok ? (out.sent ? "Отправил — должно прийти через пару секунд" : "Не дошло — разрешите уведомления на этом телефоне") : out.error ?? "Не получилось");
+  };
+  return (
+    <div className="rounded-2xl p-4" style={{ background: "var(--surface)" }}>
+      <div className="flex items-center gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white" style={{ background: "#0ea5e9" }}>
+          <Icon name="bell" size={18} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[0.9375rem] font-medium">Уведомления мне</span>
+          <span className="block text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
+            Обращения, новые ошибки, оценки 1–2★, сбои задач, полная база и сводка в 9:00
+          </span>
+        </span>
+        <button
+          onClick={() => void toggle()}
+          role="switch"
+          aria-checked={!!on}
+          disabled={on === null}
+          className="relative h-7 w-12 shrink-0 rounded-full transition"
+          style={{ background: on ? "var(--ok)" : "var(--surface-2)" }}
+        >
+          <span
+            className="absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-all"
+            style={{ left: on ? "calc(100% - 1.625rem)" : "0.125rem" }}
+          />
+        </button>
+      </div>
+      <button onClick={() => void test()} className="mt-2.5 text-[0.8125rem] font-medium" style={{ color: "var(--accent)" }}>
+        Проверить на этом телефоне
+      </button>
+      {note ? (
+        <p className="mt-1 text-[0.75rem]" style={{ color: "var(--muted)" }}>
+          {note}
+        </p>
+      ) : null}
+    </div>
   );
 }
 

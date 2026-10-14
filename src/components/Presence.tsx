@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { CURRENT_BUILD } from "@/lib/update";
 
 /** Как часто отмечаться. Онлайн в админке — отметка не старше двух минут. */
 const EVERY = 60_000;
@@ -31,6 +32,21 @@ export function Presence() {
       void touch();
       timer = setInterval(() => void touch(), EVERY);
     };
+
+    // Раз за открытие — версия, браузер и «установлено как приложение»:
+    // по ним админ отвечает на «у меня не работает» без расспросов.
+    void (async () => {
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) return;
+      const standalone =
+        window.matchMedia?.("(display-mode: standalone)").matches ||
+        (navigator as Navigator & { standalone?: boolean }).standalone === true;
+      await supabase.rpc("report_client", {
+        p_build: CURRENT_BUILD,
+        p_ua: navigator.userAgent,
+        p_standalone: !!standalone,
+      });
+    })().catch(() => undefined);
 
     sync();
     document.addEventListener("visibilitychange", sync);

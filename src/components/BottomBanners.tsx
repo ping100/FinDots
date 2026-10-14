@@ -1,6 +1,7 @@
 import { RegisterSW } from "./RegisterSW";
 import { AdminReplyBanner } from "./AdminReplyBanner";
 import { AnnouncementBanner } from "./AnnouncementBanner";
+import { NoticeBanner } from "./NoticeBanner";
 
 /**
  * Полосы внизу экрана — про обновление, ответ администратора и новости. Общий
@@ -15,6 +16,7 @@ export function BottomBanners() {
       <RegisterSW />
       <AdminReplyBanner />
       <AnnouncementBanner />
+      <NoticeBanner />
     </div>
   );
 }

@@ -9,6 +9,7 @@ import { SupportComposer, SupportThread } from "@/components/SupportThread";
 import { loadThread, sendMessage, type SupportMessage } from "@/lib/support";
 import { removeThreadAttachments } from "@/lib/supportStorage";
 import type { AdminUser } from "@/lib/admin";
+import { UserDiag } from "./UserDiag";
 
 const WIPE_PHRASE = "ОЧИСТИТЬ";
 const DELETE_PHRASE = "УДАЛИТЬ";
@@ -172,21 +173,23 @@ export function UserActionsSheet({
     });
   };
 
-  const testPush = () => {
+  const testPush = (kind: "test" | "update" = "test") => {
     if (!user) return;
     const id = user.id;
-    return run("push", async () => {
+    return run(kind === "update" ? "update" : "push", async () => {
       const res = await fetch("/api/admin/push-test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: id }),
+        body: JSON.stringify({ user_id: id, kind }),
       });
       const data = (await res.json().catch(() => ({}))) as { sent?: number; total?: number; error?: string };
       if (!res.ok) throw new Error(data.error ?? "Не получилось");
-      await log("Тестовое уведомление", id, `доставлено ${data.sent} из ${data.total}`);
+      await log(kind === "update" ? "Попросили обновиться" : "Тестовое уведомление", id, `доставлено ${data.sent} из ${data.total}`);
       setNote(
         data.sent
-          ? `Отправлено на ${data.sent} из ${data.total} — спросите, пришло ли`
+          ? kind === "update"
+            ? `Попросили обновиться — пуш дошёл на ${data.sent} из ${data.total}`
+            : `Отправлено на ${data.sent} из ${data.total} — спросите, пришло ли`
           : "Не дошло ни на одно устройство — уведомления у человека, скорее всего, отключены в телефоне",
       );
     });
@@ -252,6 +255,13 @@ export function UserActionsSheet({
               ) : null}
             </div>
           </div>
+
+          <UserDiag
+            userId={user.id}
+            pushDevices={user.push_devices ?? 0}
+            onAskUpdate={() => void testPush("update")}
+            busy={busy === "update"}
+          />
 
           {problem ? (
             <p className="text-sm" style={{ color: "var(--danger)" }}>
@@ -340,7 +350,7 @@ export function UserActionsSheet({
                   : "Уведомления у человека не включены — отправлять некуда"
               }
               busy={busy === "push"}
-              onClick={user.push_devices ? testPush : () => setNote("Уведомления у человека не включены")}
+              onClick={user.push_devices ? () => void testPush() : () => setNote("Уведомления у человека не включены")}
               first={false}
             />
             <ActionRow

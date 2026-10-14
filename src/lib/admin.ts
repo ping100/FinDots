@@ -173,6 +173,19 @@ export const VIEWS = {
     chip: "Вода и сон",
     test: (u) => !!u.wellness,
   },
+  empty: {
+    label: "Пустые аккаунты",
+    title: "Пустые аккаунты",
+    chip: "Пустые",
+    // Больше месяца с нами и ни одной записи ни в одном приложении.
+    test: (u, now) =>
+      now - new Date(u.created_at).getTime() > 30 * DAY &&
+      u.transactions === 0 &&
+      u.tasks_open + u.tasks_done === 0 &&
+      !u.fem &&
+      !u.wellness &&
+      !u.is_admin,
+  },
   admins: { label: "Админы", title: "Админы", chip: "Админы", test: (u) => !!u.is_admin },
   push: {
     label: "С уведомлениями",

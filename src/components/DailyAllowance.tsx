@@ -1,10 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { formatMoney, symbolOf } from "@/lib/money";
 import { DEFAULT_SHOWN, crossRate, formatRate, labelFor, perFor, useOfficialRates } from "@/lib/officialRates";
 import type { CurrencyCode } from "@/lib/types";
-import { SERIES } from "./charts";
 import { toISODate } from "@/lib/savings";
 import { useStore } from "./DataProvider";
 import { Sheet } from "./ui";
@@ -211,7 +210,7 @@ export function DailyAllowance() {
           ) : null}
         </div>
 
-        <SpendSpark daily={data.daily} today={data.dayOfMonth} limit={data.short ? 0 : data.perDay} avg={data.avg} base={base} />
+        <SpendSpark daily={data.daily} today={data.dayOfMonth} free={data.money - data.obligations} avg={data.avg} base={base} />
         <RatesLine
           base={base}
           rates={rates}
@@ -307,80 +306,219 @@ function plural(count: number, one: string, few: string, many: string): string {
 }
 
 /**
- * Мини-график под «Можно тратить сегодня»: столбик на каждый день месяца.
- * Пунктир — сколько можно в день; столбики выше него — красные, ниже —
- * серые: перерасход видно, не читая цифр. Будущие дни — точками.
+ * График под «Можно тратить сегодня»: сколько потрачено с начала месяца —
+ * плавной линией с заливкой. Дальше пунктиром — куда придёте к концу
+ * месяца при нынешнем темпе, а тонкая линия сверху — сколько всего можно
+ * потратить (уже потраченное + свободные деньги). Пунктир выше линии —
+ * при таком темпе денег не хватит. Провести пальцем — траты за тот день.
  */
 function SpendSpark({
   daily,
   today,
-  limit,
+  free,
   avg,
   base,
 }: {
   daily: number[];
   today: number;
-  limit: number;
+  /** Свободные деньги после обязательных платежей; ≤ 0 — уже не хватает. */
+  free: number;
   avg: number;
-  base: string;
+  base: CurrencyCode;
 }) {
-  if (!daily.some((v) => v > 0)) return null;
-  const H = 30;
-  const step = 6;
-  const max = Math.max(limit, ...daily) || 1;
-  const y = (v: number) => H - Math.max(2, (v / max) * H);
+  const [pick, setPick] = useState<number | null>(null);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => void (hideTimer.current && clearTimeout(hideTimer.current)), []);
+
+  const n = daily.length;
+  const cum: number[] = [0];
+  for (let i = 0; i < today; i++) cum.push(cum[i] + daily[i]);
+  const spent = cum[today];
+  if (spent <= 0) return null;
+
+  const projected = spent + avg * (n - today);
+  const ceiling = free > 0 ? spent + free : null;
+  const W = 300;
+  const H = 72;
+  const top = Math.max(projected, ceiling ?? 0, spent) * 1.12 || 1;
+  const x = (d: number) => (d / n) * W;
+  const y = (v: number) => H - 2 - (v / top) * (H - 6);
+  const line = smoothPath(cum.map((v, d) => [x(d), y(v)]));
+  const fits = ceiling != null && projected <= ceiling;
+  const dayLabel = (d: number) =>
+    new Date(new Date().getFullYear(), new Date().getMonth(), d).toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
+
+  // Палец над графиком: ближайший прошедший день.
+  const scrub = (e: React.PointerEvent<HTMLDivElement>) => {
+    const box = e.currentTarget.getBoundingClientRect();
+    const d = Math.round(((e.clientX - box.left) / box.width) * n);
+    setPick(Math.min(today, Math.max(1, d)));
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+  };
+  const release = () => {
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    hideTimer.current = setTimeout(() => setPick(null), 2500);
+  };
+
+  const pct = (v: number, of: number) => `${(v / of) * 100}%`;
   return (
     <div className="mt-3">
-      <div className="mb-1 flex items-baseline justify-between text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-        <span>Траты по дням</span>
-        <span className="tabular-nums">в среднем {formatMoney(Math.round(avg), base as CurrencyCode)} в день</span>
+      <div className="mb-1 flex items-baseline justify-between gap-2 text-[0.6875rem] tabular-nums" style={{ color: "var(--muted)" }}>
+        {pick ? (
+          <>
+            <span>{dayLabel(pick)}</span>
+            <span>
+              за день <b style={{ color: "var(--text)" }}>{formatMoney(Math.round(daily[pick - 1]), base)}</b>
+              {" · с 1-го "}
+              {formatMoney(Math.round(cum[pick]), base)}
+            </span>
+          </>
+        ) : (
+          <>
+            <span>
+              Потрачено <b style={{ color: "var(--text)" }}>{formatMoney(Math.round(spent), base)}</b>
+            </span>
+            <span>в среднем {formatMoney(Math.round(avg), base)} в день</span>
+          </>
+        )}
       </div>
-      <svg
-        viewBox={`0 0 ${daily.length * step} ${H}`}
-        preserveAspectRatio="none"
-        className="block h-[30px] w-full"
-        aria-label={`Траты по дням месяца, в среднем ${formatMoney(Math.round(avg), base as CurrencyCode)} в день`}
+      <div
+        className="relative h-[72px] w-full touch-pan-y"
+        onPointerDown={scrub}
+        onPointerMove={(e) => (e.pointerType === "mouse" || e.buttons ? scrub(e) : undefined)}
+        onPointerUp={release}
+        onPointerLeave={release}
+        onPointerCancel={release}
+        // Нажатие на график — посмотреть день, а не открыть «Откуда эти числа».
+        onClick={(e) => e.stopPropagation()}
       >
-        {daily.map((v, i) => {
-          const day = i + 1;
-          if (day > today) {
-            return <rect key={i} x={i * step + 1} y={H - 2} width={4} height={2} rx={1} fill="var(--border)" />;
-          }
-          const over = limit > 0 && v > limit;
-          return (
-            <rect
-              key={i}
-              x={i * step + 1}
-              y={y(v)}
-              width={4}
-              height={H - y(v)}
-              rx={1.5}
-              fill={v === 0 ? "var(--border)" : over ? `var(--spark-over, ${SERIES.expense.color})` : "var(--spark, var(--muted))"}
-              opacity={day === today || over ? 1 : 0.55}
-            />
-          );
-        })}
-        {limit > 0 ? (
-          <line
-            x1={0}
-            x2={daily.length * step}
-            y1={y(limit)}
-            y2={y(limit)}
-            stroke="var(--text)"
-            strokeOpacity={0.35}
-            strokeDasharray="3 3"
+        <svg
+          viewBox={`0 0 ${W} ${H}`}
+          preserveAspectRatio="none"
+          className="absolute inset-0 h-full w-full overflow-visible"
+          aria-label={`Потрачено с начала месяца ${formatMoney(Math.round(spent), base)}, при таком темпе к концу месяца ≈ ${formatMoney(Math.round(projected), base)}`}
+        >
+          <defs>
+            <linearGradient id="spend-fill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="var(--spark, var(--accent))" stopOpacity="0.38" />
+              <stop offset="1" stopColor="var(--spark, var(--accent))" stopOpacity="0" />
+            </linearGradient>
+            <linearGradient id="spend-line" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stopColor="var(--spark, var(--accent))" />
+              <stop offset="1" stopColor="var(--spark-2, var(--spark, var(--accent)))" />
+            </linearGradient>
+          </defs>
+          {ceiling != null ? (
+            <line x1={0} x2={W} y1={y(ceiling)} y2={y(ceiling)} stroke="var(--text)" strokeOpacity={0.3} strokeDasharray="1 4" strokeLinecap="round" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+          ) : null}
+          <path d={`${line} L${x(today)},${H} L0,${H} Z`} fill="url(#spend-fill)" />
+          <path
+            d={line}
+            fill="none"
+            stroke="url(#spend-line)"
+            strokeWidth={2.25}
+            strokeLinecap="round"
             vectorEffect="non-scaling-stroke"
-            strokeWidth={1}
+            pathLength={1}
+            className="chart-draw"
           />
+          <line
+            x1={x(today)}
+            y1={y(spent)}
+            x2={W}
+            y2={y(projected)}
+            stroke={fits || ceiling == null ? "var(--spark-2, var(--muted))" : "var(--spark-over, var(--danger))"}
+            strokeWidth={1.75}
+            strokeDasharray="4 4"
+            strokeLinecap="round"
+            vectorEffect="non-scaling-stroke"
+            opacity={0.85}
+          />
+          {pick ? (
+            <line x1={x(pick)} x2={x(pick)} y1={0} y2={H} stroke="var(--text)" strokeOpacity={0.35} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+          ) : null}
+        </svg>
+        {/* Точки — поверх, обычными кружками: SVG растянут и сплющил бы их. */}
+        <Dot left={pct(x(today), W)} top={pct(y(spent), H)} big />
+        {pick && pick !== today ? <Dot left={pct(x(pick), W)} top={pct(y(cum[pick]), H)} /> : null}
+        {ceiling != null ? (
+          <span
+            className="absolute right-0 -translate-y-full pb-0.5 text-[0.5625rem] tabular-nums"
+            style={{ top: pct(y(ceiling), H), color: "var(--muted)" }}
+          >
+            можно потратить за месяц {formatMoney(Math.round(ceiling), base)}
+          </span>
         ) : null}
-      </svg>
-      {limit > 0 ? (
-        <p className="mt-0.5 text-[0.625rem]" style={{ color: "var(--muted)" }}>
-          пунктир — сколько можно в день, красные дни — выше него
-        </p>
-      ) : null}
+      </div>
+      <div className="mt-1 flex justify-between text-[0.5625rem]" style={{ color: "var(--muted)" }}>
+        <span>1-е</span>
+        <span>{n}-е</span>
+      </div>
+      <p className="mt-0.5 text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
+        {ceiling == null
+          ? `При таком темпе к концу месяца уйдёт ≈ ${formatMoney(Math.round(projected), base)}`
+          : fits
+            ? `При таком темпе к концу месяца уйдёт ≈ ${formatMoney(Math.round(projected), base)} — денег хватит`
+            : `При таком темпе к концу месяца уйдёт ≈ ${formatMoney(Math.round(projected), base)} — не хватит ≈ ${formatMoney(Math.round(projected - ceiling), base)}`}
+      </p>
     </div>
   );
+}
+
+function Dot({ left, top, big }: { left: string; top: string; big?: boolean }) {
+  return (
+    <span
+      className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded-full"
+      style={{
+        left,
+        top,
+        width: big ? 10 : 8,
+        height: big ? 10 : 8,
+        background: "var(--spark-2, var(--spark, var(--accent)))",
+        boxShadow: big ? "0 0 0 4px color-mix(in srgb, var(--spark-2, var(--accent)) 30%, transparent)" : "0 0 0 2px var(--text)",
+      }}
+    />
+  );
+}
+
+/**
+ * Плавная линия через точки без «горбов» вниз: монотонный кубический
+ * сплайн (Фриче — Карлсон). Накопленная сумма только растёт, и обычное
+ * сглаживание рисовало бы ложные провалы.
+ */
+function smoothPath(pts: [number, number][]): string {
+  if (pts.length < 2) return pts.length ? `M${pts[0][0]},${pts[0][1]}` : "";
+  const k = pts.length;
+  const dx: number[] = [];
+  const sl: number[] = [];
+  for (let i = 0; i < k - 1; i++) {
+    dx.push(pts[i + 1][0] - pts[i][0]);
+    sl.push((pts[i + 1][1] - pts[i][1]) / (dx[i] || 1));
+  }
+  const m: number[] = [sl[0]];
+  for (let i = 1; i < k - 1; i++) m.push(sl[i - 1] * sl[i] <= 0 ? 0 : (sl[i - 1] + sl[i]) / 2);
+  m.push(sl[k - 2]);
+  for (let i = 0; i < k - 1; i++) {
+    if (sl[i] === 0) {
+      m[i] = 0;
+      m[i + 1] = 0;
+      continue;
+    }
+    const a = m[i] / sl[i];
+    const b = m[i + 1] / sl[i];
+    const h = a * a + b * b;
+    if (h > 9) {
+      const t = 3 / Math.sqrt(h);
+      m[i] = t * a * sl[i];
+      m[i + 1] = t * b * sl[i];
+    }
+  }
+  let d = `M${pts[0][0]},${pts[0][1]}`;
+  for (let i = 0; i < k - 1; i++) {
+    const c = dx[i] / 3;
+    d += ` C${pts[i][0] + c},${pts[i][1] + m[i] * c} ${pts[i + 1][0] - c},${pts[i + 1][1] - m[i + 1] * c} ${pts[i + 1][0]},${pts[i + 1][1]}`;
+  }
+  return d;
 }
 
 /**

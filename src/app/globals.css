@@ -820,8 +820,9 @@ input[type="date"]::-webkit-date-and-time-value {
   --muted: rgba(255, 255, 255, 0.8);
   --border: rgba(255, 255, 255, 0.26);
   --danger: #fecdd3;
-  --spark: rgba(255, 255, 255, 0.9);
-  --spark-over: #fda4af;
+  --spark: #ffffff;
+  --spark-2: #ffffff;
+  --spark-over: #fecdd3;
   position: relative;
   isolation: isolate;
   overflow: hidden;
@@ -835,7 +836,8 @@ input[type="date"]::-webkit-date-and-time-value {
   --border: rgba(255, 255, 255, 0.1);
   --danger: #fb7185;
   --spark: #22d3ee;
-  --spark-over: #f472b6;
+  --spark-2: #a78bfa;
+  --spark-over: #fb7185;
   background: rgba(255, 255, 255, 0.045);
   border: 1px solid rgba(255, 255, 255, 0.09);
   box-shadow: 0 20px 50px -24px rgba(8, 145, 178, 0.45);

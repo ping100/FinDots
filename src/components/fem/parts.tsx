@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { Icon } from "@/lib/icons";
 import {
   FEM_GRADIENT,
@@ -145,7 +145,7 @@ export function CycleRing({ info, size = 256 }: { info: CycleInfo; size?: number
   // День цикла (1…N) → доля окружности, начало — сверху.
   const at = (day: number) => (day - 1) / N;
 
-  const segments: { from: number; to: number; color: string; kind: string }[] = [];
+  const segments: { from: number; to: number; color: string; kind: string; dot?: boolean }[] = [];
   if (preg) {
     // Беременность — 40 недель кругом: пройденное ярче, впереди — бледнее.
     const done = Math.min(280, (info.cycleDay ?? 1));
@@ -163,15 +163,16 @@ export function CycleRing({ info, size = 256 }: { info: CycleInfo; size?: number
     const pl = Math.min(info.periodLength, fs - 1);
     segments.push({ from: 1, to: pl, color: PHASE_COLOR.period, kind: "period" });
     if (fs - 1 > pl) segments.push({ from: pl + 1, to: fs - 1, color: PHASE_COLOR.follicular, kind: "follicular" });
-    if (ov - 1 >= fs) segments.push({ from: fs, to: ov - 1, color: PHASE_COLOR.fertile, kind: "fertile" });
-    segments.push({ from: ov, to: ov, color: PHASE_COLOR.ovulation, kind: "ovulation" });
-    if (fe > ov) segments.push({ from: ov + 1, to: fe, color: PHASE_COLOR.fertile, kind: "fertile" });
+    // Фертильное окно — одной дугой, овуляция — яркой точкой поверх неё.
+    segments.push({ from: Math.min(fs, ov), to: Math.max(fe, ov), color: PHASE_COLOR.fertile, kind: "fertile" });
     if (N > fe) segments.push({ from: fe + 1, to: N, color: PHASE_COLOR.luteal, kind: "luteal" });
+    segments.push({ from: ov, to: ov, color: PHASE_COLOR.ovulation, kind: "ovulation", dot: true });
   }
 
   // Выбранная дуга: в центре — её название и даты; сама гаснет через 5 с.
   const [picked, setPicked] = useState<number | null>(null);
   const [ringKnown, learnRing] = useLearned("fem.hint.ring");
+  const uid = useId().replace(/:/g, "");
   useEffect(() => {
     if (picked === null) return;
     const t = setTimeout(() => setPicked(null), 5000);
@@ -226,11 +227,39 @@ export function CycleRing({ info, size = 256 }: { info: CycleInfo; size?: number
     <>
     <div className="relative mx-auto" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="absolute inset-0" style={{ overflow: "visible" }}>
-        <circle cx={c} cy={c} r={r} fill="none" stroke="var(--surface-2)" strokeWidth={stroke} />
-        <g transform={`rotate(-90 ${c} ${c})`}>
+        <defs>
+          {/* Каждая дуга — свой мягкий перелив: от светлого края к насыщенному. */}
           {segments.map((s, i) => {
-            const start = at(s.from) * L;
-            const len = ((s.to - s.from + 1) / N) * L;
+            const a1 = at(s.from) * 2 * Math.PI;
+            const a2 = (at(s.to) + 1 / N) * 2 * Math.PI;
+            return (
+              <linearGradient
+                key={i}
+                id={`${uid}-g${i}`}
+                gradientUnits="userSpaceOnUse"
+                x1={c + r * Math.cos(a1)}
+                y1={c + r * Math.sin(a1)}
+                x2={c + r * Math.cos(a2)}
+                y2={c + r * Math.sin(a2)}
+              >
+                <stop offset="0%" style={{ stopColor: `color-mix(in srgb, ${s.color} 62%, #fff)` }} />
+                <stop offset="100%" style={{ stopColor: s.color }} />
+              </linearGradient>
+            );
+          })}
+        </defs>
+        {/* Дорожка с лёгкой «вдавленностью». */}
+        <circle cx={c} cy={c} r={r} fill="none" stroke="var(--surface-2)" strokeWidth={stroke + 6} />
+        <circle cx={c} cy={c} r={r + stroke / 2 + 3} fill="none" stroke="var(--border)" strokeWidth={0.75} opacity={0.6} />
+        <circle cx={c} cy={c} r={r - stroke / 2 - 3} fill="none" stroke="var(--border)" strokeWidth={0.75} opacity={0.6} />
+        <g transform={`rotate(-90 ${c} ${c})`} style={{ filter: "drop-shadow(0 4px 10px rgba(236,72,153,0.22))" }}>
+          {segments.map((s, i) => {
+            if (s.dot) return null;
+            // Скруглённые концы: дугу укорачиваем на толщину, чтобы концы
+            // не наезжали на соседей; совсем короткая — превращается в точку.
+            const gap = 3;
+            const start = at(s.from) * L + stroke / 2 + gap / 2;
+            const len = ((s.to - s.from + 1) / N) * L - stroke - gap;
             return (
               <circle
                 key={i}
@@ -238,9 +267,10 @@ export function CycleRing({ info, size = 256 }: { info: CycleInfo; size?: number
                 cy={c}
                 r={r}
                 fill="none"
-                stroke={s.color}
+                stroke={`url(#${uid}-g${i})`}
                 strokeWidth={stroke}
-                strokeDasharray={`${Math.max(len - 3, 1)} ${L}`}
+                strokeLinecap="round"
+                strokeDasharray={`${Math.max(len, 0.01)} ${L}`}
                 strokeDashoffset={-start}
                 className="animate-grow-ring cursor-pointer"
                 role="button"
@@ -259,16 +289,80 @@ export function CycleRing({ info, size = 256 }: { info: CycleInfo; size?: number
             );
           })}
         </g>
+        {/* Дни — точками по внутреннему краю: прошедшие темнее, впереди — светлее. */}
+        {!preg && N <= 60
+          ? Array.from({ length: N }, (_, k) => {
+              const a = ((k + 0.5) / N) * 2 * Math.PI - Math.PI / 2;
+              const rr = r - stroke / 2 - 10;
+              const past = day != null && k + 1 < day;
+              const isToday = day != null && k + 1 === day;
+              return (
+                <circle
+                  key={k}
+                  cx={c + rr * Math.cos(a)}
+                  cy={c + rr * Math.sin(a)}
+                  r={isToday ? 2.6 : 1.5}
+                  fill={isToday ? "#ec4899" : "var(--muted)"}
+                  opacity={isToday ? 1 : past ? 0.45 : 0.18}
+                  style={{ pointerEvents: "none" }}
+                />
+              );
+            })
+          : null}
+        {segments.map((s, i) => {
+          if (!s.dot) return null;
+          const a = ((s.from - 0.5) / N) * 2 * Math.PI - Math.PI / 2;
+          return (
+            <circle
+              key={`d${i}`}
+              cx={c + r * Math.cos(a)}
+              cy={c + r * Math.sin(a)}
+              r={stroke / 2 - 2}
+              fill={s.color}
+              stroke="#fff"
+              strokeWidth={2.5}
+              role="button"
+              aria-label={SEGMENT[s.kind]?.title}
+              className="animate-fade cursor-pointer"
+              onClick={() => {
+                learnRing();
+                setPicked((p) => (p === i ? null : i));
+              }}
+              style={{
+                filter: "drop-shadow(0 2px 5px rgba(13,148,136,0.5))",
+                opacity: picked === null || picked === i ? 1 : 0.3,
+                transition: "opacity 200ms",
+              }}
+            />
+          );
+        })}
         {day ? (
-          <circle
-            cx={mx}
-            cy={my}
-            r={stroke / 2 + 4}
-            fill="#fff"
-            stroke={info.late > 0 ? PHASE_COLOR.late : "#ec4899"}
-            strokeWidth={3.5}
-            style={{ filter: "drop-shadow(0 3px 8px rgba(236,72,153,0.45))", pointerEvents: "none" }}
-          />
+          <g style={{ pointerEvents: "none" }}>
+            <circle cx={mx} cy={my} r={stroke / 2 + 4} fill={info.late > 0 ? PHASE_COLOR.late : "#ec4899"} className="ring-pulse" />
+            <circle
+              cx={mx}
+              cy={my}
+              r={stroke / 2 + 4}
+              fill="#fff"
+              stroke={info.late > 0 ? PHASE_COLOR.late : "#ec4899"}
+              strokeWidth={3.5}
+              style={{ filter: "drop-shadow(0 3px 8px rgba(236,72,153,0.45))" }}
+            />
+            {!preg && day <= 99 ? (
+              <text
+                x={mx}
+                y={my}
+                textAnchor="middle"
+                dominantBaseline="central"
+                fontSize={11}
+                fontWeight={800}
+                fill={info.late > 0 ? PHASE_COLOR.late : "#db2777"}
+                style={{ fontVariantNumeric: "tabular-nums" }}
+              >
+                {day}
+              </text>
+            ) : null}
+          </g>
         ) : null}
       </svg>
       {/* Мягкое свечение внутри кольца — в цвет текущей фазы. */}

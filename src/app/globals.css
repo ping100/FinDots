@@ -550,3 +550,73 @@ input[type="date"]::-webkit-date-and-time-value {
     animation: none;
   }
 }
+
+/* Сегодняшний день на кольце цикла — мягко «дышит» волной. */
+@keyframes ring-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.45;
+  }
+  70%,
+  100% {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+.ring-pulse {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: ring-pulse 2.4s ease-out infinite;
+}
+
+/* Блик, который раз в несколько секунд пробегает по главной кнопке. */
+@keyframes fem-shine {
+  0%,
+  70% {
+    transform: translateX(-120%) skewX(-20deg);
+  }
+  100% {
+    transform: translateX(260%) skewX(-20deg);
+  }
+}
+.fem-shine {
+  position: relative;
+  overflow: hidden;
+}
+.fem-shine::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.45), transparent);
+  animation: fem-shine 4.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Сердечко на кнопке «Думаю о тебе» — как стук сердца. */
+@keyframes heartbeat {
+  0%,
+  40%,
+  100% {
+    transform: scale(1);
+  }
+  10%,
+  30% {
+    transform: scale(1.22);
+  }
+  20% {
+    transform: scale(1.05);
+  }
+}
+.animate-heartbeat {
+  display: inline-block;
+  animation: heartbeat 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ring-pulse,
+  .fem-shine::after,
+  .animate-heartbeat {
+    animation: none;
+  }
+}

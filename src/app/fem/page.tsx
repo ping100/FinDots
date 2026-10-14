@@ -287,13 +287,21 @@ function MethodFact() {
 
 function Fact({ color, label, value, hint }: { color: string; label: string; value: string; hint: string }) {
   return (
-    <div className="fem-card rounded-2xl px-3.5 py-3">
-      <span className="flex items-center gap-1.5 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-        <span className="h-2 w-2 rounded-full" style={{ background: color }} />
+    <div
+      className="fem-card relative overflow-hidden rounded-2xl px-3.5 py-3"
+      style={{ background: `linear-gradient(160deg, color-mix(in srgb, ${color} 14%, var(--surface)) 0%, var(--surface) 70%)` }}
+    >
+      {/* Кружок Dots в углу — в цвет карточки. */}
+      <span
+        className="pointer-events-none absolute -right-5 -top-5 h-16 w-16 rounded-full"
+        style={{ background: `color-mix(in srgb, ${color} 18%, transparent)` }}
+      />
+      <span className="relative flex items-center gap-1.5 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+        <span className="h-2 w-2 rounded-full" style={{ background: color, boxShadow: `0 0 0 3px color-mix(in srgb, ${color} 25%, transparent)` }} />
         {label}
       </span>
-      <span className="mt-0.5 block text-base font-semibold">{value}</span>
-      <span className="block text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+      <span className="relative mt-1 block text-[1.0625rem] font-bold tracking-tight">{value}</span>
+      <span className="relative block text-[0.6875rem]" style={{ color: "var(--muted)" }}>
         {hint}
       </span>
     </div>

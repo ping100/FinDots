@@ -436,10 +436,10 @@ export function PartnerTogether({ name, status }: { name: string; status: string
       <button
         onClick={() => void send("heart", undefined, `${name} получит ваше «Думаю о тебе» ❤️`)}
         disabled={busy}
-        className="flex w-full items-center justify-center gap-2 rounded-3xl py-3.5 text-[0.9375rem] font-semibold text-white transition active:scale-[0.98] disabled:opacity-60"
-        style={{ background: FEM_GRADIENT, boxShadow: "0 12px 26px -12px rgba(236,72,153,0.75)" }}
+        className="fem-shine flex w-full items-center justify-center gap-2 rounded-3xl py-3.5 text-[0.9375rem] font-semibold text-white transition active:scale-[0.98] disabled:opacity-60"
+        style={{ background: FEM_GRADIENT, boxShadow: "0 12px 26px -12px rgba(236,72,153,0.75), inset 0 1px 0 rgba(255,255,255,0.35)" }}
       >
-        ❤️ Думаю о тебе
+        <span className="animate-heartbeat">❤️</span> Думаю о тебе
       </button>
       <Note note={note} />
     </div>

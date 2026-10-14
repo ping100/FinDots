@@ -366,11 +366,17 @@ function StripCard({
     <button
       onClick={onClick}
       className="animate-lift relative flex h-40 w-36 shrink-0 snap-start flex-col overflow-hidden rounded-3xl p-3.5 text-left text-white transition active:scale-95"
-      style={{ background: bg, boxShadow: "0 12px 24px -14px rgba(124,58,237,0.6)", animationDelay: `${120 + index * 60}ms` }}
+      style={{
+        background: bg,
+        boxShadow: "0 14px 26px -14px rgba(124,58,237,0.65), inset 0 1px 0 rgba(255,255,255,0.35)",
+        animationDelay: `${120 + index * 60}ms`,
+      }}
     >
+      {/* Стеклянный блик сверху. */}
+      <span className="pointer-events-none absolute inset-x-0 top-0 h-1/2" style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.18), transparent)" }} />
       <span className="pointer-events-none absolute -bottom-8 -right-8 h-24 w-24 rounded-full bg-white/15" />
       <span className="pointer-events-none absolute -bottom-2 right-10 h-8 w-8 rounded-full bg-white/10" />
-      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20">
+      <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-white/25 backdrop-blur-sm">
         <Icon name={icon} size={16} />
       </span>
       <span className="mt-auto text-[0.6875rem] font-medium opacity-85">{label}</span>
@@ -382,13 +388,21 @@ function StripCard({
 
 function Fact({ color, label, value, hint }: { color: string; label: string; value: string; hint: string }) {
   return (
-    <div className="fem-card rounded-2xl px-3.5 py-3">
-      <span className="flex items-center gap-1.5 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-        <span className="h-2 w-2 rounded-full" style={{ background: color }} />
+    <div
+      className="fem-card relative overflow-hidden rounded-2xl px-3.5 py-3"
+      style={{ background: `linear-gradient(160deg, color-mix(in srgb, ${color} 14%, var(--surface)) 0%, var(--surface) 70%)` }}
+    >
+      {/* Кружок Dots в углу — в цвет карточки. */}
+      <span
+        className="pointer-events-none absolute -right-5 -top-5 h-16 w-16 rounded-full"
+        style={{ background: `color-mix(in srgb, ${color} 18%, transparent)` }}
+      />
+      <span className="relative flex items-center gap-1.5 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+        <span className="h-2 w-2 rounded-full" style={{ background: color, boxShadow: `0 0 0 3px color-mix(in srgb, ${color} 25%, transparent)` }} />
         {label}
       </span>
-      <span className="mt-0.5 block text-base font-semibold">{value}</span>
-      <span className="block text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+      <span className="relative mt-1 block text-[1.0625rem] font-bold tracking-tight">{value}</span>
+      <span className="relative block text-[0.6875rem]" style={{ color: "var(--muted)" }}>
         {hint}
       </span>
     </div>

@@ -5,7 +5,6 @@ import { addDays, today } from "@/lib/tasks/dates";
 import { Icon } from "@/lib/icons";
 import { MOODS, PHASE_COLOR, SYMPTOMS, cycleInfo, type Phase } from "@/lib/fem/cycle";
 import { range, short } from "@/lib/fem/format";
-import { chanceOf } from "@/lib/fem/phrases";
 import { Sheet, Switch } from "@/components/ui";
 import { useFem } from "./DataProvider";
 import { FemHeader } from "./Shell";
@@ -14,6 +13,7 @@ import { CycleDial, DialStyleRow, flowerStage } from "./CycleDial";
 import { PartnerTogether } from "./Together";
 import { PartnerCalendar } from "./PartnerCalendar";
 import { ForecastCard } from "./Insights";
+import { PartnerToday } from "./PartnerToday";
 import { THEMES } from "@/lib/look";
 import { TEXT_SCALES } from "@/lib/textScale";
 
@@ -77,7 +77,7 @@ export function PartnerScreen() {
   const now = today();
   const [confirm, setConfirm] = useState(false);
   const [prefs, setPrefs] = useState(false);
-  const [sheet, setSheet] = useState<"day" | "tips" | "chance" | "mood" | null>(null);
+  const [sheet, setSheet] = useState<"day" | null>(null);
   const info = useMemo(
     () =>
       partner
@@ -97,8 +97,6 @@ export function PartnerScreen() {
   const shift = info.fertileEnd && info.fertileEnd < now ? info.cycleLength : 0;
   const mood = partner.today?.mood ? MOODS.find((m) => m.value === partner.today?.mood) : null;
   const symptoms = (partner.today?.symptoms ?? []).map((v) => SYMPTOMS.find((s) => s.value === v)).filter(Boolean);
-  const sharesToday = partner.share_mood || partner.share_symptoms;
-  const chance = info.phase ? chanceOf(info.phase) : null;
 
   return (
     <div className="mx-auto w-full max-w-md px-4 pb-16">
@@ -139,53 +137,14 @@ export function PartnerScreen() {
       ) : null}
 
       {phase && info.phase ? (
-        <>
-          <p className="mb-2 px-1 text-[0.9375rem] font-semibold">Сегодня для вас</p>
-          {/* Лента карточек во всю ширину: листается пальцем, край
-              следующей карточки подсказывает, что там есть ещё. */}
-          <div className="-mx-4 mb-4 flex snap-x snap-mandatory scroll-px-4 gap-2.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <StripCard
-              bg="linear-gradient(150deg, #f472b6, #a855f7)"
-              icon="calendar"
-              label="Её день"
-              value={info.cycleDay ? `День ${info.cycleDay}` : "—"}
-              caption={phase.title}
-              onClick={() => setSheet("day")}
-              index={0}
-            />
-            <StripCard
-              bg="linear-gradient(150deg, #c084fc, #6366f1)"
-              icon="heart"
-              label="Как поддержать"
-              value={`${phase.tips.length} ${plural(phase.tips.length, "совет", "совета", "советов")}`}
-              caption="на сегодня"
-              onClick={() => setSheet("tips")}
-              index={1}
-            />
-            {chance ? (
-              <StripCard
-                bg="linear-gradient(150deg, #2dd4bf, #0284c7)"
-                icon="baby"
-                label="Шанс беременности"
-                value={chance.label}
-                caption="по прогнозу"
-                onClick={() => setSheet("chance")}
-                index={2}
-              />
-            ) : null}
-            {sharesToday ? (
-              <StripCard
-                bg="linear-gradient(150deg, #fdba74, #f43f5e)"
-                icon="flower"
-                label="Самочувствие"
-                value={mood ? `${mood.emoji} ${mood.label}` : symptoms.length ? `${symptoms[0]!.emoji} ${symptoms[0]!.label}` : "Не отмечено"}
-                caption={symptoms.length > (mood ? 0 : 1) ? `и ещё ${symptoms.length - (mood ? 0 : 1)}` : "сегодня"}
-                onClick={() => setSheet("mood")}
-                index={3}
-              />
-            ) : null}
-          </div>
-        </>
+        <PartnerToday
+          name={name}
+          info={info}
+          mood={partner.share_mood ? (mood ?? null) : null}
+          symptoms={partner.share_symptoms ? symptoms.filter((x) => !!x).map((x) => x!) : []}
+          goal={partner.goal ?? null}
+          onAbout={() => setSheet("day")}
+        />
       ) : null}
 
       <div className="fem-card rounded-[28px] px-4 pb-5 pt-6">
@@ -318,15 +277,7 @@ export function PartnerScreen() {
 
       <Sheet
         open={sheet !== null}
-        title={
-          sheet === "day"
-            ? `${info.cycleDay}-й день цикла`
-            : sheet === "tips"
-              ? "Как поддержать"
-              : sheet === "chance"
-                ? "Шанс беременности"
-                : "Самочувствие сегодня"
-        }
+        title={`${info.cycleDay}-й день цикла`}
         onClose={() => setSheet(null)}
       >
         <div className="pb-3 text-[0.9375rem] leading-snug">
@@ -350,101 +301,9 @@ export function PartnerScreen() {
               ) : null}
             </>
           ) : null}
-          {sheet === "tips" && phase ? (
-            <ul className="space-y-2.5">
-              {phase.tips.map((t) => (
-                <li key={t} className="flex gap-2.5 rounded-2xl px-3.5 py-3" style={{ background: "var(--surface-2)" }}>
-                  <Icon name="heart" size={16} className="mt-0.5 shrink-0" style={{ color: "#ec4899" }} />
-                  {t}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          {sheet === "chance" && chance ? (
-            <>
-              <div className="flex gap-1.5">
-                {[0, 1, 2, 3].map((n) => (
-                  <span
-                    key={n}
-                    className="h-2 flex-1 rounded-full"
-                    style={{ background: n <= chance.level ? "#14b8a6" : "var(--surface-2)" }}
-                  />
-                ))}
-              </div>
-              <p className="mt-2 font-semibold">{chance.label}</p>
-              <p className="mt-1.5 text-sm" style={{ color: "var(--muted)" }}>
-                {chance.level >= 2
-                  ? "Сейчас фертильные дни — вероятность беременности высокая."
-                  : chance.level === 1
-                    ? "При задержке надёжнее всего — тест на беременность."
-                    : "Вне фертильного окна вероятность ниже, но не нулевая."}{" "}
-                Это оценка по прошлым циклам, а не способ предохранения.
-              </p>
-            </>
-          ) : null}
-          {sheet === "mood" ? (
-            mood || symptoms.length ? (
-              <div className="flex flex-wrap gap-1.5">
-                {mood ? (
-                  <Tag>
-                    {mood.emoji} {mood.label}
-                  </Tag>
-                ) : null}
-                {symptoms.map((s) => (
-                  <Tag key={s!.value}>
-                    {s!.emoji} {s!.label}
-                  </Tag>
-                ))}
-              </div>
-            ) : (
-              <p style={{ color: "var(--muted)" }}>{name} сегодня ещё ничего не отметила.</p>
-            )
-          ) : null}
         </div>
       </Sheet>
     </div>
-  );
-}
-
-/** Карточка ленты «Сегодня для вас»: яркая, с кружком Dots в углу. */
-function StripCard({
-  bg,
-  icon,
-  label,
-  value,
-  caption,
-  onClick,
-  index,
-}: {
-  bg: string;
-  icon: string;
-  label: string;
-  value: string;
-  caption: string;
-  onClick: () => void;
-  index: number;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className="animate-lift relative flex h-40 w-36 shrink-0 snap-start flex-col overflow-hidden rounded-3xl p-3.5 text-left text-white transition active:scale-95"
-      style={{
-        background: bg,
-        boxShadow: "0 14px 26px -14px rgba(124,58,237,0.65), inset 0 1px 0 rgba(255,255,255,0.35)",
-        animationDelay: `${120 + index * 60}ms`,
-      }}
-    >
-      {/* Стеклянный блик сверху. */}
-      <span className="pointer-events-none absolute inset-x-0 top-0 h-1/2" style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.18), transparent)" }} />
-      <span className="pointer-events-none absolute -bottom-8 -right-8 h-24 w-24 rounded-full bg-white/15" />
-      <span className="pointer-events-none absolute -bottom-2 right-10 h-8 w-8 rounded-full bg-white/10" />
-      <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-white/25 backdrop-blur-sm">
-        <Icon name={icon} size={16} />
-      </span>
-      <span className="mt-auto text-[0.6875rem] font-medium opacity-85">{label}</span>
-      <span className="mt-0.5 text-[1.0625rem] font-bold leading-tight">{value}</span>
-      <span className="mt-0.5 text-[0.6875rem] opacity-80">{caption}</span>
-    </button>
   );
 }
 
@@ -471,13 +330,6 @@ function Fact({ color, label, value, hint }: { color: string; label: string; val
   );
 }
 
-function Tag({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="rounded-full px-3 py-1.5 text-[0.8125rem]" style={{ background: "var(--surface-2)" }}>
-      {children}
-    </span>
-  );
-}
 
 /** Кнопка выбора темы или размера шрифта — как в настройках у неё. */
 function LookChoice({ on, onClick, fontSize, children }: { on: boolean; onClick: () => void; fontSize?: string; children: React.ReactNode }) {

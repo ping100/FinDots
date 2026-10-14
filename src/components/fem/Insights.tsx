@@ -8,7 +8,7 @@ import { useFem } from "./DataProvider";
 import { Pill, plural } from "./parts";
 
 /** Как поддержать при симптоме — подсказка партнёру к прогнозу. */
-const CARE: Record<string, string> = {
+export const CARE: Record<string, string> = {
   cramps: "грелка и тёплый чай будут кстати",
   bellyache: "грелка и тёплый чай будут кстати",
   headache: "тишина и приглушённый свет помогут",

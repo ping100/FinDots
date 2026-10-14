@@ -3,7 +3,8 @@
 import { useMemo, useRef, useState } from "react";
 import { Icon } from "@/lib/icons";
 import { today } from "@/lib/tasks/dates";
-import { buildMarks, type CycleInfo } from "@/lib/fem/cycle";
+import { SYMPTOMS, buildMarks, type CycleInfo } from "@/lib/fem/cycle";
+import { CARE } from "./Insights";
 import { CalendarCell, DOT, bandOf } from "./CalendarCell";
 import { long } from "@/lib/fem/format";
 import { Sheet } from "@/components/ui";
@@ -21,7 +22,8 @@ const iso = (y: number, m: number, d: number) =>
 /**
  * Календарь её цикла глазами партнёра: месячные, прогноз, фертильные дни
  * и сердечки близости — только для просмотра, сердечки приходят из её
- * отметок. Подробности её дневника сюда не попадают.
+ * отметок. Если она разрешила, видны и дни с самочувствием (по нажатию —
+ * что отмечено и как поддержать). Остальное из её дневника сюда не попадает.
  */
 export function PartnerCalendar({ info }: { info: CycleInfo }) {
   const { partner } = useFem();
@@ -40,7 +42,11 @@ export function PartnerCalendar({ info }: { info: CycleInfo }) {
     () => new Map((partner?.intimacy ?? []).map((x) => [x.day, { kinds: x.kinds ?? ["sex"], protected: x.protected }])),
     [partner],
   );
-  const symptomDays = useMemo(() => new Set((partner?.symptom_days ?? []).map((x) => x.day)), [partner]);
+  // Самочувствие по дням — только если она разрешила его показывать.
+  const symptomDays = useMemo(
+    () => new Map((partner?.symptom_days ?? []).map((x) => [x.day, x.symptoms.filter((v) => v !== "ok")])),
+    [partner],
+  );
   if (!partner) return null;
 
   const base = new Date();
@@ -52,6 +58,7 @@ export function PartnerCalendar({ info }: { info: CycleInfo }) {
   const pickedValue = picked ? (hearts.get(picked) ?? null) : null;
   // Подпись про сердечки — только когда в этом месяце они есть.
   const monthHasHearts = [...hearts.keys()].some((d) => d.startsWith(iso(y, m, 1).slice(0, 8)));
+  const monthHasSymptoms = [...symptomDays].some(([d, l]) => l.length > 0 && d.startsWith(iso(y, m, 1).slice(0, 8)));
 
   return (
     <div className="fem-card mt-3 rounded-3xl p-3">
@@ -108,23 +115,58 @@ export function PartnerCalendar({ info }: { info: CycleInfo }) {
               ovulation={!!mark?.ovulation && !mark.period}
               today={d === now}
               heart={heart}
-              dots={symptomDays.has(d) ? [DOT.symptoms] : []}
-              onClick={heart ? () => setPicked(d) : undefined}
+              dots={symptomDays.get(d)?.length ? [DOT.symptoms] : []}
+              onClick={heart || symptomDays.get(d)?.length ? () => setPicked(d) : undefined}
               label={long(d)}
             />
           );
         })}
       </div>
       </div>
-      {monthHasHearts ? (
-        <p className="mt-1 text-center text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-          Сердечки — близость, которую отметила {partner.owner_name}. Нажмите на сердечко — подробнее
-        </p>
+      {monthHasHearts || monthHasSymptoms ? (
+        <div className="mt-1 flex flex-col items-center gap-0.5 text-center text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+          {monthHasSymptoms ? (
+            <span className="flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full" style={{ background: DOT.symptoms }} />
+              {partner.owner_name} отметила самочувствие
+            </span>
+          ) : null}
+          {monthHasHearts ? <span>Сердечки — близость, которую отметила {partner.owner_name}</span> : null}
+          <span>Нажмите на такой день — покажу подробнее</span>
+        </div>
       ) : null}
 
       <Sheet open={!!picked} title={picked ? long(picked) : ""} onClose={() => setPicked(null)}>
         {picked ? (
           <div className="space-y-2 pb-3">
+            {(symptomDays.get(picked) ?? []).length ? (
+              <>
+                <p className="px-1 text-xs font-semibold" style={{ color: "var(--muted)" }}>
+                  Самочувствие
+                </p>
+                {(symptomDays.get(picked) ?? []).map((v) => {
+                  const sym = SYMPTOMS.find((x) => x.value === v);
+                  return (
+                    <div key={v} className="flex items-start gap-2.5 rounded-2xl px-3.5 py-2.5 text-sm" style={{ background: "var(--surface-2)" }}>
+                      <span className="text-base leading-5">{sym?.emoji}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block">{sym?.label ?? v}</span>
+                        {CARE[v] ? (
+                          <span className="block text-[0.75rem] leading-snug" style={{ color: "var(--muted)" }}>
+                            {CARE[v][0].toUpperCase() + CARE[v].slice(1)}
+                          </span>
+                        ) : null}
+                      </span>
+                    </div>
+                  );
+                })}
+              </>
+            ) : null}
+            {heartsOf(pickedValue).length ? (
+              <p className="px-1 pt-1 text-xs font-semibold" style={{ color: "var(--muted)" }}>
+                Близость
+              </p>
+            ) : null}
             {heartsOf(pickedValue).map((k) => (
               <p key={k} className="flex items-center gap-2.5 rounded-2xl px-3.5 py-2.5 text-sm" style={{ background: "var(--surface-2)" }}>
                 <IntimacyHeart kind={k} size={18} />

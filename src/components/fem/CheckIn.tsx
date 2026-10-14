@@ -1,168 +1,168 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { FEM_GRADIENT, FLOWS, MOODS, SYMPTOMS } from "@/lib/fem/cycle";
+import { Icon } from "@/lib/icons";
+import { FEM_GRADIENT, FLOWS, MOODS, PHASE_COLOR, SEX_TAGS, SYMPTOMS } from "@/lib/fem/cycle";
 import { Sheet } from "@/components/ui";
 import { useFem } from "./DataProvider";
-import { DayLog, heartOf, IntimacyHeart, type LogSection } from "./parts";
+import { DayLog, heartOf, IntimacyHeart, plural, type LogSection } from "./parts";
 
-/** Шаги опроса: вопрос и какие разделы дневника на нём. */
-const STEPS: { key: string; title: string; hint: string; only: LogSection[] }[] = [
-  { key: "flow", title: "Как идут месячные?", hint: "Выберите — и сразу дальше", only: ["flow"] },
-  { key: "mood", title: "Какое настроение?", hint: "Выберите — и сразу дальше", only: ["mood"] },
-  { key: "body", title: "Как самочувствие?", hint: "Можно несколько", only: ["symptoms"] },
-  { key: "love", title: "Близость", hint: "Если не было — просто «Дальше»", only: ["intimacy"] },
-  { key: "more", title: "Что-то ещё?", hint: "Необязательно: выделения, тесты, температура, заметка", only: ["more", "note"] },
-];
+type Topic = "flow" | "mood" | "body" | "love" | "more";
+
+/** Темы дня: заголовок листа, подсказка и какие разделы дневника в нём. */
+const TOPICS: Record<Topic, { title: string; hint: string; only: LogSection[] }> = {
+  flow: { title: "Как идут месячные?", hint: "Выберите — лист закроется сам", only: ["flow"] },
+  mood: { title: "Какое настроение?", hint: "Выберите — лист закроется сам", only: ["mood"] },
+  body: { title: "Как самочувствие?", hint: "Можно выбрать несколько", only: ["symptoms"] },
+  love: { title: "Близость", hint: "Общее видно партнёру, личное — только вам", only: ["intimacy"] },
+  more: { title: "Ещё за сегодня", hint: "Выделения, тесты, температура, вес, заметка", only: ["more", "note"] },
+};
 
 /**
- * «Как вы сегодня?» на главной: короткая карточка с тем, что уже отмечено,
- * а сами отметки — мини-опросом по шагам в листе. Полный дневник остаётся
- * в календаре.
+ * «Как вы сегодня?» на главной: плитка на каждую тему — Настроение,
+ * Самочувствие, Близость, Ещё (и Месячные в их дни). На плитке видно, что
+ * уже отмечено; нажатие открывает только эту тему. Утром — настроение,
+ * вечером — близость, без опросов. Полный дневник — в календаре.
  */
 export function CheckIn({ day, showFlow }: { day: string; showFlow: boolean }) {
   const { days, intimacy } = useFem();
-  const steps = STEPS.filter((s) => s.key !== "flow" || showFlow);
-  const [step, setStep] = useState<number | null>(null);
+  const [topic, setTopic] = useState<Topic | null>(null);
   const entry = days.get(day);
   const intim = intimacy.get(day) ?? null;
 
-  // Выбрали месячные или настроение — через миг сами переходим дальше.
+  // Где ответ один (месячные, настроение) — после выбора лист закрывается сам.
   const auto = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => void (auto.current && clearTimeout(auto.current)), []);
-  // Открыли сразу нужный шаг (кнопкой «Близость») — «Готово» его и закрывает.
-  const [single, setSingle] = useState(false);
-  const open = (i: number, one = false) => {
-    setSingle(one);
-    setStep(i);
-  };
-  const next = () => setStep((s) => (s === null || single ? null : s + 1 < steps.length ? s + 1 : null));
-  const loveStep = steps.findIndex((s) => s.key === "love");
   const onSingle = () => {
     if (auto.current) clearTimeout(auto.current);
-    auto.current = setTimeout(next, 380);
+    auto.current = setTimeout(() => setTopic(null), 420);
   };
 
-  // Что уже отмечено сегодня — короткими плашками.
-  const chips: { key: string; icon: React.ReactNode; label: string }[] = [];
   const flow = FLOWS.find((f) => f.value === entry?.flow);
-  if (flow) chips.push({ key: "flow", icon: "🩸", label: flow.label });
   const mood = MOODS.find((m) => m.value === entry?.mood);
-  if (mood) chips.push({ key: "mood", icon: mood.emoji, label: mood.label });
-  for (const v of entry?.symptoms ?? []) {
-    const x = SYMPTOMS.find((s) => s.value === v);
-    if (x) chips.push({ key: v, icon: x.emoji, label: x.label });
-  }
-  const heart = heartOf(intim);
-  if (heart) chips.push({ key: "love", icon: <IntimacyHeart kind={heart} size={14} />, label: "Близость" });
+  const symptoms = (entry?.symptoms ?? []).map((v) => SYMPTOMS.find((s) => s.value === v)).filter((x) => !!x);
+  const heart = heartOf(intim, entry?.tags);
+  const shared = intim?.kinds.length ? intim : null;
+  const privateOnly = !shared && (entry?.tags ?? []).some((t) => SEX_TAGS.some((s) => s.value === t));
   const extra =
-    (entry?.tags.length ?? 0) + (entry?.meds.length ?? 0) + (entry?.lh ? 1 : 0) + (entry?.temp != null ? 1 : 0) +
-    (entry?.weight != null ? 1 : 0) + (entry?.preg_test ? 1 : 0) + (entry?.note ? 1 : 0);
-  const shown = chips.slice(0, 5);
-  const rest = chips.length - shown.length + extra;
-  const empty = chips.length === 0 && extra === 0;
+    (entry?.tags ?? []).filter((t) => /^(d|o|a):/.test(t)).length + (entry?.meds.length ?? 0) + (entry?.lh ? 1 : 0) +
+    (entry?.temp != null ? 1 : 0) + (entry?.weight != null ? 1 : 0) + (entry?.preg_test ? 1 : 0) + (entry?.note ? 1 : 0);
 
-  const cur = step !== null ? steps[step] : null;
+  const tiles: { key: Topic; label: string; icon: React.ReactNode; value: string | null }[] = [
+    { key: "mood", label: "Настроение", icon: mood ? mood.emoji : "🙂", value: mood?.label ?? null },
+    {
+      key: "body",
+      label: "Симптомы",
+      icon: symptoms[0]?.emoji ?? "🩺",
+      value:
+        symptoms.length === 0
+          ? null
+          : symptoms.length === 1
+            ? symptoms[0]!.label
+            : `${symptoms.length} ${plural(symptoms.length, "отметка", "отметки", "отметок")}`,
+    },
+    {
+      key: "love",
+      label: "Близость",
+      icon: heart ? <IntimacyHeart kind={heart} size={22} /> : "💗",
+      value: shared
+        ? shared.kinds.includes("sex")
+          ? shared.protected === false
+            ? "Без защиты"
+            : "С защитой"
+          : "Отмечено"
+        : privateOnly
+          ? "Личное"
+          : null,
+    },
+    { key: "more", label: "Ещё", icon: "＋", value: extra ? `${extra} ${plural(extra, "отметка", "отметки", "отметок")}` : null },
+  ];
+  const cur = topic ? TOPICS[topic] : null;
 
   return (
     <div className="fem-card mt-3 rounded-3xl p-4">
-      <div className="flex items-start justify-between gap-3">
-        <span className="min-w-0">
-          <span className="block text-[0.9375rem] font-semibold">Как вы сегодня?</span>
-          <span className="mt-0.5 block text-[0.75rem] leading-snug" style={{ color: "var(--muted)" }}>
-            {empty ? "Пара нажатий — и прогноз станет точнее" : "Отмечено сегодня"}
-          </span>
-        </span>
-        {!empty ? (
-          <button
-            onClick={() => open(0)}
-            className="shrink-0 rounded-full px-3 py-1.5 text-[0.8125rem] font-medium transition active:scale-95"
-            style={{ background: "var(--surface-2)", color: "var(--accent)" }}
-          >
-            Изменить
-          </button>
-        ) : null}
-      </div>
+      <p className="text-[0.9375rem] font-semibold">Как вы сегодня?</p>
+      <p className="mt-0.5 text-[0.75rem] leading-snug" style={{ color: "var(--muted)" }}>
+        Нажмите, что хотите отметить, — в любое время дня
+      </p>
 
-      {empty ? (
+      {showFlow ? (
         <button
-          onClick={() => open(0)}
-          className="fem-shine mt-3 flex w-full items-center justify-center gap-2 rounded-2xl py-3 text-[0.9375rem] font-semibold text-white transition active:scale-[0.98]"
-          style={{ background: FEM_GRADIENT, boxShadow: "0 10px 22px -12px rgba(236,72,153,0.7)" }}
+          onClick={() => setTopic("flow")}
+          className="mt-3 flex w-full items-center gap-3 rounded-2xl px-3.5 py-2.5 text-left transition active:scale-[0.98]"
+          style={{
+            background: flow ? `color-mix(in srgb, ${PHASE_COLOR.period} 16%, var(--surface))` : "var(--surface-2)",
+            border: `1px solid ${flow ? PHASE_COLOR.period : "transparent"}`,
+          }}
         >
-          ✍️ Отметить самочувствие
-        </button>
-      ) : (
-        <button onClick={() => open(0)} className="mt-2.5 flex w-full flex-wrap gap-1.5 text-left" aria-label="Изменить отметки за сегодня">
-          {shown.map((c) => (
-            <span key={c.key} className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[0.75rem]" style={{ background: "var(--surface-2)" }}>
-              <span className="flex items-center">{c.icon}</span>
-              {c.label}
+          <span className="flex" style={{ color: PHASE_COLOR.period }}>
+            <Icon name="drop" size={20} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[0.875rem] font-semibold">Месячные</span>
+            <span className="block text-[0.75rem]" style={{ color: flow ? "var(--text)" : "var(--muted)" }}>
+              {flow ? `Выделения: ${flow.label.toLowerCase()}` : "Отметьте, какие сегодня выделения"}
             </span>
-          ))}
-          {rest > 0 ? (
-            <span className="rounded-full px-2.5 py-1 text-[0.75rem]" style={{ background: "var(--surface-2)", color: "var(--muted)" }}>
-              +{rest}
-            </span>
-          ) : null}
+          </span>
+          <Icon name="chevron-right" size={16} className="opacity-40" />
         </button>
-      )}
+      ) : null}
 
-      {/* Быстрый вход в шаг «Близость» — например, вечером, когда утром
-          самочувствие уже отмечено. */}
-      <button
-        onClick={() => open(loveStep, true)}
-        className="mt-2.5 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[0.8125rem] font-medium transition active:scale-95"
-        style={{ background: "color-mix(in srgb, #ec4899 12%, var(--surface))", color: "var(--accent)" }}
-      >
-        {heart ? <IntimacyHeart kind={heart} size={15} /> : <span>💗</span>}
-        {heart ? "Близость отмечена — изменить" : "Была близость"}
-      </button>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        {tiles.map((t) => {
+          const set = !!t.value;
+          return (
+            <button
+              key={t.key}
+              onClick={() => setTopic(t.key)}
+              aria-label={`${t.label}: ${t.value ?? "не отмечено"}`}
+              className="flex min-w-0 items-center gap-2.5 rounded-2xl px-2.5 py-2.5 text-left transition active:scale-95"
+              style={{
+                background: set ? "color-mix(in srgb, #ec4899 10%, var(--surface))" : "var(--surface-2)",
+                border: `1px solid ${set ? "color-mix(in srgb, #ec4899 45%, transparent)" : "transparent"}`,
+              }}
+            >
+              <span
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[1.2rem] leading-none"
+                style={{ background: "var(--surface)", opacity: set ? 1 : 0.6, color: "var(--muted)" }}
+              >
+                {t.icon}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[0.8125rem] font-semibold">{t.label}</span>
+                <span
+                  className="block truncate text-[0.6875rem] leading-tight"
+                  style={{ color: set ? "var(--accent)" : "var(--muted)", fontWeight: set ? 600 : 400 }}
+                >
+                  {t.value ?? "не отмечено"}
+                </span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
 
       <Sheet
         open={cur !== null}
         title={cur?.title ?? ""}
-        onClose={() => setStep(null)}
+        onClose={() => setTopic(null)}
         footer={
-          cur && step !== null ? (
-            <div className="flex gap-2">
-              {step > 0 && !single ? (
-                <button
-                  onClick={() => setStep(step - 1)}
-                  className="rounded-2xl px-4 py-3 text-sm font-medium"
-                  style={{ background: "var(--surface-2)" }}
-                >
-                  Назад
-                </button>
-              ) : null}
-              <button
-                onClick={next}
-                className="flex-1 rounded-2xl py-3 text-sm font-semibold text-white"
-                style={{ background: FEM_GRADIENT }}
-              >
-                {step + 1 < steps.length && !single ? "Дальше" : "Готово"}
-              </button>
-            </div>
+          cur ? (
+            <button
+              onClick={() => setTopic(null)}
+              className="w-full rounded-2xl py-3 text-sm font-semibold text-white"
+              style={{ background: FEM_GRADIENT }}
+            >
+              Готово
+            </button>
           ) : undefined
         }
       >
-        {cur && step !== null ? (
-          <div key={cur.key} className="animate-lift pb-2">
-            {/* Где мы в опросе — точками, как всё в Dots. */}
-            <div className="mb-3 flex items-center gap-1.5">
-              {steps.map((s, i) => (
-                <button
-                  key={s.key}
-                  onClick={() => open(i)}
-                  aria-label={s.title}
-                  className="h-2 rounded-full transition-all"
-                  style={{ width: i === step ? 22 : 8, background: i <= step ? "#ec4899" : "var(--surface-2)" }}
-                />
-              ))}
-              <span className="ml-auto text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-                {cur.hint}
-              </span>
-            </div>
+        {cur && topic ? (
+          <div key={topic} className="animate-lift pb-2">
+            <p className="mb-3 text-[0.75rem]" style={{ color: "var(--muted)" }}>
+              {cur.hint}
+            </p>
             <DayLog day={day} showFlow={showFlow} only={cur.only} onSingle={onSingle} />
           </div>
         ) : null}

@@ -5,51 +5,15 @@ import { MoodIcon, SymptomIcon } from "./FemIcons";
 import { Icon } from "@/lib/icons";
 import { PHASE_COLOR, type CycleInfo, type Goal, type Phase } from "@/lib/fem/cycle";
 import { chanceOf } from "@/lib/fem/phrases";
-import { CARE } from "./Insights";
+import { adviceFor } from "@/lib/fem/partnerAdvice";
+import { today } from "@/lib/tasks/dates";
 import { plural } from "./parts";
-
-/** Что делать — по фазе. */
-const DO: Record<Phase, string[]> = {
-  period: ["Тёплый чай, грелка, плед — мелочи, которые сейчас много значат", "Возьмите на себя часть дел по дому", "Предложите спокойный вечер дома"],
-  follicular: ["Предложите что-то новое: прогулку, спорт, поездку", "Самое время для совместных планов"],
-  fertile: ["Отличное время для свидания", "Комплименты и внимание сейчас особенно приятны", "Предложите что-то активное вдвоём"],
-  ovulation: ["Проведите день вместе — у неё пик энергии", "Скажите, как она вам нравится"],
-  luteal: ["Чуть больше заботы и терпения", "Что-нибудь вкусное к чаю будет кстати", "Обнимите просто так"],
-  late: ["Будьте рядом и сохраняйте спокойствие", "Если она захочет — сходите за тестом вместе"],
-  protected: ["Простое «как ты?» — уже забота", "Придумайте что-то приятное вместе"],
-  pregnant: ["Чуть больше заботы и внимания"],
-};
-/** Чего не делать — по фазе. */
-const DONT: Record<Phase, string[]> = {
-  period: ["Не шутите про «эти дни»", "Не планируйте тяжёлых нагрузок и долгих прогулок", "Не обижайтесь, если ей хочется побыть одной"],
-  follicular: ["Не отмахивайтесь от её идей — сейчас их много", "Не превращайте вечер в рутину"],
-  fertile: ["Не забывайте о защите, если не планируете детей", "Не отменяйте планы в последний момент"],
-  ovulation: ["Не забывайте о защите, если не планируете детей", "Не проводите вечер каждый в своём телефоне"],
-  luteal: ["Не спорьте по мелочам — эмоции сейчас ярче", "Не говорите «это у тебя гормоны»", "Не комментируйте еду и вес"],
-  late: ["Не торопите с тестом и выводами", "Не показывайте тревогу — ей и так непросто"],
-  protected: ["Не забывайте спрашивать, как она"],
-  pregnant: ["Не давите советами"],
-};
-/** Чего не делать — по её симптомам сегодня. */
-const SYMPTOM_DONT: Record<string, string> = {
-  cramps: "Не зовите на тренировку или долгую прогулку",
-  bellyache: "Не предлагайте тяжёлую еду",
-  headache: "Не включайте громкую музыку и яркий свет",
-  fatigue: "Не нагружайте её делами",
-  breasts: "Не обнимайте слишком крепко",
-  cravings: "Не комментируйте, что она ест",
-  insomnia: "Не планируйте поздний вечер",
-  acne: "Не обращайте внимания на кожу",
-  nausea: "Не готовьте ничего с резким запахом",
-  backache: "Не просите помочь с тяжёлым",
-};
-const LOW_MOODS = new Set(["sad", "irritated", "anxious", "down", "apathy", "swings", "confused"]);
 
 /**
  * «Алиса сегодня» у партнёра: её день в цифрах (фаза, до месячных, шанс
- * беременности, её настроение и симптомы, если делится) и два коротких
- * списка — что делать и чего не делать. Советы — по фазе, её симптомам и
- * настроению.
+ * беременности, её настроение и симптомы, если делится), а по нажатию —
+ * «Как её понять и поддержать»: что с ней сейчас, что скоро, что делать и
+ * чего не делать, что можно сказать (lib/fem/partnerAdvice).
  */
 export function PartnerToday({
   name,
@@ -88,34 +52,15 @@ export function PartnerToday({
   if (!phase) return null;
   const chance = chanceOf(phase);
   const real = symptoms.filter((s) => s.value !== "ok");
-  const lowMood = !!mood && LOW_MOODS.has(mood.value);
-
-  // Без повторов по смыслу: совет, у которого есть общее слово с уже
-  // взятым («грелка», «чай»), пропускаем.
-  const words = (t: string) => new Set(t.toLowerCase().replace(/[^а-яё ]/g, " ").split(/\s+/).filter((w) => w.length >= 5));
-  const uniq = (list: string[]) => {
-    const out: string[] = [];
-    for (const t of list) {
-      const w = words(t);
-      if (out.some((o) => [...words(o)].some((x) => w.has(x)))) continue;
-      out.push(t);
-      if (out.length === 4) break;
-    }
-    return out;
-  };
-  const conceive = goal === "conceive";
-  const todo = uniq([
-    ...real.map((s) => CARE[s.value]).filter(Boolean).map((t) => t[0].toUpperCase() + t.slice(1)),
-    ...(lowMood ? ["Выслушайте, не перебивая"] : []),
-    ...(conceive && (phase === "fertile" || phase === "ovulation") ? ["Лучшие дни для зачатия — побудьте вместе"] : []),
-    ...DO[phase],
-  ]);
-  const notTodo = uniq([
-    ...real.map((s) => SYMPTOM_DONT[s.value]).filter(Boolean),
-    ...(lowMood ? ["Не давайте советов, пока она не попросит"] : []),
-    ...DONT[phase].filter((t) => !(conceive && t.includes("защит"))),
-    ...(conceive ? ["Не давите разговорами о беременности"] : []),
-  ]);
+  const advice = adviceFor({
+    phase,
+    info,
+    mood: mood?.value ?? null,
+    symptoms: real.map((s) => s.value),
+    goal,
+    today: today(),
+  });
+  const { todo, notTodo } = advice;
 
   const when: [string, string] | null = info.current
     ? ["Месячные", `${info.cycleDay}-й день`]
@@ -184,15 +129,53 @@ export function PartnerToday({
           <Dot />
         </span>
         <span className="min-w-0 flex-1 text-[0.8125rem] font-medium">
-          {open ? "Свернуть советы" : `Что делать и чего не делать · ${todo.length + notTodo.length}`}
+          {open ? "Свернуть" : "Как её понять и поддержать"}
         </span>
         <Icon name="chevron-down" size={16} className="shrink-0 opacity-50 transition-transform" style={{ transform: open ? "rotate(180deg)" : undefined }} />
       </button>
       {open ? (
         <div className="animate-expand">
           <div>
+            <Section title="Что с ней сейчас" icon="bulb" color="#f59e0b">
+              {advice.understand.map((t) => (
+                <p key={t} className="text-[0.8125rem] leading-snug">
+                  {t}
+                </p>
+              ))}
+            </Section>
+            {advice.soon.length ? (
+              <div
+                className="mt-3 space-y-1 rounded-2xl px-3 py-2.5"
+                style={{ background: "color-mix(in srgb, #f59e0b 14%, var(--surface))" }}
+              >
+                <p className="text-[0.75rem] font-semibold" style={{ color: "#b45309" }}>
+                  Скоро
+                </p>
+                {advice.soon.map((t) => (
+                  <p key={t} className="text-[0.8125rem] leading-snug">
+                    {t}
+                  </p>
+                ))}
+              </div>
+            ) : null}
             <List title="Что делать" items={todo} good />
             <List title="Чего не делать" items={notTodo} />
+            <Section title="Что можно сказать" icon="heart" color="#ec4899">
+              <div className="flex flex-col gap-1.5">
+                {advice.say.map((t) => (
+                  <span
+                    key={t}
+                    className="self-start rounded-2xl rounded-bl-md px-3 py-2 text-[0.8125rem] leading-snug"
+                    style={{ background: "color-mix(in srgb, #ec4899 12%, var(--surface))" }}
+                  >
+                    «{t}»
+                  </span>
+                ))}
+              </div>
+            </Section>
+            <p className="mt-3 text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
+              Подсказки меняются каждый день. Лучший совет — спросить её саму, чего ей сейчас хочется.
+            </p>
           </div>
         </div>
       ) : null}
@@ -244,5 +227,22 @@ function Dot({ good }: { good?: boolean }) {
     >
       <Icon name={good ? "check" : "close"} size={11} />
     </span>
+  );
+}
+
+function Section({ title, icon, color, children }: { title: string; icon: string; color: string; children: React.ReactNode }) {
+  return (
+    <div className="mt-3.5">
+      <p className="mb-1.5 flex items-center gap-2 text-[0.8125rem] font-semibold">
+        <span
+          className="flex h-[18px] w-[18px] items-center justify-center rounded-full"
+          style={{ background: `color-mix(in srgb, ${color} 18%, transparent)`, color }}
+        >
+          <Icon name={icon} size={11} />
+        </span>
+        {title}
+      </p>
+      <div className="space-y-1.5">{children}</div>
+    </div>
   );
 }

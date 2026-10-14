@@ -6,22 +6,9 @@ import { addDays, today } from "@/lib/tasks/dates";
 import { FEM_GRADIENT, PREG_TESTS, SYMPTOMS, symptomForecast, type CycleInfo, type FemPeriod } from "@/lib/fem/cycle";
 import { short } from "@/lib/fem/format";
 import { useFem } from "./DataProvider";
+import { CARE } from "@/lib/fem/partnerAdvice";
 import { Pill, plural } from "./parts";
 
-/** Как поддержать при симптоме — подсказка партнёру к прогнозу. */
-export const CARE: Record<string, string> = {
-  cramps: "грелка и тёплый чай будут кстати",
-  bellyache: "грелка и тёплый чай будут кстати",
-  headache: "тишина и приглушённый свет помогут",
-  fatigue: "возьмите на себя часть дел",
-  cravings: "что-нибудь вкусное к чаю — отличная идея",
-  breasts: "объятия — бережнее обычного",
-  backache: "лёгкий массаж спины будет приятен",
-  insomnia: "спокойный вечер без экранов поможет",
-  nausea: "лёгкая еда и вода под рукой",
-  bloating: "лёгкий ужин и прогулка помогут",
-  acne: "комплимент сейчас особенно нужен",
-};
 
 const symptomOf = (v: string) => SYMPTOMS.find((x) => x.value === v);
 

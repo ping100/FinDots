@@ -5,7 +5,7 @@ import { SymptomIcon } from "./FemIcons";
 import { Icon } from "@/lib/icons";
 import { today } from "@/lib/tasks/dates";
 import { SYMPTOMS, buildMarks, type CycleInfo } from "@/lib/fem/cycle";
-import { CARE } from "./Insights";
+import { CARE } from "@/lib/fem/partnerAdvice";
 import { CalendarCell, DOT, bandOf } from "./CalendarCell";
 import { long } from "@/lib/fem/format";
 import { Sheet } from "@/components/ui";

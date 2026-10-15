@@ -137,7 +137,18 @@ export function PartnerScreen() {
         }
       />
 
-      <div className="mb-3 grid grid-cols-2 gap-1 rounded-2xl p-1" style={{ background: "var(--surface)", border: "1px solid var(--border)" }} role="tablist">
+      {/* Закреплён сверху: из длинной переписки на «Цикл» — одним нажатием. */}
+      <div
+        className="sticky z-30 mb-3 grid grid-cols-2 gap-1 rounded-2xl p-1"
+        style={{
+          top: "calc(env(safe-area-inset-top) + 8px)",
+          background: "color-mix(in srgb, var(--surface) 92%, transparent)",
+          border: "1px solid var(--border)",
+          backdropFilter: "blur(12px)",
+          boxShadow: "0 6px 18px -10px rgba(0,0,0,.25)",
+        }}
+        role="tablist"
+      >
         {(
           [
             ["cycle", "🌸 Цикл"],

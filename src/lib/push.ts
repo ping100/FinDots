@@ -19,6 +19,10 @@ export interface PushMessage {
   url: string;
   /** Одинаковый tag заменяет прежнее уведомление, а не копит стопку. */
   tag?: string;
+  /** Кнопки в уведомлении (Android, компьютер; на iPhone их нет). */
+  actions?: { action: string; title: string }[];
+  /** Что нужно кнопкам: какой сигнал, какой текст. */
+  data?: Record<string, unknown>;
 }
 
 let configured = false;

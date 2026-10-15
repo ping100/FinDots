@@ -6,6 +6,7 @@ import { applyLook } from "@/lib/look";
 import { scaleFactor } from "@/lib/textScale";
 import type { Profile } from "@/lib/types";
 import type { FemDay, FemPeriod, FemSettings, Goal, Intim } from "@/lib/fem/cycle";
+import type { Likes } from "@/lib/fem/together";
 
 /**
  * Данные FemDots: настройки, отметки месячных и дни с самочувствием.
@@ -53,6 +54,14 @@ export interface FemStore {
   markSignalsSeen: () => Promise<void>;
   /** Смахнуть / закрыть отвеченные: больше не показывать. */
   dismissSignals: (ids: number[]) => Promise<void>;
+  /** Ответить на сигнал: словами (reply) или «готово» (done). */
+  replySignal: (to: number, kind: "reply" | "done", text: string) => Promise<void>;
+  /** Её ответ на отметку близости от партнёра: было / не было. */
+  confirmIntimacy: (day: string, ok: boolean) => Promise<void>;
+  /** Партнёр предлагает отметку близости — она подтвердит. */
+  proposeIntimacy: (day: string, kinds: string[], prot: boolean | null) => Promise<void>;
+  /** Партнёр: совет на день утром. */
+  setPartnerHint: (on: boolean) => Promise<void>;
   /** Что ещё видит партнёр: статус, цель, напоминание про таблетку. */
   shareOptions: ShareOptions | null;
   setShareOptions: (next: ShareOptions) => Promise<void>;
@@ -63,7 +72,7 @@ export interface FemStore {
   setIntimacy: (day: string, value: Intim | null) => Promise<void>;
 }
 
-export type SignalKind = "care" | "buy" | "alone" | "heart" | "ok" | "custom";
+export type SignalKind = "care" | "buy" | "alone" | "heart" | "ok" | "custom" | "reply" | "done" | "will" | "invite" | "intim";
 
 export interface FemSignal {
   id: number;
@@ -74,6 +83,8 @@ export interface FemSignal {
   created_at: string;
   seen_at: string | null;
   dismissed_at: string | null;
+  /** На какой сигнал это ответ. */
+  reply_to: number | null;
 }
 
 export interface ShareOptions {
@@ -88,6 +99,10 @@ export interface PartnerView {
   cycle_length: number;
   period_length: number;
   remind: boolean;
+  /** Совет на день утром пушем. */
+  hint: boolean;
+  /** «Что она любит» — она заполняет сама. */
+  likes: Likes;
   share_mood: boolean;
   share_symptoms: boolean;
   share_status: boolean;
@@ -103,7 +118,7 @@ export interface PartnerView {
   symptom_days: { day: string; symptoms: string[] }[];
   /** Прогноз на паузе (беременность) — причину она скажет сама. */
   paused: boolean;
-  intimacy: ({ day: string } & Intim)[];
+  intimacy: ({ day: string; pending?: boolean } & Intim)[];
   today: { mood: string | null; symptoms: string[]; status: string | null } | null;
 }
 
@@ -165,6 +180,29 @@ export function FemProvider({ children }: { children: ReactNode }) {
     setShare(((mine.data ?? []) as MyShare[])[0] ?? null);
     setShareOptionsState((options.data as ShareOptions | null) ?? null);
   }, [supabase]);
+  // Свои отметки близости. Предложенные партнёром (pending) ждут её
+  // ответа и до него не попадают ни в дневник, ни в прогноз.
+  const loadIntimacy = useCallback(async () => {
+    const res = await supabase
+      .from("fem_intimacy")
+      .select("day, protected, kinds, shared")
+      .eq("active", true)
+      .eq("pending", false);
+    if (res.error) return;
+    setIntimacyState(
+      new Map(
+        (res.data ?? []).map((x) => [
+          x.day as string,
+          {
+            protected: x.protected as boolean | null,
+            kinds: (x.kinds ?? ["sex"]) as Intim["kinds"],
+            shared: (x.shared as boolean | null) ?? true,
+          },
+        ]),
+      ),
+    );
+  }, [supabase]);
+
   const daysRef = useRef(days);
   daysRef.current = days;
   // Для записи в базу — свежие настройки, а не замкнутые в колбэке.
@@ -182,25 +220,7 @@ export function FemProvider({ children }: { children: ReactNode }) {
       setUserId(user.id);
       // Партнёрские данные — своим запросом, параллельно: их отсутствие не ошибка.
       const shares = reloadShares().catch(() => undefined);
-      const intim = supabase
-        .from("fem_intimacy")
-        .select("day, protected, kinds, shared")
-        .eq("active", true)
-        .then((res) => {
-          if (!res.error)
-            setIntimacyState(
-              new Map(
-                (res.data ?? []).map((x) => [
-                  x.day as string,
-                  {
-                    protected: x.protected as boolean | null,
-                    kinds: (x.kinds ?? ["sex"]) as Intim["kinds"],
-                    shared: (x.shared as boolean | null) ?? true,
-                  },
-                ]),
-              ),
-            );
-        });
+      const intim = loadIntimacy();
       const [p, s, per, d] = await Promise.all([
         supabase.from("profiles").select("*").eq("id", user.id).single(),
         supabase.from("fem_settings").select("*").eq("user_id", user.id).maybeSingle(),
@@ -423,10 +443,10 @@ export function FemProvider({ children }: { children: ReactNode }) {
     const since = new Date(Date.now() - 3 * 86400000).toISOString();
     const res = await supabase
       .from("fem_signals")
-      .select("id, from_id, to_id, kind, item, created_at, seen_at, dismissed_at")
+      .select("id, from_id, to_id, kind, item, created_at, seen_at, dismissed_at, reply_to")
       .gte("created_at", since)
       .order("created_at", { ascending: false })
-      .limit(30);
+      .limit(80);
     if (!res.error) setSignals((res.data ?? []) as FemSignal[]);
   }, [supabase]);
 
@@ -467,6 +487,46 @@ export function FemProvider({ children }: { children: ReactNode }) {
     [supabase],
   );
 
+  const replySignal: FemStore["replySignal"] = useCallback(
+    async (to, kind, text) => {
+      const res = await supabase.rpc("fem_signal_reply", { p_to: to, p_kind: kind, p_item: text });
+      if (res.error) throw new Error(res.error.message);
+      await loadSignals();
+    },
+    [loadSignals, supabase],
+  );
+
+  const confirmIntimacy: FemStore["confirmIntimacy"] = useCallback(
+    async (day, ok) => {
+      const now = new Date().toISOString();
+      setSignals((prev) =>
+        prev.map((x) => (x.kind === "intim" && x.item?.startsWith(day) ? { ...x, dismissed_at: now } : x)),
+      );
+      const res = await supabase.rpc("fem_intimacy_confirm", { p_day: day, p_ok: ok });
+      fail(res.error?.message);
+      await loadIntimacy();
+    },
+    [fail, loadIntimacy, supabase],
+  );
+
+  const proposeIntimacy: FemStore["proposeIntimacy"] = useCallback(
+    async (day, kinds, prot) => {
+      const res = await supabase.rpc("fem_partner_intimacy_set", { p_day: day, p_kinds: kinds, p_protected: prot });
+      if (res.error) throw new Error(res.error.message);
+      await Promise.all([reloadShares(), loadSignals()]);
+    },
+    [loadSignals, reloadShares, supabase],
+  );
+
+  const setPartnerHint: FemStore["setPartnerHint"] = useCallback(
+    async (on) => {
+      setPartner((prev) => (prev ? { ...prev, hint: on } : prev));
+      const res = await supabase.rpc("fem_partner_hint", { p_on: on });
+      fail(res.error?.message);
+    },
+    [fail, supabase],
+  );
+
   const setShareOptions: FemStore["setShareOptions"] = useCallback(
     async (next) => {
       setShareOptionsState(next);
@@ -500,6 +560,7 @@ export function FemProvider({ children }: { children: ReactNode }) {
             shared: v?.shared ?? true,
             added_by: userId,
             active: !!v,
+            pending: false,
           },
           { onConflict: "owner_id,day" },
         );
@@ -513,12 +574,14 @@ export function FemProvider({ children }: { children: ReactNode }) {
       ready, error, profile, settings, periods, days, saveSettings, saveProfile, startPeriod, endPeriod, deletePeriod, saveDay, deleteAll,
       partner, share, createShare, updateShare, revokeShare, acceptCode, leavePartner, setPartnerRemind, reloadShares,
       userId, signals, sendSignal, markSignalsSeen, dismissSignals, shareOptions, setShareOptions,
+      replySignal, confirmIntimacy, proposeIntimacy, setPartnerHint,
       intimacy, setIntimacy,
     }),
     [
       ready, error, profile, settings, periods, days, saveSettings, saveProfile, startPeriod, endPeriod, deletePeriod, saveDay, deleteAll,
       partner, share, createShare, updateShare, revokeShare, acceptCode, leavePartner, setPartnerRemind, reloadShares,
       userId, signals, sendSignal, markSignalsSeen, dismissSignals, shareOptions, setShareOptions,
+      replySignal, confirmIntimacy, proposeIntimacy, setPartnerHint,
       intimacy, setIntimacy,
     ],
   );

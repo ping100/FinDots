@@ -19,6 +19,10 @@ const PUBLIC_PATHS = [
   // Зовёт сама база (уведомления админу); маршрут сам проверяет секрет.
   "/api/admin-alert",
   "/api/fem-signal",
+  "/api/fem-hints",
+  // Кнопки в уведомлении: маршрут сам проверяет вход и отвечает 401, а не
+  // уводит на страницу входа — service worker ждёт JSON.
+  "/api/fem-act",
 ];
 
 export async function proxy(request: NextRequest) {

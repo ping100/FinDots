@@ -2,8 +2,26 @@
 
 import { useEffect, useRef, useState } from "react";
 import { today } from "@/lib/tasks/dates";
-import { FEM_GRADIENT } from "@/lib/fem/cycle";
-import { BUY_ITEMS, EMOJI_CHOICES, STATUSES, ago, packCustom, signalText, statusOf } from "@/lib/fem/together";
+import { toISODate } from "@/lib/savings";
+import { FEM_GRADIENT, type CycleInfo, type FemPeriod } from "@/lib/fem/cycle";
+import {
+  BUY_ITEMS,
+  EMOJI_CHOICES,
+  ERRANDS,
+  LIKE_FOR_ITEM,
+  REPLIES,
+  STATUSES,
+  ago,
+  doneText,
+  packCustom,
+  signalText,
+  statusOf,
+  unpackIntim,
+  unpackInvite,
+  whenText,
+  type Likes,
+} from "@/lib/fem/together";
+import { IntimForm, InviteForm, LikesEditor, ReplyBox, SentList, intimLine, repliesTo } from "./TogetherParts";
 import { Sheet } from "@/components/ui";
 import { useFem, type FemSignal, type SignalKind } from "./DataProvider";
 import { burst, centerOf } from "@/lib/fem/fx";
@@ -11,6 +29,10 @@ import { burst, centerOf } from "@/lib/fem/fx";
 /** Просьбы и сердечки живут 12 часов — дальше гаснут сами. */
 const LIFE = 12 * 3_600_000;
 const fresh = (s: FemSignal) => Date.now() - Date.parse(s.created_at) < LIFE && !s.dismissed_at;
+/** Что приходит ей и ждёт ответа: сердечко, «позабочусь», приглашение, отметка близости. */
+const INCOMING_HER = new Set(["heart", "will", "invite", "intim"]);
+/** Её просьбы, которые видит партнёр. */
+const ASKS = new Set(["care", "buy", "alone", "custom"]);
 
 /** Одинаковые сигналы — одной карточкой: последний и сколько их было. */
 function grouped(list: FemSignal[]): { key: string; last: FemSignal; ids: number[]; count: number }[] {
@@ -112,7 +134,7 @@ function CloseX({ onClick, label = "Скрыть" }: { onClick: () => void; labe
   );
 }
 
-/** Отправить сигнал и коротко показать «Отправлено» или ошибку. */
+/** Отправить сигнал (или любое действие) и коротко показать «Отправлено» или ошибку. */
 function useSend() {
   const { sendSignal } = useFem();
   const [note, setNote] = useState<{ text: string; bad?: boolean } | null>(null);
@@ -122,18 +144,19 @@ function useSend() {
     const t = setTimeout(() => setNote(null), 3500);
     return () => clearTimeout(t);
   }, [note]);
-  const send = async (kind: SignalKind, item: string | undefined, done: string) => {
+  const run = async (action: () => Promise<void>, done: string) => {
     if (busy) return;
     setBusy(true);
     try {
-      await sendSignal(kind, item);
+      await action();
       setNote({ text: done });
     } catch (e) {
       setNote({ text: e instanceof Error ? e.message : "Не получилось отправить", bad: true });
     }
     setBusy(false);
   };
-  return { send, note, busy };
+  const send = (kind: SignalKind, item: string | undefined, done: string) => run(() => sendSignal(kind, item), done);
+  return { send, run, note, busy };
 }
 
 function Note({ note }: { note: { text: string; bad?: boolean } | null }) {
@@ -150,24 +173,37 @@ function Note({ note }: { note: { text: string; bad?: boolean } | null }) {
  * и то, что он ответил. Видна, только когда партнёр подключён.
  */
 export function OwnTogether() {
-  const { share, signals, userId, days, saveDay, markSignalsSeen, settings, saveSettings } = useFem();
+  const { share, signals, userId, days, saveDay, markSignalsSeen, settings, saveSettings, replySignal, confirmIntimacy } = useFem();
   const [buy, setBuy] = useState(false);
+  const [likesOpen, setLikesOpen] = useState(false);
   const [editing, setEditing] = useState<"status" | "ask" | null>(null);
   const customStatuses = settings?.custom_statuses ?? [];
   const customAsks = settings?.custom_asks ?? [];
-  const { send, note, busy } = useSend();
+  const { send, run, note, busy } = useSend();
   const now = today();
   const name = share?.partner_name;
   const { dismissSignals } = useFem();
-  const incomingAll = signals.filter((s) => s.to_id === userId && fresh(s));
-  const incoming = grouped(incomingAll).slice(0, 3);
+  // Входящее — то, на что можно ответить. Его ответы на мои просьбы — в «Ваши просьбы».
+  const incomingAll = signals.filter((s) => s.to_id === userId && fresh(s) && INCOMING_HER.has(s.kind));
+  // Уже ответила — карточку убираем (после короткого «Ответили ✓»).
+  const [answered, setAnswered] = useState<Map<string, string>>(new Map());
+  const replied = (ids: number[]) => signals.some((x) => x.from_id === userId && x.reply_to != null && ids.includes(x.reply_to));
+  const incoming = grouped(incomingAll)
+    .filter((g) => answered.has(g.key) || !replied(g.ids))
+    .slice(0, 3);
   const status = days.get(now)?.status ?? null;
 
   useEffect(() => {
-    if (incomingAll.some((s) => !s.seen_at)) void markSignalsSeen();
-  }, [incomingAll, markSignalsSeen]);
+    if (signals.some((s) => s.to_id === userId && !s.seen_at && fresh(s))) void markSignalsSeen();
+  }, [signals, userId, markSignalsSeen]);
 
   if (!name) return null;
+
+  const reply = (g: { key: string; last: FemSignal; ids: number[] }, text: string) => {
+    setAnswered((prev) => new Map(prev).set(g.key, text));
+    void run(() => replySignal(g.last.id, "reply", text), `${name} получит ваш ответ`);
+    setTimeout(() => void dismissSignals(g.ids), 1800);
+  };
 
   return (
     <div className="fem-card mt-3 rounded-3xl p-4">
@@ -177,19 +213,61 @@ export function OwnTogether() {
         <div className="mt-2.5 space-y-1.5">
           {incoming.map((g) => {
             const t = signalText(g.last.kind, g.last.item);
+            const inv = g.last.kind === "invite" ? unpackInvite(g.last.item) : null;
+            const intim = g.last.kind === "intim" ? unpackIntim(g.last.item) : null;
+            const sent = answered.get(g.key);
             return (
               <Swipeable key={g.key} onDismiss={() => void dismissSignals(g.ids)}>
                 {(close) => (
-                <div className="flex items-center gap-2.5 rounded-2xl py-2 pl-3 pr-2" style={{ background: "var(--surface-2)" }}>
-                  <span className="text-lg">{t.emoji}</span>
-                  <span className="min-w-0 flex-1 text-sm">
-                    <b>{name}:</b> {t.text}
-                    {g.count > 1 ? <span style={{ color: "var(--muted)" }}> ×{g.count}</span> : null}
-                  </span>
-                  <span className="shrink-0 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-                    {ago(g.last.created_at)}
-                  </span>
-                  <CloseX onClick={close} />
+                <div className="rounded-2xl py-2.5 pl-3 pr-2" style={{ background: "var(--surface-2)" }}>
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-lg">{t.emoji}</span>
+                    <span className="min-w-0 flex-1 text-sm leading-snug">
+                      <b>{name}:</b>{" "}
+                      {inv ? (
+                        <>
+                          зовёт — {inv.emoji} {inv.label}, {whenText(inv.day, inv.time, now)}
+                        </>
+                      ) : intim ? (
+                        <>отметил близость: {intimLine(intim, now)}. Было?</>
+                      ) : (
+                        t.text
+                      )}
+                      {g.count > 1 ? <span style={{ color: "var(--muted)" }}> ×{g.count}</span> : null}
+                    </span>
+                    <span className="shrink-0 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+                      {ago(g.last.created_at)}
+                    </span>
+                    {intim ? null : <CloseX onClick={close} />}
+                  </div>
+                  {sent ? (
+                    <p className="animate-lift mt-2 text-[0.8125rem] font-medium" style={{ color: "#14b8a6" }}>
+                      Вы: {sent} ✓
+                    </p>
+                  ) : intim ? (
+                    <div className="mt-2.5 flex gap-2 pr-1">
+                      <button
+                        onClick={() => {
+                          void run(() => confirmIntimacy(intim.day, true), "Отметка добавлена в календарь 🤍");
+                        }}
+                        className="flex-1 rounded-full py-2 text-[0.8125rem] font-semibold text-white transition active:scale-95"
+                        style={{ background: FEM_GRADIENT }}
+                      >
+                        Да, было ✓
+                      </button>
+                      <button
+                        onClick={() => {
+                          void run(() => confirmIntimacy(intim.day, false), "Отметку убрали");
+                        }}
+                        className="flex-1 rounded-full py-2 text-[0.8125rem] font-semibold transition active:scale-95"
+                        style={{ background: "var(--surface)", color: "var(--text)" }}
+                      >
+                        Не было
+                      </button>
+                    </div>
+                  ) : REPLIES[g.last.kind] ? (
+                    <ReplyBox presets={REPLIES[g.last.kind]} busy={busy} inset onSend={(text) => reply(g, text)} />
+                  ) : null}
                 </div>
                 )}
               </Swipeable>
@@ -259,6 +337,31 @@ export function OwnTogether() {
       </div>
       <Note note={note} />
 
+      <SentList signals={signals} userId={userId} name={name} she={false} title="Ваши просьбы" />
+
+      <button
+        onClick={() => setLikesOpen(true)}
+        className="mt-3 flex w-full items-center gap-2.5 rounded-2xl px-3.5 py-3 text-left transition active:scale-[0.98]"
+        style={{ background: "var(--surface-2)" }}
+      >
+        <span className="text-lg">💝</span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[0.875rem] font-medium">Что я люблю</span>
+          <span className="block truncate text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+            {Object.keys(settings?.likes ?? {}).length
+              ? `${name} видит: ${Object.values(settings?.likes ?? {}).filter(Boolean).join(", ")}`
+              : `Сладкое, цветы, что помогает при боли — подскажет ${name}, что выбрать`}
+          </span>
+        </span>
+        <span className="text-[0.75rem]" style={{ color: "var(--accent)" }}>
+          {Object.keys(settings?.likes ?? {}).length ? "Изменить" : "Заполнить"}
+        </span>
+      </button>
+
+      <Sheet open={likesOpen} title="Что я люблю" onClose={() => setLikesOpen(false)}>
+        {likesOpen ? <LikesEditor name={name} likes={settings?.likes ?? {}} onSave={(next) => void saveSettings({ likes: next })} /> : null}
+      </Sheet>
+
       <Sheet
         open={editing !== null}
         title={editing === "ask" ? "Свои просьбы" : "Свои статусы"}
@@ -314,29 +417,45 @@ function Ask({ emoji, label, onClick, disabled }: { emoji: string; label: string
 }
 
 /**
- * Сторона партнёра: её просьбы с кнопкой «Уже бегу», её статус дня и
- * «Думаю о тебе ❤️».
+ * Сторона партнёра: её просьбы с ответами (три готовых и своё), ход
+ * «бегу → готово», её статус дня, совет на сегодня с «Сделаю»,
+ * «Думаю о тебе», «Позвать на вечер» и отметка близости.
  */
-export function PartnerTogether({ name, status }: { name: string; status: string | null }) {
-  const { signals, userId, markSignalsSeen, dismissSignals } = useFem();
-  const { send, note, busy } = useSend();
+export function PartnerTogether({
+  name,
+  status,
+  tip,
+  info,
+  periods,
+  likes,
+}: {
+  name: string;
+  status: string | null;
+  tip: string | null;
+  info: CycleInfo | null;
+  periods: FemPeriod[];
+  likes: Likes;
+}) {
+  const { signals, userId, markSignalsSeen, dismissSignals, replySignal, proposeIntimacy } = useFem();
+  const { send, run, note, busy } = useSend();
   const now = today();
-  // Ответил ли уже на эту просьбу — «ok» с её ключом после неё (старые «ok»
-  // без ключа отвечали на всё сразу).
-  const answered = (s: FemSignal) =>
-    signals.some(
-      (x) =>
-        x.from_id === userId &&
-        x.kind === "ok" &&
-        (!x.item || x.item === `${s.kind}:${s.item ?? ""}`) &&
-        Date.parse(x.created_at) > Date.parse(s.created_at),
-    );
-  // Только что ответил — карточка пару секунд показывает «Ответили ✓» и уходит.
-  const [done, setDone] = useState<Set<string>>(new Set());
+  const [sheet, setSheet] = useState<"invite" | "intim" | null>(null);
+  // Только что ответил — карточка показывает ответ и (для дел) кнопку «Готово».
   const [leaving, setLeaving] = useState<Set<string>>(new Set());
-  const keyOf = (s: FemSignal) => `${s.kind}:${s.item ?? ""}`;
-  const pending = signals.filter((s) => s.to_id === userId && fresh(s) && s.kind !== "heart" && s.kind !== "ok");
-  const asks = grouped(pending.filter((s) => !answered(s) || done.has(keyOf(s)))).slice(0, 3);
+  const [doneNow, setDoneNow] = useState<Set<string>>(new Set());
+  const pending = signals.filter((s) => s.to_id === userId && fresh(s) && ASKS.has(s.kind));
+  const groups = grouped(pending)
+    .map((g) => {
+      // Ответ — на любую просьбу из группы.
+      const answers = g.ids.map((id) => repliesTo(signals, pending.find((s) => s.id === id)!));
+      return {
+        ...g,
+        reply: answers.find((a) => a.reply)?.reply ?? null,
+        done: answers.find((a) => a.done)?.done ?? null,
+      };
+    })
+    .filter((g) => !g.done || doneNow.has(g.key))
+    .slice(0, 3);
   // Статус дня тоже можно смахнуть — до конца дня (память телефона).
   const [statusHidden, setStatusHidden] = useState(false);
   useEffect(() => {
@@ -347,64 +466,84 @@ export function PartnerTogether({ name, status }: { name: string; status: string
     }
   }, [now, status]);
   const st = statusHidden ? null : statusOf(status);
+  const tipSent = signals.some((s) => s.from_id === userId && s.kind === "will" && toISODate(new Date(s.created_at)) === now);
 
   useEffect(() => {
-    if (pending.some((s) => !s.seen_at)) void markSignalsSeen();
-  }, [pending, markSignalsSeen]);
+    if (signals.some((s) => s.to_id === userId && !s.seen_at && fresh(s))) void markSignalsSeen();
+  }, [signals, userId, markSignalsSeen]);
 
-  // Отвеченные раньше (до перезахода) — убираем тихо.
+  // Выполненные раньше (до перезахода) — убираем тихо.
   useEffect(() => {
-    const old = pending.filter((s) => answered(s) && !done.has(keyOf(s))).map((s) => s.id);
+    const old = pending.filter((s) => repliesTo(signals, s).done || (s.kind === "alone" && repliesTo(signals, s).reply)).map((s) => s.id);
     if (old.length) void dismissSignals(old);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signals]);
 
-  const reply = async (g: { key: string; ids: number[] }) => {
-    // key — «care:» или «buy:chocolate»: ответ привязан к этой просьбе.
-    setDone((prev) => new Set(prev).add(g.key));
-    await send("ok", g.key, `${name} знает, что вы уже бежите`);
-    setTimeout(() => setLeaving((prev) => new Set(prev).add(g.key)), 1500);
+  const leave = (key: string, ids: number[]) =>
+    setTimeout(() => {
+      setLeaving((prev) => new Set(prev).add(key));
+      void dismissSignals(ids);
+    }, 1600);
+
+  const answer = (g: { key: string; last: FemSignal; ids: number[] }, text: string, done: boolean) => {
+    void run(() => replySignal(g.last.id, done ? "done" : "reply", text), `${name} увидит ваш ответ`);
+    if (done) {
+      setDoneNow((prev) => new Set(prev).add(g.key));
+      leave(g.key, g.ids);
+    } else if (g.last.kind === "alone") leave(g.key, g.ids);
   };
 
   return (
     <div className="mb-4 space-y-2.5">
-      {asks.map((g) => {
+      {groups.map((g) => {
         const t = signalText(g.last.kind, g.last.item);
-        const isDone = done.has(g.key);
+        const like = g.last.kind === "buy" ? likes[LIKE_FOR_ITEM[g.last.item ?? ""] ?? ""] : null;
+        const finished = doneNow.has(g.key);
         return (
           <Swipeable key={g.key} leaving={leaving.has(g.key)} onDismiss={() => void dismissSignals(g.ids)}>
             {(close) => (
-            <div className="fem-card animate-lift flex items-center gap-3 rounded-3xl py-3 pl-4 pr-3">
-              <span className="text-2xl">{t.emoji}</span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-[0.9375rem] font-semibold leading-snug">
-                  {t.text}
-                  {g.count > 1 ? <span className="font-normal" style={{ color: "var(--muted)" }}> ×{g.count}</span> : null}
+            <div className="fem-card animate-lift rounded-3xl py-3 pl-4 pr-3">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">{t.emoji}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[0.9375rem] font-semibold leading-snug">
+                    {t.text}
+                    {g.count > 1 ? <span className="font-normal" style={{ color: "var(--muted)" }}> ×{g.count}</span> : null}
+                  </span>
+                  <span className="block text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+                    {name} · {ago(g.last.created_at)}
+                  </span>
                 </span>
-                <span className="block text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-                  {name} · {ago(g.last.created_at)}
-                </span>
-              </span>
-              {g.last.kind === "alone" ? (
-                // Тут не бежать, а дать время — достаточно показать, что прочитал.
-                <button
-                  onClick={close}
-                  className="shrink-0 rounded-full px-3 py-2 text-[0.8125rem] font-semibold"
-                  style={{ background: "var(--surface-2)", color: "var(--accent)" }}
-                >
-                  Понял 👌
-                </button>
+                {finished ? null : <CloseX onClick={close} />}
+              </div>
+              {like ? (
+                <p className="mt-2 rounded-2xl px-3 py-2 text-[0.8125rem] leading-snug" style={{ background: "var(--surface-2)" }}>
+                  💝 {name} любит: <b>{like}</b>
+                </p>
+              ) : null}
+              {finished ? (
+                <p className="animate-lift mt-2 text-[0.8125rem] font-semibold" style={{ color: "#14b8a6" }}>
+                  {doneText(g.last.kind)} — {name} увидит
+                </p>
+              ) : g.reply ? (
+                <div className="mt-2 flex items-center gap-2">
+                  <p className="min-w-0 flex-1 text-[0.8125rem]" style={{ color: "var(--muted)" }}>
+                    Вы: <span style={{ color: "var(--text)" }}>{g.reply.item ?? "Уже бегу 🏃"}</span>
+                  </p>
+                  {ERRANDS.has(g.last.kind) ? (
+                    <button
+                      onClick={() => answer(g, doneText(g.last.kind), true)}
+                      disabled={busy}
+                      className="shrink-0 rounded-full px-3.5 py-2 text-[0.8125rem] font-semibold text-white transition active:scale-95 disabled:opacity-60"
+                      style={{ background: "#14b8a6" }}
+                    >
+                      {doneText(g.last.kind)}
+                    </button>
+                  ) : null}
+                </div>
               ) : (
-                <button
-                  onClick={() => void reply(g)}
-                  disabled={busy || isDone}
-                  className="shrink-0 rounded-full px-3 py-2 text-[0.8125rem] font-semibold text-white disabled:opacity-80"
-                  style={{ background: isDone ? "#14b8a6" : FEM_GRADIENT }}
-                >
-                  {isDone ? "Ответили ✓" : "Уже бегу 🏃"}
-                </button>
+                <ReplyBox presets={REPLIES[g.last.kind] ?? REPLIES.custom} busy={busy} onSend={(text, done) => answer(g, text, done)} />
               )}
-              {g.last.kind !== "alone" && !isDone ? <CloseX onClick={close} /> : null}
             </div>
             )}
           </Swipeable>
@@ -438,6 +577,32 @@ export function PartnerTogether({ name, status }: { name: string; status: string
         </Swipeable>
       ) : null}
 
+      {tip ? (
+        <div className="fem-card flex items-center gap-3 rounded-3xl py-3 pl-4 pr-3">
+          <span className="text-2xl">💡</span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+              Совет на сегодня
+            </span>
+            <span className="block text-[0.875rem] font-medium leading-snug">{tip}</span>
+          </span>
+          {tipSent ? (
+            <span className="shrink-0 text-[0.75rem] font-semibold" style={{ color: "#14b8a6" }}>
+              {name} знает ✓
+            </span>
+          ) : (
+            <button
+              onClick={() => void send("will", tip, `${name} узнает, что вы позаботитесь 💗`)}
+              disabled={busy}
+              className="shrink-0 rounded-full px-3.5 py-2 text-[0.8125rem] font-semibold text-white transition active:scale-95 disabled:opacity-60"
+              style={{ background: FEM_GRADIENT }}
+            >
+              Сделаю 👍
+            </button>
+          )}
+        </div>
+      ) : null}
+
       <button
         onClick={(e) => {
           const { x, y } = centerOf(e);
@@ -450,7 +615,48 @@ export function PartnerTogether({ name, status }: { name: string; status: string
       >
         <span className="animate-heartbeat">❤️</span> Думаю о тебе
       </button>
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          onClick={() => setSheet("invite")}
+          className="fem-card flex items-center justify-center gap-1.5 rounded-3xl px-2 py-3 text-[0.8125rem] font-semibold transition active:scale-[0.98]"
+        >
+          💌 Позвать на вечер
+        </button>
+        <button
+          onClick={() => setSheet("intim")}
+          className="fem-card flex items-center justify-center gap-1.5 rounded-3xl px-2 py-3 text-[0.8125rem] font-semibold transition active:scale-[0.98]"
+        >
+          🤍 Отметить близость
+        </button>
+      </div>
       <Note note={note} />
+
+      <SentList signals={signals} userId={userId} name={name} she title="Отправленное" />
+
+      <Sheet open={sheet === "invite"} title="Позвать на вечер" onClose={() => setSheet(null)}>
+        {sheet === "invite" ? (
+          <InviteForm
+            name={name}
+            info={info}
+            periods={periods}
+            onSend={(item) => {
+              setSheet(null);
+              void send("invite", item, "Приглашение отправлено — ждём ответ 💌");
+            }}
+          />
+        ) : null}
+      </Sheet>
+      <Sheet open={sheet === "intim"} title="Отметить близость" onClose={() => setSheet(null)}>
+        {sheet === "intim" ? (
+          <IntimForm
+            name={name}
+            onSend={(day, kinds, prot) => {
+              setSheet(null);
+              void run(() => proposeIntimacy(day, kinds, prot), `${name} подтвердит отметку 🤍`);
+            }}
+          />
+        ) : null}
+      </Sheet>
     </div>
   );
 }

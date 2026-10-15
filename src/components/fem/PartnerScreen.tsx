@@ -14,6 +14,8 @@ import { PartnerTogether } from "./Together";
 import { PartnerCalendar } from "./PartnerCalendar";
 import { ForecastCard } from "./Insights";
 import { PartnerToday } from "./PartnerToday";
+import { LikesCard } from "./TogetherParts";
+import { adviceFor } from "@/lib/fem/partnerAdvice";
 import { THEMES } from "@/lib/look";
 import { TEXT_SCALES } from "@/lib/textScale";
 
@@ -73,7 +75,7 @@ const PARTNER_PHASE: Record<Phase, { title: string; about: string; tips: string[
  * она поделилась; отключиться можно в любой момент.
  */
 export function PartnerScreen() {
-  const { partner, leavePartner, setPartnerRemind, profile, saveProfile } = useFem();
+  const { partner, leavePartner, setPartnerRemind, setPartnerHint, profile, saveProfile } = useFem();
   const now = today();
   const [confirm, setConfirm] = useState(false);
   const [prefs, setPrefs] = useState(false);
@@ -97,6 +99,18 @@ export function PartnerScreen() {
   const shift = info.fertileEnd && info.fertileEnd < now ? info.cycleLength : 0;
   const mood = partner.today?.mood ? MOODS.find((m) => m.value === partner.today?.mood) : null;
   const symptoms = (partner.today?.symptoms ?? []).map((v) => SYMPTOMS.find((s) => s.value === v)).filter(Boolean);
+  // Совет на сегодня — тот же, что приходит утром пушем.
+  const tip =
+    info.phase && !partner.paused
+      ? (adviceFor({
+          phase: info.phase,
+          info,
+          mood: partner.share_mood ? (mood?.value ?? null) : null,
+          symptoms: partner.share_symptoms ? symptoms.map((x) => x!.value).filter((v) => v !== "ok") : [],
+          goal: partner.goal ?? null,
+          today: now,
+        }).todo[0] ?? null)
+      : null;
 
   return (
     <div className="mx-auto w-full max-w-md px-4 pb-16">
@@ -117,7 +131,14 @@ export function PartnerScreen() {
 
       {info.phase && !partner.paused ? <DayHero phase={info.phase} day={now} who="partner" goal={partner.goal} /> : null}
 
-      <PartnerTogether name={name} status={partner.share_status ? (partner.today?.status ?? null) : null} />
+      <PartnerTogether
+        name={name}
+        status={partner.share_status ? (partner.today?.status ?? null) : null}
+        tip={tip}
+        info={partner.paused ? null : info}
+        periods={partner.periods}
+        likes={partner.likes ?? {}}
+      />
 
       {partner.paused ? (
         // Беременность: прогноз на паузе. Причину не называем — она скажет сама.
@@ -196,6 +217,8 @@ export function PartnerScreen() {
         </div>
       ) : null}
 
+      <LikesCard name={name} likes={partner.likes ?? {}} />
+
       <ForecastCard periods={partner.periods} logs={partner.symptom_days ?? []} info={info} who="partner" name={name} />
 
       <PartnerCalendar info={info} />
@@ -203,7 +226,7 @@ export function PartnerScreen() {
       )}
 
       <p className="mt-5 px-4 text-center text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
-        Вы видите только то, чем {name} поделилась, и ничего не можете изменить. Прогноз — оценка, а не медицинский совет.
+        Вы видите только то, чем {name} поделилась. Ваши отметки близости появляются у неё только после её подтверждения. Прогноз — оценка, а не медицинский совет.
       </p>
 
       {/* Настройки партнёра — в шапке, чтобы главный экран оставался чистым. */}
@@ -219,6 +242,15 @@ export function PartnerScreen() {
               </span>
             </span>
             <Switch checked={partner.remind} onChange={(v) => void setPartnerRemind(v)} label="Напоминать мне" />
+          </div>
+          <div className="flex items-center gap-3 px-4 py-3.5" style={{ borderTop: "1px solid var(--border)" }}>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[0.9375rem]">Совет на день</span>
+              <span className="mt-0.5 block text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
+                Утром пришлём, как позаботиться о {name} сегодня, — с кнопкой «Сделаю»
+              </span>
+            </span>
+            <Switch checked={partner.hint ?? true} onChange={(v) => void setPartnerHint(v)} label="Совет на день" />
           </div>
           <div className="px-4 py-3" style={{ borderTop: "1px solid var(--border)" }}>
             <DialStyleRow />

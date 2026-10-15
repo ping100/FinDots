@@ -50,6 +50,8 @@ export interface FemSettings {
   /** Свои статусы и просьбы — к готовым. */
   custom_statuses: { emoji: string; label: string }[];
   custom_asks: { emoji: string; label: string }[];
+  /** «Что я люблю» — видит партнёр: ключ из LIKES → текст. */
+  likes?: Partial<Record<string, string>>;
   remind_period: boolean;
   remind_fertile: boolean;
   pill_on: boolean;

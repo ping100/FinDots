@@ -65,7 +65,7 @@ export function signalPush(row: SignalRow): { title: string; body: string; actio
     case "done":
       return { title: `✅ ${name}`, body: what ? `${row.item ?? "Готово"} — «${what}»` : (row.item ?? "Готово") };
     case "will":
-      return { title: `💗 ${name}`, body: `Позаботится о тебе сегодня: ${row.item ?? ""}`.trim(), actions };
+      return { title: `💗 ${name}`, body: row.item ? `Прочитал совет на сегодня и обещает: «${row.item}»` : "Обещает позаботиться о тебе сегодня", actions };
     case "invite": {
       const inv = unpackInvite(row.item);
       return {

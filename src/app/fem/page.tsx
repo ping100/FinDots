@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Icon } from "@/lib/icons";
 import { addDays, today } from "@/lib/tasks/dates";
-import { FEM_GRADIENT, PHASE_COLOR, PHASE_TEXT, cycleHealth, cycleInfo, signalsFrom } from "@/lib/fem/cycle";
-import { OwnTogether } from "@/components/fem/Together";
+import { FEM_GRADIENT, PHASE_COLOR, PHASE_TEXT, cycleHealth, cycleInfo, signalsFrom, upcomingFertile } from "@/lib/fem/cycle";
+import { TogetherStrip } from "@/components/fem/Together";
 import { ForecastCard, PregnancyCheck } from "@/components/fem/Insights";
 import { PartnerJoin } from "@/components/fem/PartnerShare";
 import { long, range, short } from "@/lib/fem/format";
@@ -17,8 +17,10 @@ import { CheckIn } from "@/components/fem/CheckIn";
 import { burst, centerOf } from "@/lib/fem/fx";
 
 /**
- * Главный экран FemDots: фраза дня, кольцо цикла, одна главная кнопка
- * («начались» / «закончились»), ближайшие даты и самочувствие за сегодня.
+ * Главный экран FemDots — по важности: фраза дня, цветок цикла с главной
+ * кнопкой («начались» / «закончились»), новое от партнёра одной полоской,
+ * таблетка и «Как вы сегодня?», затем ближайшие даты и прогноз. Всё
+ * общение с партнёром — во вкладке «Вместе».
  */
 export default function FemToday() {
   const { settings, periods, days, partner, share, profile, startPeriod, endPeriod, saveDay } = useFem();
@@ -34,17 +36,7 @@ export default function FemToday() {
   const [busy, setBusy] = useState(false);
   const phase = info.phase ? PHASE_TEXT[info.phase] : null;
   // Окно этого цикла уже прошло — показываем ближайшее, следующего.
-  const fw = useMemo(() => {
-    if (!info.fertileStart || !info.fertileEnd || !info.ovulation) return null;
-    const shiftBy = info.fertileEnd < now ? info.cycleLength : 0;
-    return {
-      from: addDays(info.fertileStart, shiftBy),
-      to: addDays(info.fertileEnd, shiftBy),
-      ovulation: addDays(info.ovulation, shiftBy),
-      now: now >= addDays(info.fertileStart, shiftBy) && now <= addDays(info.fertileEnd, shiftBy),
-      shifted: shiftBy > 0,
-    };
-  }, [info, now]);
+  const fw = useMemo(() => upcomingFertile(info, now), [info, now]);
 
   const act = async () => {
     setBusy(true);
@@ -112,7 +104,54 @@ export default function FemToday() {
         )}
       </div>
 
+      {share?.partner_name ? <TogetherStrip who="her" name={share.partner_name} href="/fem/together" /> : null}
+
       <FirstSteps partner={share?.partner_name ?? null} />
+
+      {method === "coc" || method === "pop" ? (
+        <div className="fem-card mt-3 flex items-center gap-3 rounded-3xl px-4 py-3.5">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-xl" style={{ background: "var(--surface-2)" }}>
+            💊
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[0.9375rem] font-semibold">
+              {info.pack?.inBreak
+                ? "Перерыв — таблетки не нужны"
+                : info.pack
+                  ? `Таблетка ${info.pack.day} из ${info.pack.active}`
+                  : "Таблетка сегодня"}
+            </span>
+            <span className="block text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
+              {info.pack?.inBreak
+                ? `Новая упаковка — через ${info.pack.length - info.pack.day + 1} ${plural(info.pack.length - info.pack.day + 1, "день", "дня", "дней")}`
+                : method === "pop"
+                  ? "Мини-пили — строго в одно и то же время"
+                  : "Пропустили — смотрите инструкцию или спросите врача"}
+            </span>
+          </span>
+          {!info.pack?.inBreak ? (
+            <button
+              onClick={(e) => {
+                if (!days.get(now)?.pill) {
+                  const { x, y } = centerOf(e);
+                  burst(x, y, "💊");
+                }
+                void saveDay(now, { pill: !days.get(now)?.pill });
+              }}
+              className="shrink-0 rounded-full px-3.5 py-2 text-[0.8125rem] font-semibold transition active:scale-95"
+              style={
+                days.get(now)?.pill
+                  ? { background: "var(--surface-2)", color: "var(--accent)" }
+                  : { background: FEM_GRADIENT, color: "#fff" }
+              }
+            >
+              {days.get(now)?.pill ? "Выпила ✓" : "Выпила"}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      <CheckIn day={now} showFlow={!!info.current || (info.daysToNext != null && info.daysToNext <= 2)} />
 
       <PregnancyCheck info={info} />
 
@@ -166,49 +205,8 @@ export default function FemToday() {
                   : `овуляция ~${short(fw.ovulation)}`
               }
             />
-          ) : null}
-        </div>
-      ) : null}
-
-      {method === "coc" || method === "pop" ? (
-        <div className="fem-card mt-3 flex items-center gap-3 rounded-3xl px-4 py-3.5">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-xl" style={{ background: "var(--surface-2)" }}>
-            💊
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-[0.9375rem] font-semibold">
-              {info.pack?.inBreak
-                ? "Перерыв — таблетки не нужны"
-                : info.pack
-                  ? `Таблетка ${info.pack.day} из ${info.pack.active}`
-                  : "Таблетка сегодня"}
-            </span>
-            <span className="block text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
-              {info.pack?.inBreak
-                ? `Новая упаковка — через ${info.pack.length - info.pack.day + 1} ${plural(info.pack.length - info.pack.day + 1, "день", "дня", "дней")}`
-                : method === "pop"
-                  ? "Мини-пили — строго в одно и то же время"
-                  : "Пропустили — смотрите инструкцию или спросите врача"}
-            </span>
-          </span>
-          {!info.pack?.inBreak ? (
-            <button
-              onClick={(e) => {
-                if (!days.get(now)?.pill) {
-                  const { x, y } = centerOf(e);
-                  burst(x, y, "💊");
-                }
-                void saveDay(now, { pill: !days.get(now)?.pill });
-              }}
-              className="shrink-0 rounded-full px-3.5 py-2 text-[0.8125rem] font-semibold transition active:scale-95"
-              style={
-                days.get(now)?.pill
-                  ? { background: "var(--surface-2)", color: "var(--accent)" }
-                  : { background: FEM_GRADIENT, color: "#fff" }
-              }
-            >
-              {days.get(now)?.pill ? "Выпила ✓" : "Выпила"}
-            </button>
+          ) : info.late > 0 ? (
+            <Fact color={PHASE_COLOR.fertile} label="Фертильное окно" value="после месячных" hint="посчитаем, когда они начнутся" />
           ) : null}
         </div>
       ) : null}
@@ -230,9 +228,6 @@ export default function FemToday() {
 
       <ForecastCard periods={periods} logs={logs} info={info} who="own" />
 
-      <OwnTogether />
-
-      <CheckIn day={now} showFlow={!!info.current || (info.daysToNext != null && info.daysToNext <= 2)} />
 
       <p className="mt-4 px-3 text-center text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
         {info.hormonal
@@ -253,11 +248,11 @@ function FirstSteps({ partner }: { partner: string | null }) {
   const steps: [string, React.ReactNode][] = [
     ["🌸", <>Цветок — ваш цикл: лепесток на каждый день, нажмите на любой. </>],
     ["🩸", <>Начались месячные — нажмите кнопку выше. Другой день — в <Link href="/fem/calendar" replace className="underline">календаре</Link>.</>],
-    ["✍️", "Ниже — «Как вы сегодня?»: плитки настроения, самочувствия, близости. Пара нажатий в день делает прогноз точнее."],
+    ["✍️", "Под цветком — «Как вы сегодня?»: настроение, самочувствие, близость. Пара нажатий в день делает прогноз точнее."],
     ["📊", <>Как прошёл цикл и что в норме — во вкладке <Link href="/fem/stats" replace className="underline">«Итоги»</Link>.</>],
     partner
-      ? ["💌", `${partner} подключён — просьбы и статус дня ниже, в карточке «Вы и ${partner}».`]
-      : ["💌", <>Хотите, чтобы партнёр видел прогноз? Код для него — в <Link href="/fem/settings" replace className="underline">настройках</Link>.</>],
+      ? ["💌", <>{partner} подключён — просьбы, статус дня и его ответы во вкладке <Link href="/fem/together" replace className="underline">«Вместе»</Link>.</>]
+      : ["💌", <>Хотите, чтобы партнёр видел прогноз и мог помочь? Подключите его во вкладке <Link href="/fem/together" replace className="underline">«Вместе»</Link>.</>],
   ];
   return (
     <div className="fem-card animate-lift mt-3 rounded-3xl p-4">

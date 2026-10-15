@@ -735,3 +735,17 @@ export function pastPhase(periods: FemPeriod[], day: string, luteal = 14): Phase
   if (day >= addDays(ov, -5) && day <= addDays(ov, 1)) return "fertile";
   return day < ov ? "follicular" : "luteal";
 }
+
+/**
+ * Ближайшее фертильное окно: нынешнее или, если оно уже прошло, следующего
+ * цикла. При задержке — null: пока месячные не начались, следующее окно
+ * не посчитать, а прошедшее показывать нельзя — оно только путает.
+ */
+export function upcomingFertile(info: CycleInfo, now: string) {
+  if (!info.fertileStart || !info.fertileEnd || !info.ovulation || info.late > 0) return null;
+  let shift = 0;
+  while (addDays(info.fertileEnd, shift) < now && shift < info.cycleLength * 3) shift += info.cycleLength;
+  const from = addDays(info.fertileStart, shift);
+  const to = addDays(info.fertileEnd, shift);
+  return { from, to, ovulation: addDays(info.ovulation, shift), now: now >= from && now <= to, shifted: shift > 0 };
+}

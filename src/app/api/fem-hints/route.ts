@@ -48,7 +48,7 @@ export async function POST(request: Request) {
       const result = await sendPush(row, {
         title: `💡 ${row.data.owner_name} сегодня`,
         body: tip,
-        url: "/fem",
+        url: "/fem/together",
         tag: "fem-hint",
         actions: [{ action: "will", title: "Сделаю 👍" }],
         data: { act: "will", text: tip },

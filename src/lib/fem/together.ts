@@ -60,7 +60,7 @@ export function signalText(kind: string, item: string | null): { emoji: string; 
     case "done":
       return { emoji: "✅", text: item ?? "Готово" };
     case "will":
-      return { emoji: "💗", text: `Позаботится: ${lower(item ?? "о вас")}` };
+      return { emoji: "💗", text: item ? `Прочитал совет и обещает: «${lower(item)}»` : "Обещает позаботиться о вас" };
     case "invite": {
       const inv = unpackInvite(item);
       return { emoji: "💌", text: inv ? `Зовёт: ${inv.emoji} ${inv.label}` : "Зовёт провести вечер вместе" };

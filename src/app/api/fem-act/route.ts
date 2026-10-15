@@ -36,6 +36,7 @@ export async function POST(request: Request) {
   if (!signal || signal.to_id !== auth.user.id) return NextResponse.json({ error: "Нет такого сигнала" }, { status: 404 });
 
   if (body.action === "intim_ok" || body.action === "intim_no") {
+    if (signal.kind !== "intim") return NextResponse.json({ error: "Не та кнопка" }, { status: 400 });
     const day = String(signal.item ?? "").split("|")[0];
     const { error } = await supabase.rpc("fem_intimacy_confirm", { p_day: day, p_ok: body.action === "intim_ok" });
     return error ? NextResponse.json({ error: error.message }, { status: 400 }) : NextResponse.json({ ok: true });

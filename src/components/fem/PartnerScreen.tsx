@@ -1,16 +1,17 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { addDays, today } from "@/lib/tasks/dates";
+import { usePathname } from "next/navigation";
+import { today } from "@/lib/tasks/dates";
 import { Icon } from "@/lib/icons";
-import { MOODS, PHASE_COLOR, SYMPTOMS, cycleInfo, type Phase } from "@/lib/fem/cycle";
+import { FEM_GRADIENT, MOODS, PHASE_COLOR, SYMPTOMS, cycleInfo, upcomingFertile, type Phase } from "@/lib/fem/cycle";
 import { range, short } from "@/lib/fem/format";
 import { Sheet, Switch } from "@/components/ui";
 import { useFem } from "./DataProvider";
 import { FemHeader } from "./Shell";
 import { DayHero, plural } from "./parts";
 import { CycleDial, DialStyleRow, flowerStage } from "./CycleDial";
-import { PartnerTogether } from "./Together";
+import { PartnerTogether, TogetherStrip, partnerNew } from "./Together";
 import { PartnerCalendar } from "./PartnerCalendar";
 import { ForecastCard } from "./Insights";
 import { PartnerToday } from "./PartnerToday";
@@ -75,11 +76,19 @@ const PARTNER_PHASE: Record<Phase, { title: string; about: string; tips: string[
  * она поделилась; отключиться можно в любой момент.
  */
 export function PartnerScreen() {
-  const { partner, leavePartner, setPartnerRemind, setPartnerHint, profile, saveProfile } = useFem();
+  const { partner, leavePartner, setPartnerRemind, setPartnerHint, profile, saveProfile, signals, userId } = useFem();
   const now = today();
   const [confirm, setConfirm] = useState(false);
   const [prefs, setPrefs] = useState(false);
   const [sheet, setSheet] = useState<"day" | null>(null);
+  // Вкладка: по ссылке из уведомления (/fem/together) — сразу «Вместе».
+  const pathname = usePathname();
+  const [tab, setTab] = useState<"cycle" | "together">(() => (pathname === "/fem/together" ? "together" : "cycle"));
+  const pick = (next: "cycle" | "together") => {
+    setTab(next);
+    window.scrollTo({ top: 0 });
+  };
+  const unanswered = partnerNew(signals, userId).length;
   const info = useMemo(
     () =>
       partner
@@ -96,7 +105,7 @@ export function PartnerScreen() {
   if (!partner || !info) return null;
   const name = partner.owner_name;
   const phase = info.phase ? PARTNER_PHASE[info.phase] : null;
-  const shift = info.fertileEnd && info.fertileEnd < now ? info.cycleLength : 0;
+  const fw = upcomingFertile(info, now);
   const mood = partner.today?.mood ? MOODS.find((m) => m.value === partner.today?.mood) : null;
   const symptoms = (partner.today?.symptoms ?? []).map((v) => SYMPTOMS.find((s) => s.value === v)).filter(Boolean);
   // Совет на сегодня — тот же, что приходит утром пушем.
@@ -129,8 +138,36 @@ export function PartnerScreen() {
         }
       />
 
-      {info.phase && !partner.paused ? <DayHero phase={info.phase} day={now} who="partner" goal={partner.goal} /> : null}
+      <div className="mb-3 grid grid-cols-2 gap-1 rounded-2xl p-1" style={{ background: "var(--surface)", border: "1px solid var(--border)" }} role="tablist">
+        {(
+          [
+            ["cycle", "🌸 Цикл"],
+            ["together", "💞 Вместе"],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            role="tab"
+            aria-selected={tab === id}
+            onClick={() => pick(id)}
+            className="relative rounded-xl py-2 text-[0.875rem] font-semibold transition active:scale-[0.98]"
+            style={tab === id ? { background: FEM_GRADIENT, color: "#fff" } : { color: "var(--muted)" }}
+          >
+            {label}
+            {id === "together" && unanswered ? (
+              <span
+                className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 align-[1px] text-[0.625rem] font-bold tabular-nums text-white"
+                style={{ background: "var(--danger)" }}
+              >
+                {unanswered}
+              </span>
+            ) : null}
+          </button>
+        ))}
+      </div>
 
+      {tab === "together" ? (
+        <>
       <PartnerTogether
         name={name}
         status={partner.share_status ? (partner.today?.status ?? null) : null}
@@ -140,13 +177,22 @@ export function PartnerScreen() {
         likes={partner.likes ?? {}}
       />
 
+      <LikesCard name={name} likes={partner.likes ?? {}} />
+
+        </>
+      ) : (
+      <>
+      {info.phase && !partner.paused ? <DayHero phase={info.phase} day={now} who="partner" goal={partner.goal} /> : null}
+
+      <TogetherStrip who="partner" name={name} onOpen={() => pick("together")} className="mb-3" />
+
       {partner.paused ? (
         // Беременность: прогноз на паузе. Причину не называем — она скажет сама.
         <div className="fem-card rounded-3xl px-4 py-5 text-center">
           <p className="text-2xl">🌸</p>
           <p className="mt-1 text-[0.9375rem] font-semibold">Прогноз цикла на паузе</p>
           <p className="mt-1 text-[0.8125rem] leading-snug" style={{ color: "var(--muted)" }}>
-            {name} поставила прогноз на паузу. Просьбы и статус дня по-прежнему приходят сюда.
+            {name} поставила прогноз на паузу. Просьбы и статус дня по-прежнему во вкладке «Вместе».
           </p>
         </div>
       ) : (
@@ -211,17 +257,17 @@ export function PartnerScreen() {
           <Fact
             color={PHASE_COLOR.fertile}
             label={partner.goal === "conceive" ? "Лучшие дни" : "Фертильное окно"}
-            value={range(addDays(info.fertileStart!, shift), addDays(info.fertileEnd!, shift))}
-            hint={`овуляция ~${short(addDays(info.ovulation!, shift))}`}
+            value={fw ? range(fw.from, fw.to) : "после месячных"}
+            hint={fw ? `овуляция ~${short(fw.ovulation)}` : "посчитаем, когда они начнутся"}
           />
         </div>
       ) : null}
 
-      <LikesCard name={name} likes={partner.likes ?? {}} />
-
       <ForecastCard periods={partner.periods} logs={partner.symptom_days ?? []} info={info} who="partner" name={name} />
 
       <PartnerCalendar info={info} />
+      </>
+      )}
       </>
       )}
 

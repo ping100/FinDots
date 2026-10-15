@@ -33,7 +33,7 @@ export async function POST(request: Request) {
   const rows = (data ?? []) as ({ endpoint: string; p256dh: string; auth: string } & SignalRow)[];
   const results = await Promise.all(
     rows.map(async (row) => {
-      const result = await sendPush(row, { ...signalPush(row), url: "/fem", tag: `fem-signal-${id}`, data: { signal_id: id } });
+      const result = await sendPush(row, { ...signalPush(row), url: "/fem/together", tag: `fem-signal-${id}`, data: { signal_id: id } });
       if (result === "dead") {
         await supabase.rpc("drop_push_subscription", { p_secret: secret, p_endpoint: row.endpoint });
       }

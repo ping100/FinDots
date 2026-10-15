@@ -9,10 +9,12 @@ import { useFem } from "./DataProvider";
 import { Onboarding } from "./Onboarding";
 import { PartnerScreen } from "./PartnerScreen";
 import { Backdrop } from "./Backdrop";
+import { herNew } from "./Together";
 
 const TABS = [
   { href: "/fem", label: "Цикл", icon: "drop" },
   { href: "/fem/calendar", label: "Календарь", icon: "calendar" },
+  { href: "/fem/together", label: "Вместе", icon: "heart" },
   { href: "/fem/stats", label: "Итоги", icon: "chart" },
   { href: "/fem/settings", label: "Настройки", icon: "gear" },
 ];
@@ -24,8 +26,10 @@ const TABS = [
  */
 export function FemShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { ready, error, settings, partner } = useFem();
+  const { ready, error, settings, partner, signals, userId } = useFem();
   if (!ready) return <Loader />;
+  // Новое от партнёра без ответа — красный кружок на «Вместе».
+  const fresh = herNew(signals, userId).length;
 
   // Ссылка-приглашение открывается всегда — даже до первого входа в FemDots.
   if (pathname.startsWith("/fem/join")) {
@@ -73,7 +77,18 @@ export function FemShell({ children }: { children: ReactNode }) {
                 background: pathname === tab.href ? "var(--surface-2)" : undefined,
               }}
             >
-              <Icon name={tab.icon} size={21} />
+              <span className="relative">
+                <Icon name={tab.icon} size={21} />
+                {tab.href === "/fem/together" && fresh ? (
+                  <span
+                    className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[0.625rem] font-bold tabular-nums text-white"
+                    style={{ background: "var(--danger)" }}
+                    aria-label={`Новых: ${fresh}`}
+                  >
+                    {fresh}
+                  </span>
+                ) : null}
+              </span>
               <span className="text-[0.625rem]">{tab.label}</span>
             </Link>
           ))}

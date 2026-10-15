@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { today } from "@/lib/tasks/dates";
 import { toISODate } from "@/lib/savings";
@@ -206,10 +207,10 @@ export function OwnTogether() {
   };
 
   return (
-    <div className="fem-card mt-3 rounded-3xl p-4">
-      <p className="text-[0.9375rem] font-semibold">Вы и {name}</p>
-
+    <div className="space-y-3">
       {incoming.length ? (
+        <section className="fem-card animate-lift rounded-3xl p-4">
+        <p className="text-[0.9375rem] font-semibold">Новое</p>
         <div className="mt-2.5 space-y-1.5">
           {incoming.map((g) => {
             const t = signalText(g.last.kind, g.last.item);
@@ -274,10 +275,13 @@ export function OwnTogether() {
             );
           })}
         </div>
+        </section>
       ) : null}
 
-      <p className="mb-1.5 mt-3 text-xs font-semibold" style={{ color: "var(--muted)" }}>
-        Статус на сегодня — {name} увидит его
+      <section className="fem-card rounded-3xl p-4">
+      <p className="text-[0.9375rem] font-semibold">Статус на сегодня</p>
+      <p className="mb-2 text-[0.75rem]" style={{ color: "var(--muted)" }}>
+        {name} увидит его у себя
       </p>
       <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {[
@@ -309,9 +313,12 @@ export function OwnTogether() {
           ＋ Свой
         </button>
       </div>
+      </section>
 
-      <p className="mb-1.5 mt-3 text-xs font-semibold" style={{ color: "var(--muted)" }}>
-        Попросить одним нажатием
+      <section className="fem-card rounded-3xl p-4">
+      <p className="text-[0.9375rem] font-semibold">Попросить одним нажатием</p>
+      <p className="mb-2 text-[0.75rem]" style={{ color: "var(--muted)" }}>
+        Придёт уведомлением на его телефон — ответ увидите ниже
       </p>
       <div className="grid grid-cols-3 gap-2">
         <Ask emoji="💗" label="Нужна забота" disabled={busy} onClick={() => void send("care", undefined, `Отправлено ${name} 💗`)} />
@@ -336,13 +343,12 @@ export function OwnTogether() {
         </button>
       </div>
       <Note note={note} />
-
       <SentList signals={signals} userId={userId} name={name} she={false} title="Ваши просьбы" />
+      </section>
 
       <button
         onClick={() => setLikesOpen(true)}
-        className="mt-3 flex w-full items-center gap-2.5 rounded-2xl px-3.5 py-3 text-left transition active:scale-[0.98]"
-        style={{ background: "var(--surface-2)" }}
+        className="fem-card flex w-full items-center gap-3 rounded-3xl px-4 py-3.5 text-left transition active:scale-[0.98]"
       >
         <span className="text-lg">💝</span>
         <span className="min-w-0 flex-1">
@@ -747,5 +753,75 @@ function CustomEditor({
         </div>
       ) : null}
     </div>
+  );
+}
+
+/** Её новое без ответа: сердечки, приглашения, «позабочусь», отметки близости. */
+export function herNew(signals: FemSignal[], userId: string | null) {
+  // Отвечают на последний в группе — значит, отвечена вся группа.
+  return grouped(signals.filter((s) => s.to_id === userId && fresh(s) && INCOMING_HER.has(s.kind))).filter(
+    (g) => !signals.some((x) => x.from_id === userId && x.reply_to != null && g.ids.includes(x.reply_to)),
+  );
+}
+
+/** Его новое без ответа: её просьбы, на которые он ещё не ответил. */
+export function partnerNew(signals: FemSignal[], userId: string | null) {
+  const asks = signals.filter((s) => s.to_id === userId && fresh(s) && ASKS.has(s.kind));
+  return grouped(asks).filter((g) =>
+    g.ids.every((id) => {
+      const a = repliesTo(signals, asks.find((s) => s.id === id)!);
+      return !a.reply && !a.done;
+    }),
+  );
+}
+
+/**
+ * Тонкая полоска на «Цикле»: есть новое от партнёра — «Саша: Думаю о тебе ·
+ * ответить». Чтобы не пропустить, не заходя во «Вместе».
+ */
+export function TogetherStrip({
+  who,
+  name,
+  href,
+  onOpen,
+  className = "mt-3",
+}: {
+  who: "her" | "partner";
+  name: string;
+  href?: string;
+  onOpen?: () => void;
+  className?: string;
+}) {
+  const { signals, userId } = useFem();
+  const list = who === "her" ? herNew(signals, userId) : partnerNew(signals, userId);
+  if (!list.length) return null;
+  const t = signalText(list[0].last.kind, list[0].last.item);
+  const body = (
+    <>
+      <span className="text-xl">{t.emoji}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[0.875rem]">
+          <b>{name}:</b> {list[0].last.kind === "intim" ? "отметил близость" : t.text}
+        </span>
+        {list.length > 1 ? (
+          <span className="block text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+            и ещё {list.length - 1}
+          </span>
+        ) : null}
+      </span>
+      <span className="shrink-0 rounded-full px-3 py-1.5 text-[0.75rem] font-semibold text-white" style={{ background: FEM_GRADIENT }}>
+        Ответить
+      </span>
+    </>
+  );
+  const cls = `fem-card animate-lift ${className} flex w-full items-center gap-3 rounded-3xl py-2.5 pl-4 pr-2.5 text-left transition active:scale-[0.98]`;
+  return href ? (
+    <Link href={href} replace className={cls}>
+      {body}
+    </Link>
+  ) : (
+    <button onClick={onOpen} className={cls}>
+      {body}
+    </button>
   );
 }

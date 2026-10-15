@@ -9,7 +9,7 @@ import { useFem } from "./DataProvider";
 import { Onboarding } from "./Onboarding";
 import { PartnerScreen } from "./PartnerScreen";
 import { Backdrop } from "./Backdrop";
-import { herNew } from "./Together";
+import { unread } from "./Together";
 
 const TABS = [
   { href: "/fem", label: "Цикл", icon: "drop" },
@@ -28,8 +28,8 @@ export function FemShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { ready, error, settings, partner, signals, userId } = useFem();
   if (!ready) return <Loader />;
-  // Новое от партнёра без ответа — красный кружок на «Вместе».
-  const fresh = herNew(signals, userId).length;
+  // Непрочитанное от партнёра — красный кружок на «Вместе».
+  const fresh = unread(signals, userId).length;
 
   // Ссылка-приглашение открывается всегда — даже до первого входа в FemDots.
   if (pathname.startsWith("/fem/join")) {

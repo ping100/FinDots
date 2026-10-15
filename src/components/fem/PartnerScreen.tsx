@@ -11,11 +11,10 @@ import { useFem } from "./DataProvider";
 import { FemHeader } from "./Shell";
 import { DayHero, plural } from "./parts";
 import { CycleDial, DialStyleRow, flowerStage } from "./CycleDial";
-import { PartnerTogether, TogetherStrip, partnerNew } from "./Together";
+import { Chat, TogetherStrip, unread } from "./Together";
 import { PartnerCalendar } from "./PartnerCalendar";
 import { ForecastCard } from "./Insights";
 import { PartnerToday } from "./PartnerToday";
-import { LikesCard } from "./TogetherParts";
 import { adviceFor } from "@/lib/fem/partnerAdvice";
 import { THEMES } from "@/lib/look";
 import { TEXT_SCALES } from "@/lib/textScale";
@@ -76,7 +75,7 @@ const PARTNER_PHASE: Record<Phase, { title: string; about: string; tips: string[
  * она поделилась; отключиться можно в любой момент.
  */
 export function PartnerScreen() {
-  const { partner, leavePartner, setPartnerRemind, setPartnerHint, profile, saveProfile, signals, userId } = useFem();
+  const { partner, leavePartner, setPartnerRemind, setPartnerHint, profile, saveProfile, signals, userId, settings } = useFem();
   const now = today();
   const [confirm, setConfirm] = useState(false);
   const [prefs, setPrefs] = useState(false);
@@ -88,7 +87,7 @@ export function PartnerScreen() {
     setTab(next);
     window.scrollTo({ top: 0 });
   };
-  const unanswered = partnerNew(signals, userId).length;
+  const unanswered = unread(signals, userId).length;
   const info = useMemo(
     () =>
       partner
@@ -168,23 +167,24 @@ export function PartnerScreen() {
 
       {tab === "together" ? (
         <>
-      <PartnerTogether
+      <Chat
+        who="partner"
         name={name}
         status={partner.share_status ? (partner.today?.status ?? null) : null}
         tip={tip}
         info={partner.paused ? null : info}
         periods={partner.periods}
         likes={partner.likes ?? {}}
+        // Ведёт и свой цикл — внизу её панель вкладок, поле ввода выше неё.
+        bottom={settings ? "calc(env(safe-area-inset-bottom) + 92px)" : "calc(env(safe-area-inset-bottom) + 12px)"}
       />
-
-      <LikesCard name={name} likes={partner.likes ?? {}} />
 
         </>
       ) : (
       <>
       {info.phase && !partner.paused ? <DayHero phase={info.phase} day={now} who="partner" goal={partner.goal} /> : null}
 
-      <TogetherStrip who="partner" name={name} onOpen={() => pick("together")} className="mb-3" />
+      <TogetherStrip name={name} onOpen={() => pick("together")} className="mb-3" />
 
       {partner.paused ? (
         // Беременность: прогноз на паузе. Причину не называем — она скажет сама.
@@ -271,9 +271,11 @@ export function PartnerScreen() {
       </>
       )}
 
-      <p className="mt-5 px-4 text-center text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
-        Вы видите только то, чем {name} поделилась. Ваши отметки близости появляются у неё только после её подтверждения. Прогноз — оценка, а не медицинский совет.
-      </p>
+      {tab === "cycle" ? (
+        <p className="mt-5 px-4 text-center text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
+          Вы видите только то, чем {name} поделилась. Ваши отметки близости появляются у неё только после её подтверждения. Прогноз — оценка, а не медицинский совет.
+        </p>
+      ) : null}
 
       {/* Настройки партнёра — в шапке, чтобы главный экран оставался чистым. */}
       <Sheet open={prefs} title="Настройки" onClose={() => { setPrefs(false); setConfirm(false); }}>

@@ -104,7 +104,7 @@ export default function FemToday() {
         )}
       </div>
 
-      {share?.partner_name ? <TogetherStrip who="her" name={share.partner_name} href="/fem/together" /> : null}
+      {share?.partner_name ? <TogetherStrip name={share.partner_name} href="/fem/together" /> : null}
 
       <FirstSteps partner={share?.partner_name ?? null} />
 

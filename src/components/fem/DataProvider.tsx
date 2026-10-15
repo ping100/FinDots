@@ -54,6 +54,8 @@ export interface FemStore {
   markSignalsSeen: () => Promise<void>;
   /** Смахнуть / закрыть отвеченные: больше не показывать. */
   dismissSignals: (ids: number[]) => Promise<void>;
+  /** Подтянуть переписку сейчас (чат открыт — чаще, чем раз в 30 секунд). */
+  refreshSignals: () => Promise<void>;
   /** Ответить на сигнал: словами (reply) или «готово» (done). */
   replySignal: (to: number, kind: "reply" | "done", text: string) => Promise<void>;
   /** Её ответ на отметку близости от партнёра: было / не было. */
@@ -72,7 +74,7 @@ export interface FemStore {
   setIntimacy: (day: string, value: Intim | null) => Promise<void>;
 }
 
-export type SignalKind = "care" | "buy" | "alone" | "heart" | "ok" | "custom" | "reply" | "done" | "will" | "invite" | "intim";
+export type SignalKind = "care" | "buy" | "alone" | "heart" | "ok" | "custom" | "reply" | "done" | "will" | "invite" | "intim" | "msg";
 
 export interface FemSignal {
   id: number;
@@ -440,13 +442,14 @@ export function FemProvider({ children }: { children: ReactNode }) {
   );
 
   const loadSignals = useCallback(async () => {
-    const since = new Date(Date.now() - 3 * 86400000).toISOString();
+    // Переписка пары — за 30 дней.
+    const since = new Date(Date.now() - 30 * 86400000).toISOString();
     const res = await supabase
       .from("fem_signals")
       .select("id, from_id, to_id, kind, item, created_at, seen_at, dismissed_at, reply_to")
       .gte("created_at", since)
       .order("created_at", { ascending: false })
-      .limit(80);
+      .limit(300);
     if (!res.error) setSignals((res.data ?? []) as FemSignal[]);
   }, [supabase]);
 
@@ -574,14 +577,14 @@ export function FemProvider({ children }: { children: ReactNode }) {
       ready, error, profile, settings, periods, days, saveSettings, saveProfile, startPeriod, endPeriod, deletePeriod, saveDay, deleteAll,
       partner, share, createShare, updateShare, revokeShare, acceptCode, leavePartner, setPartnerRemind, reloadShares,
       userId, signals, sendSignal, markSignalsSeen, dismissSignals, shareOptions, setShareOptions,
-      replySignal, confirmIntimacy, proposeIntimacy, setPartnerHint,
+      replySignal, confirmIntimacy, proposeIntimacy, setPartnerHint, refreshSignals: loadSignals,
       intimacy, setIntimacy,
     }),
     [
       ready, error, profile, settings, periods, days, saveSettings, saveProfile, startPeriod, endPeriod, deletePeriod, saveDay, deleteAll,
       partner, share, createShare, updateShare, revokeShare, acceptCode, leavePartner, setPartnerRemind, reloadShares,
       userId, signals, sendSignal, markSignalsSeen, dismissSignals, shareOptions, setShareOptions,
-      replySignal, confirmIntimacy, proposeIntimacy, setPartnerHint,
+      replySignal, confirmIntimacy, proposeIntimacy, setPartnerHint, loadSignals,
       intimacy, setIntimacy,
     ],
   );

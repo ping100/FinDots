@@ -59,6 +59,8 @@ export function signalPush(row: SignalRow): { title: string; body: string; actio
       const c = unpackCustom(row.item);
       return { title: `${c?.emoji ?? "💌"} ${name}`, body: c?.label ?? row.item ?? "Просьба", actions };
     }
+    case "msg":
+      return { title: `💬 ${name}`, body: row.item ?? "Новое сообщение" };
     case "reply":
       return { title: `💬 ${name}`, body: what ? `${row.item ?? ""} — на «${what}»` : (row.item ?? "Ответ") };
     case "done":

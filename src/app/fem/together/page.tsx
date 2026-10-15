@@ -1,13 +1,14 @@
 "use client";
 
-import { OwnTogether } from "@/components/fem/Together";
+import { Chat } from "@/components/fem/Together";
 import { PartnerShare } from "@/components/fem/PartnerShare";
 import { useFem } from "@/components/fem/DataProvider";
 import { FemHeader } from "@/components/fem/Shell";
 
 /**
- * «Вместе»: всё общение с партнёром — новое от него, статус дня, просьбы,
- * как они идут, «Что я люблю». Партнёр не подключён — тут же и подключить.
+ * «Вместе»: переписка с партнёром — сообщения, просьбы, его ответы,
+ * приглашения; сверху статус дня. Партнёр не подключён — тут же и
+ * подключить.
  */
 export default function FemTogether() {
   const { share } = useFem();
@@ -16,7 +17,7 @@ export default function FemTogether() {
     <div className="mx-auto w-full max-w-md px-4 pb-32">
       <FemHeader title={name ? `Вы и ${name}` : "Вместе"} sub="FemDots" />
       {name ? (
-        <OwnTogether />
+        <Chat who="her" name={name} bottom="calc(env(safe-area-inset-bottom) + 92px)" />
       ) : (
         <PartnerShare />
       )}

@@ -55,6 +55,8 @@ export function signalText(kind: string, item: string | null): { emoji: string; 
       const c = unpackCustom(item);
       return { emoji: c?.emoji ?? "💌", text: c?.label ?? "Просьба" };
     }
+    case "msg":
+      return { emoji: "💬", text: item ?? "" };
     case "reply":
       return { emoji: "💬", text: item ?? "Ответ" };
     case "done":

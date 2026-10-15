@@ -12,6 +12,7 @@ import { FemHeader } from "./Shell";
 import { DayHero, plural } from "./parts";
 import { CycleDial, DialStyleRow, flowerStage } from "./CycleDial";
 import { Chat, TogetherStrip, unread } from "./Together";
+import { IntimForm } from "./TogetherParts";
 import { PartnerCalendar } from "./PartnerCalendar";
 import { ForecastCard } from "./Insights";
 import { PartnerToday } from "./PartnerToday";
@@ -75,11 +76,12 @@ const PARTNER_PHASE: Record<Phase, { title: string; about: string; tips: string[
  * она поделилась; отключиться можно в любой момент.
  */
 export function PartnerScreen() {
-  const { partner, leavePartner, setPartnerRemind, setPartnerHint, profile, saveProfile, signals, userId, settings } = useFem();
+  const { partner, leavePartner, setPartnerRemind, setPartnerHint, profile, saveProfile, signals, userId, settings, proposeIntimacy } = useFem();
   const now = today();
   const [confirm, setConfirm] = useState(false);
   const [prefs, setPrefs] = useState(false);
-  const [sheet, setSheet] = useState<"day" | null>(null);
+  const [sheet, setSheet] = useState<"day" | "intim" | null>(null);
+  const [intimNote, setIntimNote] = useState<{ text: string; bad?: boolean } | null>(null);
   // Вкладка: по ссылке из уведомления (/fem/together) — сразу «Вместе».
   const pathname = usePathname();
   const [tab, setTab] = useState<"cycle" | "together">(() => (pathname === "/fem/together" ? "together" : "cycle"));
@@ -276,6 +278,21 @@ export function PartnerScreen() {
 
       <ForecastCard periods={partner.periods} logs={partner.symptom_days ?? []} info={info} who="partner" name={name} />
 
+      {/* Отметка близости — рядом с календарём, где она и видна. */}
+      <button
+        onClick={() => setSheet("intim")}
+        className="fem-card mt-3 flex w-full items-center gap-3 rounded-3xl px-4 py-3.5 text-left transition active:scale-[0.98]"
+      >
+        <span className="text-xl">🤍</span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[0.9375rem] font-semibold">Отметить близость</span>
+          <span className="block text-[0.75rem]" style={{ color: intimNote?.bad ? "var(--danger)" : "var(--muted)" }}>
+            {intimNote?.text ?? `${name} подтвердит — тогда отметка появится в календаре`}
+          </span>
+        </span>
+        <Icon name="chevron-right" size={16} className="opacity-30" />
+      </button>
+
       <PartnerCalendar info={info} />
       </>
       )}
@@ -287,6 +304,20 @@ export function PartnerScreen() {
           Вы видите только то, чем {name} поделилась. Ваши отметки близости появляются у неё только после её подтверждения. Прогноз — оценка, а не медицинский совет.
         </p>
       ) : null}
+
+      <Sheet open={sheet === "intim"} title="Отметить близость" onClose={() => setSheet(null)}>
+        {sheet === "intim" ? (
+          <IntimForm
+            name={name}
+            onSend={(day, kinds, prot) => {
+              setSheet(null);
+              proposeIntimacy(day, kinds, prot)
+                .then(() => setIntimNote({ text: `Отправлено — ${name} подтвердит в чате` }))
+                .catch((e: unknown) => setIntimNote({ text: e instanceof Error ? e.message : "Не получилось отправить", bad: true }));
+            }}
+          />
+        ) : null}
+      </Sheet>
 
       {/* Настройки партнёра — в шапке, чтобы главный экран оставался чистым. */}
       <Sheet open={prefs} title="Настройки" onClose={() => { setPrefs(false); setConfirm(false); }}>
@@ -368,7 +399,7 @@ export function PartnerScreen() {
       </Sheet>
 
       <Sheet
-        open={sheet !== null}
+        open={sheet === "day"}
         title={`${info.cycleDay}-й день цикла`}
         onClose={() => setSheet(null)}
       >

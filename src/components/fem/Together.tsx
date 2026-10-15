@@ -23,7 +23,7 @@ import {
 import { Sheet } from "@/components/ui";
 import { useFem, type FemSignal, type SignalKind } from "./DataProvider";
 import { burst, centerOf } from "@/lib/fem/fx";
-import { IntimForm, InviteForm, LikesCard, LikesEditor, ReplyBox, Steps, intimLine, repliesTo } from "./TogetherParts";
+import { InviteForm, LikesCard, LikesEditor, ReplyBox, Steps, intimLine, repliesTo } from "./TogetherParts";
 
 /**
  * «Вместе» — переписка пары. В одной ленте всё подряд: обычные сообщения,
@@ -160,12 +160,12 @@ export function Chat({
   /** Отступ панели ввода от низа экрана — над нижним меню или без него. */
   bottom: string;
 }) {
-  const { signals, userId, replySignal, confirmIntimacy, proposeIntimacy, markSignalsSeen, refreshSignals, days, saveDay, settings, saveSettings } =
+  const { signals, userId, replySignal, confirmIntimacy, markSignalsSeen, refreshSignals, days, saveDay, settings, saveSettings } =
     useFem();
   const { send, run, note, busy } = useSend();
   const now = today();
   const [text, setText] = useState("");
-  const [sheet, setSheet] = useState<"buy" | "invite" | "intim" | "likes" | "ask" | "status" | null>(null);
+  const [sheet, setSheet] = useState<"buy" | "invite" | "likes" | "ask" | "status" | null>(null);
   const [answered, setAnswered] = useState<Map<number, string>>(new Map());
 
   // Чат открыт — переписка подтягивается чаще, чем раз в 30 секунд.
@@ -341,7 +341,6 @@ export function Chat({
               <>
                 <Quick emoji="❤️" label="Думаю о тебе" disabled={busy} onClick={(e) => { burstAt(e, "❤️"); void send("heart", undefined); }} />
                 <Quick emoji="💌" label="Позвать на вечер" onClick={() => setSheet("invite")} />
-                <Quick emoji="🤍" label="Отметить близость" onClick={() => setSheet("intim")} />
               </>
             )}
           </div>
@@ -408,17 +407,6 @@ export function Chat({
             onSend={(item) => {
               setSheet(null);
               void send("invite", item);
-            }}
-          />
-        ) : null}
-      </Sheet>
-      <Sheet open={sheet === "intim"} title="Отметить близость" onClose={() => setSheet(null)}>
-        {sheet === "intim" ? (
-          <IntimForm
-            name={name}
-            onSend={(day, kinds, prot) => {
-              setSheet(null);
-              void run(() => proposeIntimacy(day, kinds, prot), `${name} подтвердит отметку 🤍`);
             }}
           />
         ) : null}

@@ -25,7 +25,7 @@ interface HintData {
 /**
  * Совет на день партнёру, утром по его часам: как позаботиться о ней
  * сегодня — по фазе цикла и тому, чем она делится. Тот же совет, что на
- * его экране. Кнопка «Сделаю» шлёт ей «позаботится» (см. /api/fem-act).
+ * его экране. Просто подсказка — отвечать на неё не нужно.
  *
  * Зовёт база (pg_cron, kick_fem_partner_hints) с секретом из Vault.
  */
@@ -50,8 +50,6 @@ export async function POST(request: Request) {
         body: tip,
         url: "/fem/together",
         tag: "fem-hint",
-        actions: [{ action: "will", title: "Сделаю 👍" }],
-        data: { act: "will", text: tip },
       });
       if (result === "dead") await supabase.rpc("drop_push_subscription", { p_secret: secret, p_endpoint: row.endpoint });
       return result;

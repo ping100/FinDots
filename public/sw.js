@@ -87,7 +87,7 @@ function openApp(path) {
 // подтверждаем. Не вышло (нет входа, нет сети) — открываем приложение.
 function answer(action, data) {
   const extra = (data && data.extra) || {};
-  const body = action === "will" ? { action, text: extra.text } : { action, signal_id: extra.signal_id };
+  const body = { action, signal_id: extra.signal_id };
   return fetch("/api/fem-act", {
     method: "POST",
     credentials: "same-origin",

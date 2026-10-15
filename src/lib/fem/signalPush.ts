@@ -27,7 +27,6 @@ const ACTIONS: Record<string, string[]> = {
   alone: ["ok"],
   heart: ["metoo", "hug"],
   invite: ["yes", "no"],
-  will: ["thanks"],
 };
 
 /** Текст ответа по коду — сервер берёт его отсюда, а не из уведомления. */

@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { today } from "@/lib/tasks/dates";
-import { toISODate } from "@/lib/savings";
 import { FEM_GRADIENT, type CycleInfo, type FemPeriod } from "@/lib/fem/cycle";
 import {
   BUY_ITEMS,
@@ -30,8 +29,8 @@ import { burst, centerOf } from "@/lib/fem/fx";
 /** Просьбы и сердечки живут 12 часов — дальше гаснут сами. */
 const LIFE = 12 * 3_600_000;
 const fresh = (s: FemSignal) => Date.now() - Date.parse(s.created_at) < LIFE && !s.dismissed_at;
-/** Что приходит ей и ждёт ответа: сердечко, «позабочусь», приглашение, отметка близости. */
-const INCOMING_HER = new Set(["heart", "will", "invite", "intim"]);
+/** Что приходит ей и ждёт ответа: сердечко, приглашение, отметка близости. */
+const INCOMING_HER = new Set(["heart", "invite", "intim"]);
 /** Её просьбы, которые видит партнёр. */
 const ASKS = new Set(["care", "buy", "alone", "custom"]);
 
@@ -424,7 +423,7 @@ function Ask({ emoji, label, onClick, disabled }: { emoji: string; label: string
 
 /**
  * Сторона партнёра: её просьбы с ответами (три готовых и своё), ход
- * «бегу → готово», её статус дня, совет на сегодня с «Сделаю»,
+ * «бегу → готово», её статус дня, совет на сегодня (просто подсказка),
  * «Думаю о тебе», «Позвать на вечер» и отметка близости.
  */
 export function PartnerTogether({
@@ -472,7 +471,6 @@ export function PartnerTogether({
     }
   }, [now, status]);
   const st = statusHidden ? null : statusOf(status);
-  const tipSent = signals.some((s) => s.from_id === userId && s.kind === "will" && toISODate(new Date(s.created_at)) === now);
 
   useEffect(() => {
     if (signals.some((s) => s.to_id === userId && !s.seen_at && fresh(s))) void markSignalsSeen();
@@ -592,20 +590,6 @@ export function PartnerTogether({
             </span>
             <span className="block text-[0.875rem] font-medium leading-snug">{tip}</span>
           </span>
-          {tipSent ? (
-            <span className="shrink-0 text-[0.75rem] font-semibold" style={{ color: "#14b8a6" }}>
-              {name} знает ✓
-            </span>
-          ) : (
-            <button
-              onClick={() => void send("will", tip, `${name} узнает, что вы позаботитесь 💗`)}
-              disabled={busy}
-              className="shrink-0 rounded-full px-3.5 py-2 text-[0.8125rem] font-semibold text-white transition active:scale-95 disabled:opacity-60"
-              style={{ background: FEM_GRADIENT }}
-            >
-              Сделаю 👍
-            </button>
-          )}
         </div>
       ) : null}
 
@@ -756,7 +740,7 @@ function CustomEditor({
   );
 }
 
-/** Её новое без ответа: сердечки, приглашения, «позабочусь», отметки близости. */
+/** Её новое без ответа: сердечки, приглашения, отметки близости. */
 export function herNew(signals: FemSignal[], userId: string | null) {
   // Отвечают на последний в группе — значит, отвечена вся группа.
   return grouped(signals.filter((s) => s.to_id === userId && fresh(s) && INCOMING_HER.has(s.kind))).filter(

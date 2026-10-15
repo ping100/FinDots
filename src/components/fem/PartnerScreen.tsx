@@ -293,7 +293,7 @@ export function PartnerScreen() {
             <span className="min-w-0 flex-1">
               <span className="block text-[0.9375rem]">Совет на день</span>
               <span className="mt-0.5 block text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
-                Утром пришлём, как позаботиться о {name} сегодня, — с кнопкой «Сделаю»
+                Утром пришлём подсказку, как позаботиться о {name} сегодня
               </span>
             </span>
             <Switch checked={partner.hint ?? true} onChange={(v) => void setPartnerHint(v)} label="Совет на день" />

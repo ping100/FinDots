@@ -136,17 +136,6 @@ export function PartnerScreen() {
         </p>
       ) : null}
 
-      {phase && info.phase ? (
-        <PartnerToday
-          name={name}
-          info={info}
-          mood={partner.share_mood ? (mood ?? null) : null}
-          symptoms={partner.share_symptoms ? symptoms.filter((x) => !!x).map((x) => x!) : []}
-          goal={partner.goal ?? null}
-          onAbout={() => setSheet("day")}
-        />
-      ) : null}
-
       <div className="fem-card rounded-[28px] px-4 pb-5 pt-6">
         {info.lastStart ? (
           <CycleDial info={info} size={270} />
@@ -163,6 +152,18 @@ export function PartnerScreen() {
           </p>
         ) : null}
       </div>
+
+      {/* Сначала цветок — главное, потом «что с ней сегодня» и подсказки. */}
+      {phase && info.phase ? (
+        <PartnerToday
+          name={name}
+          info={info}
+          mood={partner.share_mood ? (mood ?? null) : null}
+          symptoms={partner.share_symptoms ? symptoms.filter((x) => !!x).map((x) => x!) : []}
+          goal={partner.goal ?? null}
+          onAbout={() => setSheet("day")}
+        />
+      ) : null}
 
       {info.nextStart ? (
         <div className="mt-3 grid grid-cols-2 gap-2">

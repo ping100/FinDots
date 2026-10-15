@@ -71,7 +71,7 @@ export function PartnerToday({
         : null;
 
   return (
-    <div className="fem-card mb-4 rounded-3xl p-4">
+    <div className="fem-card mt-3 rounded-3xl p-4">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-[0.9375rem] font-semibold">{name} сегодня</p>

@@ -31,7 +31,8 @@ function ruError(message: string): string {
   if (short) return `Пароль короче ${short[1]} символов`;
   if (text.includes("password should be")) return "Пароль слишком простой";
   if (text.includes("unable to validate email")) return "Проверьте адрес почты";
-  if (text.includes("failed to fetch")) return "Нет связи с сервером — проверьте интернет";
+  if (text.includes("failed to fetch") || text.includes("load failed")) return "Нет связи с сервером — проверьте интернет";
+  if (text.includes("network timeout")) return "Сервер долго не отвечает — проверьте интернет и нажмите ещё раз";
   const wait = message.match(/after (\d+) seconds?/i);
   if (wait) return `Слишком часто. Попробуйте через ${wait[1]} с`;
   return message;
@@ -63,6 +64,17 @@ function LoginForm() {
     if (params.get("error")) setProblem("Вход через Google не завершился — попробуйте ещё раз");
   }, [params]);
 
+  // Ушли на Google и вернулись кнопкой «Назад» — iPhone восстанавливает
+  // страницу целиком, вместе с «Минуту…» на кнопках, и они так и остаются
+  // нажатыми. Возврат из такой памяти снимает ожидание.
+  useEffect(() => {
+    const onShow = (e: PageTransitionEvent) => {
+      if (e.persisted) setBusy(false);
+    };
+    window.addEventListener("pageshow", onShow);
+    return () => window.removeEventListener("pageshow", onShow);
+  }, []);
+
   // Без ключа капчи её просто нет, и вход ничем не отличается от прежнего.
   const captchaRequired = !!TURNSTILE_SITE_KEY;
 
@@ -75,14 +87,18 @@ function LoginForm() {
     const supabase = createClient();
 
     const captcha = captchaToken ?? undefined;
-    const result =
+    // Сеть пропала посреди запроса — не висим на «Минуту…» вечно.
+    const timeout = new Promise<{ error: { message: string }; data: { session: null } }>((done) =>
+      setTimeout(() => done({ error: { message: "network timeout" }, data: { session: null } }), 25_000),
+    );
+    const request =
       mode === "in"
-        ? await supabase.auth.signInWithPassword({
+        ? supabase.auth.signInWithPassword({
             email,
             password,
             options: { captchaToken: captcha },
           })
-        : await supabase.auth.signUp({
+        : supabase.auth.signUp({
             email,
             password,
             options: {
@@ -97,6 +113,7 @@ function LoginForm() {
               },
             },
           });
+    const result = await Promise.race([request, timeout]);
 
     setBusy(false);
 

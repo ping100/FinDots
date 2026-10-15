@@ -4,19 +4,27 @@ import { Greeting } from "@/components/Greeting";
 import { HomeWidgets } from "@/components/HomeWidgets";
 import { HomeSky } from "@/components/home/Sky";
 import { SKY_SCRIPT } from "@/lib/sky";
+import { createClient } from "@/lib/supabase/server";
+import { Landing } from "@/components/landing/Landing";
 
 /**
  * Развилка: одна учётная запись, несколько приложений Dots.
  *
  * Небо по времени суток, приветствие, погода с курсом и орбита — шары
  * приложений медленно кружат вокруг знака Dots. Сводка под орбитой
- * включается в шестерёнке (HomeApps). Без входа сюда не пускает proxy.
+ * включается в шестерёнке (HomeApps). Гость видит вместо этого лендинг.
  */
 export default async function Home({
   searchParams,
 }: {
   searchParams: Promise<{ denied?: string }>;
 }) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return <Landing />;
+
   const { denied } = await searchParams;
   const deniedName = { money: "Деньги", tasks: "Задачи", fem: "Цикл" }[denied ?? ""] ?? null;
 

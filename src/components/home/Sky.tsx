@@ -16,7 +16,7 @@ import { SKY_WORD, skyPeriod, type SkyPeriod } from "@/lib/sky";
  * Движение замирает, когда приложение свёрнуто, и выключено вовсе при
  * системной настройке «меньше движения».
  */
-export function HomeSky({ script, children }: { script: ReactNode; children: ReactNode }) {
+export function HomeSky({ script, children, pill = true }: { script: ReactNode; children: ReactNode; pill?: boolean }) {
   const [period, setPeriod] = useState<SkyPeriod | null>(null);
   const [paused, setPaused] = useState(false);
 
@@ -60,7 +60,7 @@ export function HomeSky({ script, children }: { script: ReactNode; children: Rea
           ))}
         </span>
       </div>
-      {period ? (
+      {period && pill ? (
         <span
           className="animate-fade fixed left-4 z-[1] flex h-8 items-center gap-1.5 rounded-full px-3 text-[0.75rem] font-semibold"
           style={{

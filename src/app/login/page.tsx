@@ -44,7 +44,8 @@ function LoginForm() {
   // Только свои пути: ссылку на вход с чужим адресом может прислать кто угодно.
   const next = safeNext(params.get("next"));
   const googleReady = useProvider("google");
-  const [mode, setMode] = useState<"in" | "up">("in");
+  // С лендинга «Создать аккаунт» ведёт сразу на регистрацию.
+  const [mode, setMode] = useState<"in" | "up">(() => (params.get("mode") === "up" ? "up" : "in"));
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

@@ -9,45 +9,7 @@ import { HomeSummary } from "./home/HomeSummary";
 import { SunPath } from "./home/SunPath";
 import { Sheet, Switch } from "./ui";
 
-/** Приложения Dots на развилке. Какие показывать — выбирают шестерёнкой. */
-export const APPS = [
-  {
-    id: "money",
-    href: "/money",
-    name: "Findots",
-    what: "Деньги",
-    hint: "Сколько есть, сколько ушло и сколько можно потратить сегодня",
-    icon: "wallet",
-    color: "#22c55e",
-    hi: "#86efac",
-    lo: "#15803d",
-    summary: "Сколько можно тратить сегодня",
-  },
-  {
-    id: "tasks",
-    href: "/tasks",
-    name: "Todots",
-    what: "Задачи",
-    hint: "Что сделать сегодня, что переносится и что горит",
-    icon: "list",
-    color: "#60a5fa",
-    hi: "#bfdbfe",
-    lo: "#1d4ed8",
-    summary: "Сколько задач осталось и что дальше",
-  },
-  {
-    id: "fem",
-    href: "/fem",
-    name: "FemDots",
-    what: "Цикл",
-    hint: "Календарь цикла: прогноз месячных, овуляция и самочувствие",
-    icon: "flower",
-    color: "#ec4899",
-    hi: "#fbcfe8",
-    lo: "#be185d",
-    summary: "День цикла и сколько до месячных",
-  },
-] as const;
+import { APPS } from "@/lib/apps";
 
 const KEY = "dots.home.apps";
 const DEFAULT = ["money", "tasks"];

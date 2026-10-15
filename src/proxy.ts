@@ -49,7 +49,10 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isPublic = PUBLIC_PATHS.some((p) => request.nextUrl.pathname.startsWith(p));
+  // Главная гостю — лендинг (решает сама страница), поэтому открыта. Только
+  // ровно «/»: startsWith("/") открыл бы всё.
+  const isPublic =
+    request.nextUrl.pathname === "/" || PUBLIC_PATHS.some((p) => request.nextUrl.pathname.startsWith(p));
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();

@@ -160,12 +160,12 @@ export function Chat({
   /** Отступ панели ввода от низа экрана — над нижним меню или без него. */
   bottom: string;
 }) {
-  const { signals, userId, replySignal, confirmIntimacy, markSignalsSeen, refreshSignals, days, saveDay, settings, saveSettings } =
+  const { signals, userId, replySignal, confirmIntimacy, clearChat, markSignalsSeen, refreshSignals, days, saveDay, settings, saveSettings } =
     useFem();
   const { send, run, note, busy } = useSend();
   const now = today();
   const [text, setText] = useState("");
-  const [sheet, setSheet] = useState<"buy" | "invite" | "likes" | "ask" | "status" | null>(null);
+  const [sheet, setSheet] = useState<"buy" | "invite" | "likes" | "ask" | "status" | "clear" | null>(null);
   const [answered, setAnswered] = useState<Map<number, string>>(new Map());
 
   // Чат открыт — переписка подтягивается чаще, чем раз в 30 секунд.
@@ -275,6 +275,14 @@ export function Chat({
           <LikesCard name={name} likes={likes ?? {}} />
         </div>
       )}
+
+      {feed.length ? (
+        <div className="mt-3 flex justify-end">
+          <button onClick={() => setSheet("clear")} className="px-1 text-[0.75rem]" style={{ color: "var(--muted)" }}>
+            🗑 Очистить переписку
+          </button>
+        </div>
+      ) : null}
 
       {/* ───── лента ───── */}
       <div className="mt-4 flex flex-col gap-1.5">
@@ -394,6 +402,27 @@ export function Chat({
             onSave={(next) => void saveSettings(sheet === "ask" ? { custom_asks: next } : { custom_statuses: next })}
           />
         ) : null}
+      </Sheet>
+      <Sheet open={sheet === "clear"} title="Очистить переписку?" onClose={() => setSheet(null)}>
+        <div className="space-y-3 pb-3">
+          <p className="text-[0.875rem] leading-snug" style={{ color: "var(--muted)" }}>
+            Удалятся все сообщения, просьбы, ответы и приглашения — у вас и у {who === "her" ? "партнёра" : name}. Вернуть их будет
+            нельзя. Цикл, дневник и отметки в календаре останутся.
+          </p>
+          <button
+            onClick={() => {
+              setSheet(null);
+              void run(() => clearChat(), "Переписка очищена");
+            }}
+            className="w-full rounded-2xl py-3 text-[0.9375rem] font-semibold text-white"
+            style={{ background: "var(--danger)" }}
+          >
+            Удалить всю переписку
+          </button>
+          <button onClick={() => setSheet(null)} className="w-full rounded-2xl py-3 text-[0.9375rem] font-semibold" style={{ background: "var(--surface-2)" }}>
+            Отмена
+          </button>
+        </div>
       </Sheet>
       <Sheet open={sheet === "likes"} title="Что я люблю" onClose={() => setSheet(null)}>
         {sheet === "likes" ? <LikesEditor name={name} likes={settings?.likes ?? {}} onSave={(next) => void saveSettings({ likes: next })} /> : null}

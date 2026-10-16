@@ -56,6 +56,8 @@ export interface FemStore {
   dismissSignals: (ids: number[]) => Promise<void>;
   /** Подтянуть переписку сейчас (чат открыт — чаще, чем раз в 30 секунд). */
   refreshSignals: () => Promise<void>;
+  /** Удалить всю переписку пары — у обоих. */
+  clearChat: () => Promise<void>;
   /** Ответить на сигнал: словами (reply) или «готово» (done). */
   replySignal: (to: number, kind: "reply" | "done", text: string) => Promise<void>;
   /** Её ответ на отметку близости от партнёра: было / не было. */
@@ -490,6 +492,12 @@ export function FemProvider({ children }: { children: ReactNode }) {
     [supabase],
   );
 
+  const clearChat: FemStore["clearChat"] = useCallback(async () => {
+    const res = await supabase.rpc("fem_chat_clear");
+    if (res.error) throw new Error(res.error.message);
+    setSignals([]);
+  }, [supabase]);
+
   const replySignal: FemStore["replySignal"] = useCallback(
     async (to, kind, text) => {
       const res = await supabase.rpc("fem_signal_reply", { p_to: to, p_kind: kind, p_item: text });
@@ -577,14 +585,14 @@ export function FemProvider({ children }: { children: ReactNode }) {
       ready, error, profile, settings, periods, days, saveSettings, saveProfile, startPeriod, endPeriod, deletePeriod, saveDay, deleteAll,
       partner, share, createShare, updateShare, revokeShare, acceptCode, leavePartner, setPartnerRemind, reloadShares,
       userId, signals, sendSignal, markSignalsSeen, dismissSignals, shareOptions, setShareOptions,
-      replySignal, confirmIntimacy, proposeIntimacy, setPartnerHint, refreshSignals: loadSignals,
+      replySignal, confirmIntimacy, proposeIntimacy, setPartnerHint, refreshSignals: loadSignals, clearChat,
       intimacy, setIntimacy,
     }),
     [
       ready, error, profile, settings, periods, days, saveSettings, saveProfile, startPeriod, endPeriod, deletePeriod, saveDay, deleteAll,
       partner, share, createShare, updateShare, revokeShare, acceptCode, leavePartner, setPartnerRemind, reloadShares,
       userId, signals, sendSignal, markSignalsSeen, dismissSignals, shareOptions, setShareOptions,
-      replySignal, confirmIntimacy, proposeIntimacy, setPartnerHint, loadSignals,
+      replySignal, confirmIntimacy, proposeIntimacy, setPartnerHint, loadSignals, clearChat,
       intimacy, setIntimacy,
     ],
   );

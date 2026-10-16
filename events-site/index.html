@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Регистрация · Конференция 06.11.2026</title>
+<meta name="description" content="Регистрация на научно-практическую конференцию с международным участием, 6 ноября 2026, Алматы.">
+<meta name="robots" content="noindex">
+<style>
+:root {
+  --bg: #f4f6f8; --card: #ffffff; --text: #17212b; --muted: #5d6b78; --line: #d9e0e6;
+  --accent: #0f6e78; --accent-ink: #ffffff; --accent-soft: #e3f1f2; --danger: #b3261e; --ok: #1e7a3c;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f151a; --card: #172028; --text: #e6edf2; --muted: #95a3af; --line: #2a3742;
+    --accent: #4fb3bd; --accent-ink: #0b1418; --accent-soft: #1c3236; --danger: #f2827a; --ok: #6fcf8f;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+main { max-width: 640px; margin: 0 auto; padding: 24px 16px 48px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 24px 20px; }
+.card + .card { margin-top: 16px; }
+.kicker { color: var(--accent); font-weight: 600; font-size: 13px; letter-spacing: .04em; text-transform: uppercase; margin: 0 0 8px; }
+h1 { font-size: 21px; line-height: 1.3; margin: 0 0 16px; }
+dl { margin: 0; display: grid; gap: 10px; }
+dl div { display: grid; grid-template-columns: 110px 1fr; gap: 8px; }
+dt { color: var(--muted); font-size: 14px; }
+dd { margin: 0; font-size: 15px; }
+.seats { margin-top: 16px; padding: 10px 12px; border-radius: 10px; background: var(--accent-soft); font-size: 14px; }
+.seats:empty { display: none; }
+h2 { font-size: 18px; margin: 0 0 16px; }
+label.field { display: block; margin-bottom: 14px; }
+label.field span { display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+input[type=text], input[type=tel], input[type=email] {
+  width: 100%; padding: 12px; font: inherit; color: var(--text); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 10px; }
+input:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+fieldset { border: 0; padding: 0; margin: 0 0 14px; }
+legend { font-size: 14px; font-weight: 600; margin-bottom: 6px; padding: 0; }
+.choices { display: flex; flex-wrap: wrap; gap: 8px; }
+.choices label { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border: 1px solid var(--line);
+  border-radius: 999px; cursor: pointer; font-size: 15px; background: var(--bg); }
+.choices input { accent-color: var(--accent); margin: 0; }
+.choices label:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.consent { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; color: var(--muted); margin: 4px 0 18px; }
+.consent input { accent-color: var(--accent); margin-top: 3px; width: 18px; height: 18px; flex: none; }
+.hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+button { width: 100%; padding: 14px; font: inherit; font-weight: 600; border: 0; border-radius: 12px;
+  background: var(--accent); color: var(--accent-ink); cursor: pointer; }
+button:disabled { opacity: .6; cursor: default; }
+.msg { margin-top: 14px; font-size: 15px; }
+.msg.err { color: var(--danger); }
+.done { text-align: center; padding: 8px 0; }
+.done .mark { width: 56px; height: 56px; border-radius: 50%; background: var(--accent-soft); color: var(--ok);
+  display: grid; place-items: center; margin: 0 auto 12px; font-size: 28px; }
+.done p { color: var(--muted); margin: 6px 0 0; }
+footer { text-align: center; color: var(--muted); font-size: 13px; margin-top: 20px; }
+@media (max-width: 420px) { dl div { grid-template-columns: 1fr; gap: 0; } }
+</style>
+</head>
+<body>
+<main>
+  <section class="card">
+    <p class="kicker">Регистрация участника</p>
+    <h1>Научно-практическая конференция с&nbsp;международным участием «Современные подходы к&nbsp;диагностике, терапии и&nbsp;профилактике распространённых заболеваний кожи. Актуальные вопросы дерматокосметологии»</h1>
+    <dl>
+      <div><dt>Дата</dt><dd>6 ноября 2026 года</dd></div>
+      <div><dt>Формат</dt><dd>Офлайн</dd></div>
+      <div><dt>Место</dt><dd>г. Алматы, ул. Тимирязева 42, отель «Best Western Plus Atakent Park»</dd></div>
+      <div><dt>Организаторы</dt><dd>ОО «Коллегия дерматовенерологов и дерматокосметологов города Алматы»; КГП на ПХВ «Кожно-венерологический диспансер» УОЗ г. Алматы</dd></div>
+    </dl>
+    <div class="seats" id="seats"></div>
+  </section>
+
+  <section class="card" id="formCard">
+    <h2>Анкета</h2>
+    <form id="form" novalidate>
+      <label class="field"><span>ФИО</span>
+        <input type="text" name="full_name" autocomplete="name" required minlength="3" maxlength="200" placeholder="Иванова Анна Сергеевна"></label>
+      <label class="field"><span>Телефон</span>
+        <input type="tel" name="phone" autocomplete="tel" required maxlength="40" placeholder="+7 7__ ___ __ __"></label>
+      <label class="field"><span>Email</span>
+        <input type="email" name="email" autocomplete="email" required maxlength="200" placeholder="name@mail.kz"></label>
+      <label class="field"><span>Город</span>
+        <input type="text" name="city" autocomplete="address-level2" required maxlength="100" placeholder="Алматы"></label>
+      <label class="field"><span>Место работы / учёбы</span>
+        <input type="text" name="workplace" autocomplete="organization" required maxlength="300" placeholder="Организация, ВУЗ или кафедра"></label>
+      <label class="field"><span>Должность / специальность</span>
+        <input type="text" name="position" autocomplete="organization-title" required maxlength="200" placeholder="Врач-дерматовенеролог"></label>
+      <fieldset>
+        <legend>Категория участника</legend>
+        <div class="choices">
+          <label><input type="radio" name="category" value="doctor" required> Врач</label>
+          <label><input type="radio" name="category" value="resident"> Резидент</label>
+          <label><input type="radio" name="category" value="student"> Студент</label>
+          <label><input type="radio" name="category" value="company"> Представитель компании</label>
+          <label><input type="radio" name="category" value="other"> Другое</label>
+        </div>
+      </fieldset>
+      <div class="hp" aria-hidden="true"><label>Сайт <input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>
+      <label class="consent"><input type="checkbox" name="consent" required>
+        <span>Я согласен(-на) на сбор и обработку моих персональных данных организаторами конференции для целей регистрации и участия в мероприятии.</span></label>
+      <button type="submit" id="submit">Зарегистрироваться</button>
+      <div class="msg" id="msg" role="status" aria-live="polite"></div>
+    </form>
+  </section>
+
+  <footer>Вопросы по регистрации — к организаторам конференции.</footer>
+</main>
+
+<script>
+const SUPABASE_URL = "https://yssdpeqzvauxwhuktyvz.supabase.co";
+const SUPABASE_KEY = "sb_publishable_MUnlj4xjmeOIa13wxkPgFw_XJkwL7Of";
+const EVENT = "derma-2026-11";
+
+async function rpc(fn, args) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", apikey: SUPABASE_KEY },
+    body: JSON.stringify(args),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+const $ = (id) => document.getElementById(id);
+const form = $("form"), msg = $("msg"), btn = $("submit");
+
+function showClosed(text) {
+  $("formCard").innerHTML = `<div class="done"><div class="mark" style="color:var(--muted)">!</div><h2>${text}</h2></div>`;
+}
+
+async function loadStatus() {
+  try {
+    const s = await rpc("event_status", { p_event: EVENT });
+    if (!s) return;
+    const left = Math.max(0, s.capacity - s.taken);
+    if (s.closed) { showClosed("Регистрация завершена"); return; }
+    if (left === 0) { showClosed("Все места заняты — регистрация закрыта"); return; }
+    $("seats").textContent = `Свободных мест: ${left} из ${s.capacity}`;
+  } catch { /* Без счётчика форма всё равно работает. */ }
+}
+loadStatus();
+
+function fail(text) { msg.className = "msg err"; msg.textContent = text; }
+
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  msg.textContent = "";
+  const d = Object.fromEntries(new FormData(form));
+  if (d.website) return; // бот заполнил скрытое поле
+  for (const k of ["full_name", "phone", "email", "city", "workplace", "position"]) d[k] = (d[k] || "").trim();
+
+  if (d.full_name.length < 3) return fail("Укажите ФИО полностью.");
+  if (d.phone.replace(/\D/g, "").length < 10) return fail("Проверьте номер телефона — нужно не меньше 10 цифр.");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.email)) return fail("Проверьте адрес email.");
+  if (!d.city) return fail("Укажите город.");
+  if (!d.workplace) return fail("Укажите место работы или учёбы.");
+  if (!d.position) return fail("Укажите должность или специальность.");
+  if (!d.category) return fail("Выберите категорию участника.");
+  if (!d.consent) return fail("Нужно согласие на обработку персональных данных.");
+
+  btn.disabled = true; btn.textContent = "Отправляем…";
+  try {
+    const r = await rpc("event_register", {
+      p_event: EVENT, p_full_name: d.full_name, p_phone: d.phone, p_email: d.email,
+      p_city: d.city, p_workplace: d.workplace, p_position: d.position, p_category: d.category,
+    });
+    if (r === "ok") {
+      $("formCard").innerHTML = `<div class="done"><div class="mark">✓</div><h2>Вы зарегистрированы</h2>
+        <p>Ждём вас 6 ноября 2026 года в отеле «Best Western Plus Atakent Park», ул. Тимирязева 42.</p></div>`;
+      loadStatus();
+      return;
+    }
+    if (r === "duplicate") fail("С этим номером телефона уже есть регистрация — повторно регистрироваться не нужно.");
+    else if (r === "full") showClosed("Все места заняты — регистрация закрыта");
+    else if (r === "closed") showClosed("Регистрация завершена");
+    else fail("Не удалось отправить анкету. Попробуйте ещё раз.");
+  } catch {
+    fail("Не удалось отправить анкету — проверьте интернет и попробуйте ещё раз.");
+  }
+  btn.disabled = false; btn.textContent = "Зарегистрироваться";
+});
+</script>
+</body>
+</html>

@@ -27,7 +27,7 @@ export async function GET(request: Request) {
   const { data: admin } = await supabase.rpc("is_admin");
   if (!admin) return NextResponse.json({ error: "Нет доступа" }, { status: 403 });
 
-  const checks = await Promise.all([database(supabase), rates(new URL(request.url).origin), ai(supabase), push(), jobs(supabase)]);
+  const checks = await Promise.all([database(supabase), rates(new URL(request.url).origin, request.headers.get("cookie")), ai(supabase), push(), jobs(supabase)]);
   return NextResponse.json({ checks, at: new Date().toISOString() });
 }
 
@@ -46,9 +46,16 @@ async function database(supabase: Db): Promise<HealthCheck> {
   };
 }
 
-async function rates(origin: string): Promise<HealthCheck> {
+/** /api/rates закрыт входом — передаём куки админа, иначе прокси отдаст страницу входа. */
+async function rates(origin: string, cookie: string | null): Promise<HealthCheck> {
   try {
-    const res = await fetch(`${origin}/api/rates`, { cache: "no-store", signal: AbortSignal.timeout(10000) });
+    const res = await fetch(`${origin}/api/rates`, {
+      cache: "no-store",
+      headers: cookie ? { cookie } : undefined,
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.headers.get("content-type")?.includes("json"))
+      return { key: "rates", name: "Курс валют", state: "bad", detail: `Вместо курса пришла страница (${res.status})` };
     const data = (await res.json()) as { source?: string; date?: string; kzt?: Record<string, number>; error?: string };
     if (!res.ok || !data.kzt) return { key: "rates", name: "Курс валют", state: "bad", detail: data.error ?? `Ошибка ${res.status}` };
     const usd = data.kzt.USD ? ` · $1 = ${data.kzt.USD.toLocaleString("ru-RU")} ₸` : "";

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { FEM_GRADIENT } from "@/lib/fem/cycle";
 
 /**
@@ -142,21 +142,59 @@ export function PhotoBubble({
   );
 }
 
-/** Фото на весь экран. Закрыли — исчезло совсем (с сервера оно уже удалено). */
-export function PhotoViewer({ url, onClose }: { url: string; onClose: () => void }) {
+/**
+ * Фото на весь экран. Закрыли — исчезло совсем (с сервера оно уже удалено).
+ *
+ * Запретить снимок экрана сайт не может (ни iPhone, ни Android такого не
+ * дают), поэтому только затрудняем: фото прячется, когда приложение уходит
+ * в фон (переключатель приложений, шторка, запись экрана) и по клавишам
+ * снимка на компьютере; не печатается; поверх — едва заметная подпись с
+ * именем получателя и временем.
+ */
+export function PhotoViewer({ url, mark, onClose }: { url: string; mark: string; onClose: () => void }) {
+  const [hidden, setHidden] = useState(false);
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", esc);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const hide = () => {
+      clearTimeout(timer);
+      setHidden(true);
+    };
+    // Вернулись — показываем не сразу: снимок «на выходе» успеет попасть на пустой экран.
+    const show = () => {
+      clearTimeout(timer);
+      if (document.visibilityState === "visible" && document.hasFocus()) timer = setTimeout(() => setHidden(false), 400);
+    };
+    const key = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+      // Print Screen, ⌘⇧3/4/5 и Win+Shift+S — прячем, пока клавиши зажаты.
+      if (e.key === "PrintScreen" || (e.shiftKey && (e.metaKey || e.ctrlKey))) {
+        hide();
+        timer = setTimeout(show, 1500);
+      }
+    };
+    const vis = () => (document.visibilityState === "visible" ? show() : hide());
+    window.addEventListener("keydown", key);
+    window.addEventListener("keyup", key);
+    window.addEventListener("blur", hide);
+    window.addEventListener("focus", show);
+    window.addEventListener("pagehide", hide);
+    document.addEventListener("visibilitychange", vis);
     return () => {
+      clearTimeout(timer);
       document.body.style.overflow = prev;
-      window.removeEventListener("keydown", esc);
+      window.removeEventListener("keydown", key);
+      window.removeEventListener("keyup", key);
+      window.removeEventListener("blur", hide);
+      window.removeEventListener("focus", show);
+      window.removeEventListener("pagehide", hide);
+      document.removeEventListener("visibilitychange", vis);
     };
   }, [onClose]);
   return (
     <div
-      className="fixed inset-0 z-[90] flex flex-col bg-black/95"
+      className="fem-photo-viewer fixed inset-0 z-[90] flex flex-col bg-black"
       onContextMenu={(e) => e.preventDefault()}
       style={{ WebkitUserSelect: "none", userSelect: "none" }}
     >
@@ -171,15 +209,38 @@ export function PhotoViewer({ url, onClose }: { url: string; onClose: () => void
           ✕
         </button>
       </div>
-      <div className="flex min-h-0 flex-1 items-center justify-center p-3">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={url}
-          alt="Фото"
-          draggable={false}
-          className="max-h-full max-w-full rounded-2xl object-contain"
-          style={{ WebkitTouchCallout: "none" } as React.CSSProperties}
-        />
+      <div className="relative flex min-h-0 flex-1 items-center justify-center p-3">
+        <div className="relative max-h-full max-w-full" style={{ visibility: hidden ? "hidden" : "visible" }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={url}
+            alt="Фото"
+            draggable={false}
+            className="block max-h-[calc(100dvh-7rem)] max-w-full rounded-2xl object-contain"
+            style={{ WebkitTouchCallout: "none", pointerEvents: "none" } as React.CSSProperties}
+          />
+          {/* Подпись получателя — едва заметно, по диагонали. */}
+          <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl" aria-hidden>
+            <div className="absolute inset-[-50%] flex flex-col justify-around" style={{ transform: "rotate(-24deg)" }}>
+              {Array.from({ length: 9 }, (_, i) => (
+                <p
+                  key={i}
+                  className="whitespace-nowrap text-center text-[0.8125rem] font-semibold tracking-wide"
+                  style={{ color: "#fff", opacity: 0.17, textShadow: "0 0 3px rgba(0,0,0,.7)" }}
+                >
+                  {`${mark}   ·   ${mark}   ·   ${mark}`}
+                </p>
+              ))}
+            </div>
+          </div>
+        </div>
+        {hidden ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-center text-white">
+            <Bloom />
+            <p className="mt-24 text-[0.875rem] font-semibold">Фото скрыто</p>
+            <p className="text-[0.75rem] text-white/60">Вернитесь в приложение, чтобы посмотреть</p>
+          </div>
+        ) : null}
       </div>
       <div style={{ height: "calc(env(safe-area-inset-bottom) + 14px)" }} />
     </div>

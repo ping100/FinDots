@@ -1232,3 +1232,10 @@ input[type="date"]::-webkit-date-and-time-value {
     animation: none;
   }
 }
+
+/* Одноразовое фото не печатается. */
+@media print {
+  .fem-photo-viewer {
+    display: none !important;
+  }
+}

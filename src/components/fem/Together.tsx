@@ -162,7 +162,7 @@ export function Chat({
   /** Отступ панели ввода от низа экрана — над нижним меню или без него. */
   bottom: string;
 }) {
-  const { signals, userId, replySignal, confirmIntimacy, clearChat, markSignalsSeen, refreshSignals, days, saveDay, settings, saveSettings, sendPhoto, openPhoto, cleanupPhotos } =
+  const { signals, userId, replySignal, confirmIntimacy, clearChat, markSignalsSeen, refreshSignals, days, saveDay, settings, saveSettings, sendPhoto, openPhoto, cleanupPhotos, profile } =
     useFem();
   const { send, run, note, busy } = useSend();
   const now = today();
@@ -204,6 +204,8 @@ export function Chat({
     }
     setOpening(null);
   };
+  // Подпись поверх фото: кто смотрит и когда — если снимок куда-то уйдёт.
+  const photoMark = `${profile?.display_name?.trim() || "FemDots"} · ${new Date().toLocaleDateString("ru-RU", { day: "numeric", month: "short" })}`;
   const closeViewer = () => {
     if (viewer) URL.revokeObjectURL(viewer);
     setViewer(null);
@@ -469,7 +471,7 @@ export function Chat({
       <Sheet open={!!picked} title="Одноразовое фото" onClose={closePicked}>
         {picked ? <PhotoSend url={picked.url} busy={busy} onSend={() => void sendPicked()} onCancel={closePicked} /> : null}
       </Sheet>
-      {viewer ? <PhotoViewer url={viewer} onClose={closeViewer} /> : null}
+      {viewer ? <PhotoViewer url={viewer} mark={photoMark} onClose={closeViewer} /> : null}
       <Sheet open={sheet === "menu"} title="Переписка" onClose={() => setSheet(null)}>
         <div className="pb-3">
           <button

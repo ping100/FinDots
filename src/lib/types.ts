@@ -22,7 +22,7 @@ export interface Profile {
   /** Пол — спрашивает FemDots при первом входе; null — ещё не спрашивал. */
   gender?: "female" | "male" | null;
   /** Вид круга цикла в FemDots; null — цветок. */
-  fem_ring?: "flower" | "ring" | "beads" | "comet" | "petals" | null;
+  fem_ring?: "flower" | "life" | "ring" | "beads" | "comet" | "petals" | null;
 }
 
 export interface ExchangeRate {

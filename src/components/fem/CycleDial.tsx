@@ -9,11 +9,12 @@ import { Sheet } from "@/components/ui";
 import { useFem } from "./DataProvider";
 import { CycleRing, plural, useLearned } from "./parts";
 
-export type DialStyle = "flower" | "ring" | "beads" | "comet" | "petals";
+export type DialStyle = "flower" | "life" | "ring" | "beads" | "comet" | "petals";
 
 /** Виды круга цикла — для выбора в настройках и на самом круге. */
-export const DIAL_STYLES: { id: DialStyle; label: string; hint: string }[] = [
+export const DIAL_STYLES: { id: DialStyle; label: string; hint: string; beta?: boolean }[] = [
   { id: "flower", label: "Цветок", hint: "Лепесток на каждый день, цветок живёт с циклом" },
+  { id: "life", label: "Жизнь цветка", hint: "Бутон, цветение, семена и облетание за цикл", beta: true },
   { id: "ring", label: "Кольцо", hint: "Классический круг с фазами" },
   { id: "beads", label: "Бусины", hint: "Кружок на каждый день, как логотип Dots" },
   { id: "comet", label: "Комета", hint: "Цветное кольцо и светящаяся комета" },
@@ -37,10 +38,23 @@ const STAGE: Record<string, string> = {
   late: "Ожидание",
 };
 
+/** Стадии «Жизни цветка»: после овуляции — семена, увядание, облетание. */
+const LIFE_STAGE: Record<string, string> = {
+  period: "Бутон",
+  follicular: "Раскрытие",
+  fertile: "Цветение",
+  ovulation: "Пик цветения",
+  late: "Ожидание",
+};
+
 /** «Цветение · » перед названием фазы — только когда показан цветок. */
 export function flowerStage(info: CycleInfo, style: DialStyle): string | null {
-  if (style !== "flower" || info.hormonal || info.pregnancy || !info.phase) return null;
-  return STAGE[info.phase] ?? null;
+  if ((style !== "flower" && style !== "life") || info.hormonal || info.pregnancy || !info.phase) return null;
+  if (style === "life" && info.phase === "luteal") {
+    const left = info.daysToNext ?? 99;
+    return left <= 2 ? "Облетание" : left <= 7 ? "Увядание" : "Семена зреют";
+  }
+  return (style === "life" ? LIFE_STAGE : STAGE)[info.phase] ?? null;
 }
 
 const NS = "http://www.w3.org/2000/svg";
@@ -118,12 +132,12 @@ export function CycleDial({ info, size: guess = 280 }: { info: CycleInfo; size?:
       </div>
     );
   }
-  const flower = style === "flower";
+  const flower = style === "flower" || style === "life";
   // Цветок рисует лепестки примерно на 3/4 своего поля (запас под пыльцу
   // и пик цветения) — поэтому поле шире карточки, а лишнее по краям пусто.
   const size = Math.round(flower ? Math.min(w * 1.22, 470) : Math.min(w * 0.94, 360));
   const height = Math.round(flower ? size * 0.88 : size);
-  const Body = style === "beads" ? Beads : style === "comet" ? Comet : style === "petals" ? Petals : Flower;
+  const Body = style === "beads" ? Beads : style === "comet" ? Comet : style === "petals" ? Petals : style === "life" ? LifeFlower : Flower;
   return (
     <>
       <div ref={boxRef} className="relative w-full" style={{ height }}>
@@ -266,6 +280,14 @@ export function DialStylePicker({ value, onChange }: { value: DialStyle; onChang
               <span className="block text-[0.9375rem] font-semibold">
                 {s.label}
                 {s.id === "flower" ? <span className="ml-1.5 text-[0.6875rem] font-medium" style={{ color: "var(--muted)" }}>по умолчанию</span> : null}
+                {s.beta ? (
+                  <span
+                    className="ml-1.5 rounded-full px-1.5 py-0.5 align-middle text-[0.625rem] font-semibold"
+                    style={{ background: "color-mix(in srgb, var(--accent) 15%, transparent)", color: "var(--accent)" }}
+                  >
+                    эксперимент
+                  </span>
+                ) : null}
               </span>
               <span className="block text-[0.75rem] leading-snug" style={{ color: "var(--muted)" }}>
                 {s.hint}
@@ -286,7 +308,20 @@ function DialThumb({ kind }: { kind: DialStyle }) {
   const col = (i: number, n: number) => P[Math.min(3, Math.floor((i / n) * 4))];
   return (
     <svg width={44} height={44} viewBox="0 0 44 44" className="shrink-0">
-      {kind === "flower"
+      {kind === "life"
+        ? (
+          <>
+            {Array.from({ length: 14 }, (_, i) => (
+              <ellipse key={i} cx={22} cy={10} rx={3} ry={7} fill={i % 3 ? "#e9c9b5" : col(i, 14)} transform={`rotate(${(i / 14) * 360 + 8} 22 22)`} />
+            ))}
+            {Array.from({ length: 22 }, (_, i) => {
+              const r = 4 + Math.sqrt(i / 22) * 5;
+              const a = i * 2.39996;
+              return <circle key={`s${i}`} cx={22 + Math.cos(a) * r} cy={22 + Math.sin(a) * r} r={1} fill="#b07f23" />;
+            })}
+          </>
+        )
+        : kind === "flower"
         ? Array.from({ length: 14 }, (_, i) => (
             <ellipse key={i} cx={22} cy={9} rx={3.2} ry={8} fill={col(i, 14)} transform={`rotate(${(i / 14) * 360} 22 22)`} />
           ))
@@ -317,6 +352,7 @@ function DialThumb({ kind }: { kind: DialStyle }) {
                   <path key={i} d={`M ${at(i + 0.06, 4, 15).join(" ")} A 15 15 0 0 1 ${at(i + 0.94, 4, 15).join(" ")}`} fill="none" stroke={c} strokeWidth={5} strokeLinecap="round" />
                 ))}
       {kind === "flower" ? <circle cx={22} cy={22} r={6} fill="#fff" stroke={PHASE_COLOR.fertile} strokeWidth={2} /> : null}
+      {kind === "life" ? <circle cx={22} cy={22} r={3.6} fill="#fff" stroke={PHASE_COLOR.luteal} strokeWidth={1.5} /> : null}
     </svg>
   );
 }
@@ -326,6 +362,19 @@ type BodyProps = { d: Days; size: number; pick: (p: Picked) => void; late: boole
 /** Капля-лепесток, растущий вверх от точки (0, 0). */
 const petalD = (len: number, w: number) =>
   `M0 0 C ${w} ${-len * 0.3} ${w * 0.85} ${-len * 0.82} 0 ${-len} C ${-w * 0.85} ${-len * 0.82} ${-w} ${-len * 0.3} 0 0 Z`;
+/** Лепесток со скрученным кончиком: c — насколько кончик ушёл вбок (0…1). */
+const petalCurlD = (len: number, w: number, c: number) => {
+  const tx = c * w * 1.6;
+  return `M0 0 C ${w} ${-len * 0.3} ${w * 0.85 + tx * 0.5} ${-len * 0.82} ${tx} ${-len} C ${-w * 0.85 + tx * 0.9} ${-len * 0.82} ${-w + tx * 0.2} ${-len * 0.3} 0 0 Z`;
+};
+/** Пушинка-семечко для облетания. */
+const FLUFF = `<path d="M0 0 L0 -9" stroke="#b8a48c" stroke-width=".8"/>${Array.from({ length: 10 }, (_, i) => {
+  const a = (i / 10) * Math.PI * 2;
+  return `<path d="M0 -9 l${(Math.cos(a) * 5).toFixed(1)} ${(Math.sin(a) * 5).toFixed(1)}" stroke="#e8dccb" stroke-width=".7"/>`;
+}).join("")}<ellipse cx="0" cy="1" rx="1.4" ry="2" fill="#8a6a3a"/>`;
+
+/** «Жизнь цветка» (эксперимент): тот же цветок, но живёт по-настоящему. */
+const LifeFlower = (p: BodyProps) => <Flower {...p} life />;
 
 /**
  * Цветок: два ряда лепестков (задний — пышность, передний — дни), перелив
@@ -333,7 +382,7 @@ const petalD = (len: number, w: number) =>
  * Бутон в месячные → раскрытие → цветение с пыльцой → увядание и
  * опадающие лепестки перед месячными.
  */
-function Flower({ d, size, pick, late }: BodyProps) {
+function Flower({ d, size, pick, late, life = false }: BodyProps & { life?: boolean }) {
   const ref = useRef<SVGSVGElement | null>(null);
   const uid = useId().replace(/:/g, "");
   const { N, day, fs, fe, ov, pl, phaseOf, lateDays } = d;
@@ -365,7 +414,18 @@ function Flower({ d, size, pick, late }: BodyProps) {
        <linearGradient id="${uid}-late" x1="0" y1="1" x2="0" y2="0"><stop offset="0%" stop-color="${LATE_PETAL[0]}"/><stop offset="100%" stop-color="${LATE_PETAL[1]}"/></linearGradient>
        <radialGradient id="${uid}-wait"><stop offset="0%" stop-color="${PHASE_COLOR.late}" stop-opacity=".45"/><stop offset="100%" stop-color="${PHASE_COLOR.late}" stop-opacity="0"/></radialGradient>
        <radialGradient id="${uid}-shade"><stop offset="0%" stop-color="#ec4899" stop-opacity=".16"/><stop offset="100%" stop-color="#ec4899" stop-opacity="0"/></radialGradient>
-       <filter id="${uid}-glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="${4 * k0}"/></filter>`;
+       <filter id="${uid}-glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="${4 * k0}"/></filter>` +
+      (life
+        ? phases
+            .map(
+              (p) => `<linearGradient id="${uid}-${p}-dry" x1="0" y1="1" x2="0" y2="0">
+            <stop offset="0%" style="stop-color: color-mix(in srgb, ${PHASE_COLOR[p]} 70%, #b08a6a)"/>
+            <stop offset="70%" style="stop-color: color-mix(in srgb, ${PHASE_COLOR[p]} 35%, #e8d6bf)"/>
+            <stop offset="100%" stop-color="#c9a27a"/></linearGradient>`,
+            )
+            .join("") +
+          `<radialGradient id="${uid}-bud" cx=".45" cy=".4"><stop offset="0%" stop-color="#ffe4ec"/><stop offset="100%" stop-color="${PHASE_COLOR.period}"/></radialGradient>`
+        : "");
     el("ellipse", { cx: C, cy: C + 14 * k0, rx: C * 0.86, ry: C * 0.8, fill: `url(#${uid}-shade)` }, svg);
     const aura = el("circle", { cx: C, cy: C, r: C * 0.95, fill: `url(#${uid}-${waiting ? "wait" : "aura"})`, opacity: 0 }, svg);
     const back = el("g", {}, svg);
@@ -395,23 +455,68 @@ function Flower({ d, size, pick, late }: BodyProps) {
 
     const ph = phaseOf(day);
     const frac = (a: number, b: number) => (b > a ? (day - a) / (b - a) : 1);
-    const open = waiting ? 0.8 :
+    const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
+    // «Жизнь цветка»: бутон в месячные, семена и увядание после овуляции, облетание в конце.
+    const lifeOn = life && !waiting;
+    const budK = !lifeOn ? 0 : ph === "period" ? 1 : ph === "follicular" ? clamp01(1 - frac(pl + 1, fs - 1) * 1.6) : 0;
+    const ageK = lifeOn && ph === "luteal" ? clamp01(frac(fe + 1, N)) : 0;
+    const seedK = lifeOn && ph === "luteal" ? 0.35 + 0.65 * ageK : 0;
+    const fallK = lifeOn && ph === "luteal" ? (N - day <= 1 ? 0.5 : N - day === 2 ? 0.25 : 0) : 0;
+    const growK = !lifeOn ? 1 : ph === "period" ? 0 : ph === "follicular" ? frac(pl + 1, fs - 1) : 1;
+    const budG = el("g", { style: "pointer-events:none", opacity: budK }, svg);
+    if (budK > 0) {
+      for (let j = 0; j < 6; j++)
+        el("path", { d: petalD(34 * k0, 9 * k0), transform: `translate(${C} ${C}) rotate(${j * 60 + 15}) translate(0 ${-R0 + 4 * k0})`, fill: "#6cc48a", stroke: "#fff", "stroke-width": 0.8 * k0 }, budG);
+      for (let L = 0; L < 2; L++)
+        for (let j = 0; j < 10; j++)
+          el(
+            "path",
+            {
+              d: petalCurlD((L ? 26 : 20) * k0, (L ? 15 : 13) * k0, 0.25),
+              transform: `translate(${C} ${C}) rotate(${j * 36 + L * 18}) translate(0 ${-R0 + 3 * k0})`,
+              fill: `url(#${uid}-bud)`,
+              stroke: "#fff",
+              "stroke-width": 0.9 * k0,
+              opacity: L ? 0.85 : 1,
+            },
+            budG,
+          );
+    }
+    const seedG = el("g", { style: "pointer-events:none" }, svg);
+    if (seedK > 0) {
+      const M = Math.round(30 + 90 * seedK);
+      for (let j = 0; j < M; j++) {
+        const r = R0 + (Math.sqrt(j / M) * (6 + 18 * seedK) - 1) * k0;
+        const a = j * 2.39996;
+        el("circle", { cx: C + Math.cos(a) * r, cy: C + Math.sin(a) * r, r: (1.4 + 1.4 * seedK) * k0, fill: seedK > 0.75 ? "#a8742a" : j % 5 === 0 ? PHASE_COLOR.ovulation : "#e0a43a" }, seedG);
+      }
+    }
+    // Облетевшие лепестки (кроме сегодняшнего) — по одному и тому же правилу, без мигания.
+    const gone = (i: number) => fallK > 0 && i + 1 !== day && ((i * 11) % N) / N < fallK;
+    const open = waiting ? 0.8 : lifeOn ? (ph === "period" ? lerp(0.3, 0.42, frac(1, pl)) : ph === "follicular" ? lerp(0.48, 0.86, frac(pl + 1, fs - 1)) : ph === "ovulation" ? 1.08 : ph === "fertile" ? (day < ov ? lerp(0.88, 1, frac(fs, ov - 1)) : 0.98) : lerp(0.96, 0.86, ageK)) :
       ph === "period" ? lerp(0.56, 0.62, frac(1, pl))
       : ph === "follicular" ? lerp(0.64, 0.84, frac(pl + 1, fs - 1))
       : ph === "ovulation" ? 1.08
       : ph === "fertile" ? (day < ov ? lerp(0.86, 1, frac(fs, ov - 1)) : 0.98)
       : lerp(0.96, 0.62, frac(fe + 1, N));
-    const curl = waiting ? 0.12 : ph === "period" ? lerp(0.35, 0.15, frac(1, pl)) : ph === "luteal" ? lerp(0, 0.6, frac(fe + 1, N)) : 0;
-    const wide = waiting ? 0.92 : ph === "period" ? 0.74 : ph === "follicular" ? lerp(0.8, 0.98, frac(pl + 1, fs - 1)) : ph === "luteal" ? lerp(1, 0.78, frac(fe + 1, N)) : 1.04;
+    const curl = lifeOn ? (ph === "luteal" ? 0.12 * ageK : 0) : waiting ? 0.12 : ph === "period" ? lerp(0.35, 0.15, frac(1, pl)) : ph === "luteal" ? lerp(0, 0.6, frac(fe + 1, N)) : 0;
+    const wide = lifeOn && ph === "luteal" ? 1 : waiting ? 0.92 : ph === "period" ? 0.74 : ph === "follicular" ? lerp(0.8, 0.98, frac(pl + 1, fs - 1)) : ph === "luteal" ? lerp(1, 0.78, frac(fe + 1, N)) : 1.04;
     const bloomy = !waiting && (ph === "fertile" || ph === "ovulation");
     const shedding = !waiting && ph === "luteal" && N - day <= 5;
+    const fluffy = lifeOn && ph === "luteal" && N - day <= 3;
+    for (let i = 0; i < N; i++)
+      if (gone(i)) {
+        fronts[i].setAttribute("display", "none");
+        backs[i].setAttribute("display", "none");
+        veins[i].setAttribute("display", "none");
+      }
     // Задержка: каждый её день окрашивает по лепестку по кругу.
     const todayK = waiting ? Math.min(lateDays, N) : day;
     if (waiting) for (let k = 1; k <= todayK; k++) fronts[k - 1].setAttribute("fill", `url(#${uid}-late)`);
     if (waiting) front.appendChild(fronts[todayK - 1]);
     const narrow = Math.sqrt(28 / Math.max(N, 24));
 
-    type Part = { pollen: boolean; x: number; y: number; vx: number; vy: number; life: number; r: number; rot: number; vr: number; c: string };
+    type Part = { pollen: boolean; fluff?: boolean; x: number; y: number; vx: number; vy: number; life: number; r: number; rot: number; vr: number; c: string };
     let parts: Part[] = [];
     let raf = 0;
     const t0 = performance.now();
@@ -428,22 +533,27 @@ function Flower({ d, size, pick, late }: BodyProps) {
         const past = waiting || k < day;
         const wave = reduce ? 1 : 1 + 0.03 * Math.sin(s * 1.6 - i * 0.45);
         const isOv = k === ov;
-        const len = (78 + (isToday ? 18 : 0) + (isOv ? 16 : 0)) * k0 * o * wave;
-        const w = 15 * k0 * wide * (isToday ? 1.15 : isOv ? 1.25 : 1) * narrow;
-        const a = ((k - 0.5) / N) * 360 + curl * 28 * g + sway;
+        // Возраст лепестка после овуляции: у каждого свой, чтобы сохли не разом.
+        const age = ageK > 0 ? clamp01(ageK * 1.5 - ((i * 7) % 10) * 0.05 - (past ? 0 : 0.1)) : 0;
+        const len = (78 + (isToday ? 18 : 0) + (isOv ? 16 : 0)) * k0 * o * wave * (1 - 0.32 * age);
+        const w = 15 * k0 * wide * (isToday ? 1.15 : isOv ? 1.25 : 1) * narrow * (1 - 0.25 * age);
+        const twist = age * 0.9;
+        // Пока бутон раскрывается, лепестки ещё закручены спиралью.
+        const a = ((k - 0.5) / N) * 360 + curl * 28 * g + sway + (1 - growK) * 40;
         const tr = `translate(${C} ${C}) rotate(${a}) translate(0 ${-R0 + 6 * k0})`;
-        fronts[i].setAttribute("d", petalD(len, w));
+        fronts[i].setAttribute("d", age > 0 ? petalCurlD(len, w, twist) : petalD(len, w));
+        if (life && !waiting) fronts[i].setAttribute("fill", `url(#${uid}-${phaseOf(k)}${age > 0.4 ? "-dry" : ""})`);
         fronts[i].setAttribute("transform", tr);
         fronts[i].setAttribute("opacity", String(isToday || isOv ? 1 : past ? 1 : 0.5 + 0.12 * o));
         fronts[i].setAttribute("stroke", isToday || isOv ? "#fff" : "rgba(255,255,255,0.5)");
         fronts[i].setAttribute("stroke-width", String((isToday ? 2.5 : isOv ? 1.8 : 0.6) * k0));
-        veins[i].setAttribute("d", `M0 ${-len * 0.14} Q ${w * 0.18} ${-len * 0.5} 0 ${-len * 0.8}`);
+        veins[i].setAttribute("d", `M0 ${-len * 0.14} Q ${w * 0.18 + twist * w * 0.5} ${-len * 0.5} ${twist * w * 1.1} ${-len * 0.8}`);
         veins[i].setAttribute("transform", tr);
         veins[i].setAttribute("stroke-opacity", String(past || isToday ? 0.5 : 0.25));
         veins[i].setAttribute("stroke-width", String(1.1 * k0));
         // Задний ряд — между днями, длиннее и шире: цветок пышнее.
         const ab = (k / N) * 360 + curl * 34 * g + sway * 0.6;
-        backs[i].setAttribute("d", petalD(len * 1.06 + 6 * k0, w * 1.25));
+        backs[i].setAttribute("d", age > 0 ? petalCurlD(len * 1.06 + 6 * k0, w * 1.25, twist * 0.7) : petalD(len * 1.06 + 6 * k0, w * 1.25));
         backs[i].setAttribute("transform", `translate(${C} ${C}) rotate(${ab}) translate(0 ${-R0 + 8 * k0})`);
         backs[i].setAttribute("opacity", String((past ? 0.24 : 0.1) * g));
         if (isToday) {
@@ -464,8 +574,10 @@ function Flower({ d, size, pick, late }: BodyProps) {
         const rr = R0 + 2 * k0;
         stamens[i].setAttribute("cx", String(C + Math.cos(a) * rr));
         stamens[i].setAttribute("cy", String(C + Math.sin(a) * rr));
-        stamens[i].setAttribute("r", String((1.6 + 1.2 * o + (reduce ? 0 : 0.5 * Math.sin(s * 3 + i))) * k0 * g));
+        stamens[i].setAttribute("r", String(seedK > 0 || budK > 0.5 ? 0 : (1.6 + 1.2 * o + (reduce ? 0 : 0.5 * Math.sin(s * 3 + i))) * k0 * g));
       }
+      if (budK > 0) budG.setAttribute("transform", `translate(${C} ${C}) scale(${g * (1 + (reduce ? 0 : 0.015 * Math.sin(s * 1.4)))}) translate(${-C} ${-C})`);
+      if (seedK > 0) seedG.setAttribute("transform", `translate(${C} ${C}) rotate(${s * 4}) scale(${g}) translate(${-C} ${-C})`);
       aura.setAttribute("opacity", String(bloomy || waiting ? (0.55 + 0.15 * Math.sin(s * (waiting ? 1.2 : 2))) * g : 0));
 
 
@@ -475,6 +587,10 @@ function Flower({ d, size, pick, late }: BodyProps) {
           const sp = (0.6 + Math.random()) * k0;
           parts.push({ pollen: true, x: C + Math.cos(a) * R0, y: C + Math.sin(a) * R0, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 0.2 * k0, life: 1, r: (1.5 + Math.random() * 2.2) * k0, rot: 0, vr: 0, c: Math.random() < 0.5 ? PHASE_COLOR.ovulation : "#fbbf24" });
         }
+        if (fluffy && Math.random() < 0.025) {
+          const a = Math.random() * Math.PI * 2;
+          parts.push({ pollen: false, fluff: true, x: C + Math.cos(a) * R0 * 1.2, y: C + Math.sin(a) * R0 * 1.2, vx: (0.4 + Math.random() * 0.5) * k0, vy: -(0.3 + Math.random() * 0.4) * k0, life: 1, r: 0, rot: (Math.random() - 0.5) * 30, vr: (Math.random() - 0.5) * 0.6, c: "" });
+        }
         if (shedding && Math.random() < 0.02 * (6 - (N - day))) {
           const k = Math.floor(Math.random() * N) + 1;
           const a = ((k - 0.5) / N) * Math.PI * 2 - Math.PI / 2;
@@ -482,7 +598,7 @@ function Flower({ d, size, pick, late }: BodyProps) {
           parts.push({ pollen: false, x: C + Math.cos(a) * rr, y: C + Math.sin(a) * rr, vx: (Math.random() - 0.5) * 0.6 * k0, vy: (0.5 + Math.random() * 0.5) * k0, life: 1, r: 0, rot: Math.random() * 360, vr: (Math.random() - 0.5) * 4, c: PHASE_COLOR[phaseOf(k)] });
         }
       }
-      parts = parts.filter((q) => (q.life -= q.pollen ? 0.012 : 0.006) > 0);
+      parts = parts.filter((q) => (q.life -= q.pollen ? 0.012 : q.fluff ? 0.004 : 0.006) > 0);
       fx.innerHTML = parts
         .map((q) => {
           q.x += q.vx;
@@ -491,6 +607,7 @@ function Flower({ d, size, pick, late }: BodyProps) {
             q.rot += q.vr;
             q.vx += Math.sin(q.y / 20) * 0.02;
           }
+          if (q.fluff) return `<g transform="translate(${q.x} ${q.y}) rotate(${q.rot}) scale(${k0 * 1.2})" opacity="${Math.min(1, q.life * 2)}">${FLUFF}</g>`;
           return q.pollen
             ? `<circle cx="${q.x}" cy="${q.y}" r="${q.r}" fill="${q.c}" opacity="${q.life}"/>`
             : `<path d="${petalD(16 * k0, 5 * k0)}" transform="translate(${q.x} ${q.y}) rotate(${q.rot})" fill="${q.c}" opacity="${Math.min(1, q.life * 1.5)}"/>`;
@@ -501,7 +618,7 @@ function Flower({ d, size, pick, late }: BodyProps) {
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [N, day, fs, fe, ov, pl, size, late, lateDays]);
+  }, [N, day, fs, fe, ov, pl, size, late, lateDays, life]);
   return <svg ref={ref} width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="absolute inset-0" style={{ overflow: "visible" }} />;
 }
 

@@ -179,7 +179,7 @@ function LoginForm() {
           className="animate-lift mt-1.5 text-sm leading-snug"
           style={{ color: "var(--muted)", animationDelay: "330ms" }}
         >
-          Деньги и задачи под одним входом: сколько можно потратить сегодня и что сегодня сделать
+          Деньги, задачи и цикл под одним входом. Три приложения, одна учётная запись
         </p>
       </div>
 

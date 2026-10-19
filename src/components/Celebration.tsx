@@ -6,8 +6,8 @@ import { formatMoney } from "@/lib/money";
 import type { Wallet } from "@/lib/types";
 import { Button } from "./ui";
 
-/** Цвета знака Dots: доход, кошелёк, расход. */
-const DOTS = ["#22c55e", "#60a5fa", "#f97316"];
+/** Цвета знака Dots: Findots, Todots, FemDots. */
+const DOTS = ["#22c55e", "#60a5fa", "#ec4899"];
 
 /**
  * Цель копилки достигнута: из её кружка разлетаются кружки в цветах Dots и

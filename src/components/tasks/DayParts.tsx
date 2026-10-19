@@ -40,7 +40,7 @@ export function EmptyDay({
   return (
     <div className="flex flex-col items-center py-10 text-center">
       <span style={{ opacity: allDone ? 1 : 0.55 }}>
-        <Logo size={52} animated />
+        <Logo size={52} animated focus="tasks" />
       </span>
       <p className="mt-4 text-[0.9375rem] font-semibold">{title}</p>
       {hint ? (

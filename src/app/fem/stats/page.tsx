@@ -68,7 +68,7 @@ export default function FemStats() {
         <FemHeader title="Итоги" />
         <div className="flex flex-col items-center py-12 text-center">
           <span style={{ opacity: 0.55 }}>
-            <Logo size={52} animated />
+            <Logo size={52} animated focus="fem" />
           </span>
           <p className="mt-4 text-[0.9375rem] font-semibold">Пока нечего считать</p>
           <p className="mt-1 text-[0.8125rem]" style={{ color: "var(--muted)" }}>

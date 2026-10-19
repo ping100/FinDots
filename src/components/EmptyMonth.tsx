@@ -11,7 +11,7 @@ export function EmptyMonth({ past, hasWallets, hasIncome }: { past: boolean; has
     return (
       <div className="money-card mb-3 flex items-center gap-3 rounded-[1.375rem] px-4 py-3">
         <span style={{ opacity: 0.5 }}>
-          <Logo size={34} />
+          <Logo size={34} focus="money" />
         </span>
         <span className="text-sm" style={{ color: "var(--muted)" }}>
           В этом месяце записей нет
@@ -32,7 +32,7 @@ export function EmptyMonth({ past, hasWallets, hasIncome }: { past: boolean; has
   return (
     <div className="money-card mb-3 rounded-[1.375rem] px-4 py-4">
       <div className="flex items-center gap-3">
-        <Logo size={40} animated />
+        <Logo size={40} animated focus="money" />
         <div>
           <p className="text-[0.9375rem] font-semibold">{fresh ? "Добро пожаловать в Findots" : "Новый месяц — чистый лист"}</p>
           <p className="text-[0.75rem]" style={{ color: "var(--muted)" }}>
@@ -45,7 +45,7 @@ export function EmptyMonth({ past, hasWallets, hasIncome }: { past: boolean; has
           <li key={text} className="flex items-start gap-2.5 text-[0.8125rem] leading-snug">
             <span
               className="mt-px flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[0.6875rem] font-semibold text-white"
-              style={{ background: ["#22c55e", "#60a5fa", "#f97316"][i % 3] }}
+              style={{ background: ["#22c55e", "#60a5fa", "#ec4899"][i % 3] }}
             >
               {i + 1}
             </span>

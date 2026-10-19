@@ -48,12 +48,20 @@ function png(size, pixels) {
   ]);
 }
 
-// Три кружка — доходы, кошельки, расходы — на тёмном скруглённом квадрате.
+// Три кружка — Findots, Todots, FemDots — на тёмном скруглённом квадрате.
+// Каждый объёмный, как знак в приложении: радиальный перелив светлый →
+// основной → тёмный из точки сверху слева (как radialGradient cx .35 cy .3
+// r .8 в SVG) и маленький блик.
 const DOTS = [
-  { x: 0.5, y: 0.29, r: 0.145, c: [34, 197, 94] },
-  { x: 0.31, y: 0.63, r: 0.145, c: [96, 165, 250] },
-  { x: 0.69, y: 0.63, r: 0.145, c: [249, 115, 22] },
+  { x: 0.5, y: 0.29, r: 0.145, lo: [21, 128, 61], c: [34, 197, 94], hi: [134, 239, 172] },
+  { x: 0.31, y: 0.63, r: 0.145, lo: [29, 78, 216], c: [96, 165, 250], hi: [191, 219, 254] },
+  { x: 0.69, y: 0.63, r: 0.145, lo: [190, 24, 93], c: [236, 72, 153], hi: [251, 207, 232] },
 ];
+
+const mix = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
+function shade(dot, t) {
+  return t <= 0.55 ? mix(dot.hi, dot.c, t / 0.55) : mix(dot.c, dot.lo, Math.min(1, (t - 0.55) / 0.45));
+}
 
 function render(size) {
   const px = Buffer.alloc(size * size * 4);
@@ -74,12 +82,21 @@ function render(size) {
       px[i + 3] = 255;
 
       for (const dot of DOTS) {
-        const d = Math.hypot(x + 0.5 - dot.x * size, y + 0.5 - dot.y * size);
-        const edge = dot.r * size;
-        const alpha = Math.max(0, Math.min(1, edge - d));
+        const R = dot.r * size;
+        const cx = dot.x * size;
+        const cy = dot.y * size;
+        const px0 = x + 0.5;
+        const py0 = y + 0.5;
+        const alpha = Math.max(0, Math.min(1, R - Math.hypot(px0 - cx, py0 - cy)));
         if (alpha <= 0) continue;
+        // Перелив: от точки (cx − 0.3R, cy − 0.4R), радиус градиента 1.6R.
+        const t = Math.hypot(px0 - (cx - 0.3 * R), py0 - (cy - 0.4 * R)) / (1.6 * R);
+        let col = shade(dot, t);
+        // Блик: кружок 0.25R в (cx − 0.31R, cy − 0.35R), белый 45%.
+        const hl = Math.max(0, Math.min(1, 0.25 * R - Math.hypot(px0 - (cx - 0.31 * R), py0 - (cy - 0.35 * R)))) * 0.45;
+        if (hl > 0) col = mix(col, [255, 255, 255], hl);
         for (let c = 0; c < 3; c++) {
-          px[i + c] = Math.round(px[i + c] * (1 - alpha) + dot.c[c] * alpha);
+          px[i + c] = Math.round(px[i + c] * (1 - alpha) + col[c] * alpha);
         }
       }
     }

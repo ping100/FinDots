@@ -6,7 +6,7 @@ import { applyLook } from "@/lib/look";
 import { scaleFactor } from "@/lib/textScale";
 import type { Profile } from "@/lib/types";
 import type { FemDay, FemPeriod, FemSettings, Goal, Intim } from "@/lib/fem/cycle";
-import type { Likes } from "@/lib/fem/together";
+import { unpackPhoto, type Likes } from "@/lib/fem/together";
 import type { PartnerState } from "@/lib/fem/partnerCare";
 
 /**
@@ -52,6 +52,12 @@ export interface FemStore {
   /** Сигналы между партнёрами за последние дни, новые сверху. */
   signals: FemSignal[];
   sendSignal: (kind: SignalKind, item?: string) => Promise<void>;
+  /** Одноразовое фото: загрузить и отправить. */
+  sendPhoto: (photo: Blob, colors: string[]) => Promise<void>;
+  /** Открыть одноразовое фото: скачать, удалить с сервера, вернуть адрес в памяти. */
+  openPhoto: (signal: FemSignal) => Promise<string>;
+  /** Убрать свои фото старше суток: их так и не открыли (или чат очистили). */
+  cleanupPhotos: () => Promise<void>;
   markSignalsSeen: () => Promise<void>;
   /** Смахнуть / закрыть отвеченные: больше не показывать. */
   dismissSignals: (ids: number[]) => Promise<void>;
@@ -80,7 +86,10 @@ export interface FemStore {
   setIntimacy: (day: string, value: Intim | null) => Promise<void>;
 }
 
-export type SignalKind = "care" | "buy" | "alone" | "heart" | "ok" | "custom" | "reply" | "done" | "will" | "invite" | "intim" | "msg";
+/** Одноразовые фото пары — приватный бакет (миграция 0078). */
+const PHOTO_BUCKET = "fem-photos";
+
+export type SignalKind = "care" | "buy" | "alone" | "heart" | "ok" | "custom" | "reply" | "done" | "will" | "invite" | "intim" | "msg" | "photo";
 
 export interface FemSignal {
   id: number;
@@ -500,6 +509,51 @@ export function FemProvider({ children }: { children: ReactNode }) {
     [supabase],
   );
 
+  const sendPhoto: FemStore["sendPhoto"] = useCallback(
+    async (photo, colors) => {
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth.user) throw new Error("Нужно войти заново");
+      const ext = photo.type === "image/webp" ? "webp" : "jpg";
+      const path = `${auth.user.id}/${crypto.randomUUID()}.${ext}`;
+      const up = await supabase.storage.from(PHOTO_BUCKET).upload(path, photo, { contentType: photo.type, upsert: false });
+      if (up.error) throw new Error(up.error.message);
+      const res = await supabase.rpc("fem_signal_send", { p_kind: "photo", p_item: `${path}|${colors.join(",")}` });
+      if (res.error) {
+        void supabase.storage.from(PHOTO_BUCKET).remove([path]);
+        throw new Error(res.error.message);
+      }
+      await loadSignals();
+    },
+    [loadSignals, supabase],
+  );
+
+  const openPhoto: FemStore["openPhoto"] = useCallback(
+    async (signal) => {
+      const { path } = unpackPhoto(signal.item);
+      if (!path) throw new Error("Фото уже открыли");
+      const dl = await supabase.storage.from(PHOTO_BUCKET).download(path);
+      if (dl.error || !dl.data) throw new Error("Фото уже недоступно");
+      const url = URL.createObjectURL(dl.data);
+      // Сразу после скачивания — удалить с сервера и отметить открытым.
+      await supabase.storage.from(PHOTO_BUCKET).remove([path]);
+      await supabase.rpc("fem_photo_opened", { p_id: signal.id });
+      setSignals((prev) =>
+        prev.map((x) => (x.id === signal.id ? { ...x, item: `|${unpackPhoto(x.item).colors.join(",")}`, dismissed_at: new Date().toISOString() } : x)),
+      );
+      return url;
+    },
+    [supabase],
+  );
+
+  const cleanupPhotos: FemStore["cleanupPhotos"] = useCallback(async () => {
+    const { data: auth } = await supabase.auth.getUser();
+    if (!auth.user) return;
+    const bucket = supabase.storage.from(PHOTO_BUCKET);
+    const { data } = await bucket.list(auth.user.id, { limit: 200 });
+    const old = (data ?? []).filter((f) => f.created_at && Date.now() - Date.parse(f.created_at) > 24 * 3600 * 1000);
+    if (old.length) await bucket.remove(old.map((f) => `${auth.user!.id}/${f.name}`));
+  }, [supabase]);
+
   const clearChat: FemStore["clearChat"] = useCallback(async () => {
     const res = await supabase.rpc("fem_chat_clear");
     if (res.error) throw new Error(res.error.message);
@@ -613,14 +667,14 @@ export function FemProvider({ children }: { children: ReactNode }) {
     () => ({
       ready, error, profile, settings, periods, days, saveSettings, saveProfile, startPeriod, endPeriod, deletePeriod, saveDay, deleteAll,
       partner, share, createShare, updateShare, revokeShare, acceptCode, leavePartner, setPartnerRemind, reloadShares,
-      userId, signals, sendSignal, markSignalsSeen, dismissSignals, shareOptions, setShareOptions,
+      userId, signals, sendSignal, sendPhoto, openPhoto, cleanupPhotos, markSignalsSeen, dismissSignals, shareOptions, setShareOptions,
       replySignal, confirmIntimacy, proposeIntimacy, setPartnerHint, setPartnerNudge, setPartnerState, refreshSignals: loadSignals, clearChat,
       intimacy, setIntimacy,
     }),
     [
       ready, error, profile, settings, periods, days, saveSettings, saveProfile, startPeriod, endPeriod, deletePeriod, saveDay, deleteAll,
       partner, share, createShare, updateShare, revokeShare, acceptCode, leavePartner, setPartnerRemind, reloadShares,
-      userId, signals, sendSignal, markSignalsSeen, dismissSignals, shareOptions, setShareOptions,
+      userId, signals, sendSignal, sendPhoto, openPhoto, cleanupPhotos, markSignalsSeen, dismissSignals, shareOptions, setShareOptions,
       replySignal, confirmIntimacy, proposeIntimacy, setPartnerHint, setPartnerNudge, setPartnerState, loadSignals, clearChat,
       intimacy, setIntimacy,
     ],

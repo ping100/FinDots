@@ -17,6 +17,7 @@ import {
   statusOf,
   unpackIntim,
   unpackInvite,
+  unpackPhoto,
   whenText,
   type Likes,
 } from "@/lib/fem/together";
@@ -24,6 +25,7 @@ import { Sheet } from "@/components/ui";
 import { useFem, type FemSignal, type SignalKind } from "./DataProvider";
 import { burst, centerOf } from "@/lib/fem/fx";
 import { InviteForm, LikesCard, LikesEditor, ReplyBox, Steps, intimLine, repliesTo } from "./TogetherParts";
+import { PhotoBubble, PhotoSend, PhotoViewer, preparePhoto, type PhotoState } from "./Photo";
 
 /**
  * «Вместе» — переписка пары. В одной ленте всё подряд: обычные сообщения,
@@ -160,13 +162,52 @@ export function Chat({
   /** Отступ панели ввода от низа экрана — над нижним меню или без него. */
   bottom: string;
 }) {
-  const { signals, userId, replySignal, confirmIntimacy, clearChat, markSignalsSeen, refreshSignals, days, saveDay, settings, saveSettings } =
+  const { signals, userId, replySignal, confirmIntimacy, clearChat, markSignalsSeen, refreshSignals, days, saveDay, settings, saveSettings, sendPhoto, openPhoto, cleanupPhotos } =
     useFem();
   const { send, run, note, busy } = useSend();
   const now = today();
   const [text, setText] = useState("");
   const [sheet, setSheet] = useState<"buy" | "invite" | "likes" | "ask" | "status" | "menu" | "clear" | null>(null);
   const [answered, setAnswered] = useState<Map<number, string>>(new Map());
+  // Одноразовые фото: выбранное перед отправкой и открытое на весь экран.
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const [picked, setPicked] = useState<{ blob: Blob; colors: string[]; url: string } | null>(null);
+  const [viewer, setViewer] = useState<string | null>(null);
+  const [opening, setOpening] = useState<number | null>(null);
+  useEffect(() => {
+    void cleanupPhotos().catch(() => undefined);
+  }, [cleanupPhotos]);
+  const pickPhoto = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      setPicked(await preparePhoto(file));
+    } catch (e) {
+      void run(() => Promise.reject(e));
+    }
+  };
+  const closePicked = () => {
+    if (picked) URL.revokeObjectURL(picked.url);
+    setPicked(null);
+  };
+  const sendPicked = async () => {
+    if (!picked) return;
+    const ok = await run(() => sendPhoto(picked.blob, picked.colors), "Фото отправлено 📷");
+    if (ok) closePicked();
+  };
+  const open = async (s: FemSignal) => {
+    if (opening) return;
+    setOpening(s.id);
+    try {
+      setViewer(await openPhoto(s));
+    } catch (e) {
+      void run(() => Promise.reject(e));
+    }
+    setOpening(null);
+  };
+  const closeViewer = () => {
+    if (viewer) URL.revokeObjectURL(viewer);
+    setViewer(null);
+  };
 
   // Чат открыт — переписка подтягивается чаще, чем раз в 30 секунд.
   useEffect(() => {
@@ -305,6 +346,8 @@ export function Chat({
                 answered={answered.get(s.id) ?? null}
                 busy={busy}
                 likes={likes}
+                opening={opening === s.id}
+                onPhoto={() => void open(s)}
                 onReply={(t, done) => reply(s, t, done)}
                 onConfirm={(ok) => {
                   const it = unpackIntim(s.item);
@@ -345,6 +388,16 @@ export function Chat({
             )}
           </div>
           <div className="flex items-end gap-2">
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                void pickPhoto(e.target.files?.[0]);
+                e.target.value = "";
+              }}
+            />
             {feed.length ? (
               <button
                 onClick={() => setSheet("menu")}
@@ -355,6 +408,14 @@ export function Chat({
                 ⋯
               </button>
             ) : null}
+            <button
+              onClick={() => fileRef.current?.click()}
+              aria-label="Одноразовое фото"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-lg transition active:scale-95"
+              style={{ background: "var(--surface-2)" }}
+            >
+              📷
+            </button>
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
@@ -405,6 +466,10 @@ export function Chat({
           />
         ) : null}
       </Sheet>
+      <Sheet open={!!picked} title="Одноразовое фото" onClose={closePicked}>
+        {picked ? <PhotoSend url={picked.url} busy={busy} onSend={() => void sendPicked()} onCancel={closePicked} /> : null}
+      </Sheet>
+      {viewer ? <PhotoViewer url={viewer} onClose={closeViewer} /> : null}
       <Sheet open={sheet === "menu"} title="Переписка" onClose={() => setSheet(null)}>
         <div className="pb-3">
           <button
@@ -500,6 +565,8 @@ function Item({
   answered,
   busy,
   likes,
+  opening,
+  onPhoto,
   onReply,
   onConfirm,
 }: {
@@ -512,9 +579,34 @@ function Item({
   answered: string | null;
   busy: boolean;
   likes?: Likes;
+  opening?: boolean;
+  onPhoto?: () => void;
   onReply: (text: string, done: boolean) => void;
   onConfirm: (ok: boolean) => void;
 }) {
+  if (s.kind === "photo") {
+    const ph = unpackPhoto(s.item);
+    const expired = Date.now() - Date.parse(s.created_at) > 24 * 3600 * 1000;
+    const state: PhotoState = mine
+      ? s.dismissed_at
+        ? "seen"
+        : expired
+          ? "expired"
+          : "waiting"
+      : s.dismissed_at || !ph.path
+        ? "opened"
+        : expired
+          ? "expired"
+          : "ready";
+    return (
+      <div className={`flex max-w-[86%] flex-col ${mine ? "items-end self-end" : "items-start self-start"}`}>
+        <PhotoBubble colors={ph.colors} state={state} mine={mine} busy={opening} onOpen={onPhoto} />
+        <span className="mt-0.5 px-1 text-[0.625rem] tabular-nums" style={{ color: "var(--muted)" }}>
+          {clock(s.created_at)}
+        </span>
+      </div>
+    );
+  }
   const t = signalText(s.kind, s.item);
   const { reply, done } = repliesTo(signals, s);
   const isAsk = ASKS.has(s.kind);

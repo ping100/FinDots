@@ -26,6 +26,12 @@ export function unpackCustom(raw: string | null | undefined): { emoji: string; l
   return i > 0 ? { emoji: raw.slice(0, i), label: raw.slice(i + 1) } : null;
 }
 
+/** Одноразовое фото: «путь|цвет,цвет,цвет,цвет». После просмотра путь пуст. */
+export function unpackPhoto(raw: string | null | undefined): { path: string; colors: string[] } {
+  const [path = "", colors = ""] = (raw ?? "").split("|");
+  return { path, colors: colors.split(",").filter((c) => /^#[0-9a-f]{6}$/i.test(c)) };
+}
+
 export const statusOf = (value: string | null | undefined): { value: string; emoji: string; label: string } | null => {
   if (value?.startsWith("c:")) {
     const c = unpackCustom(value.slice(2));
@@ -57,6 +63,8 @@ export function signalText(kind: string, item: string | null): { emoji: string; 
     }
     case "msg":
       return { emoji: "💬", text: item ?? "" };
+    case "photo":
+      return { emoji: "📷", text: "Фото" };
     case "reply":
       return { emoji: "💬", text: item ?? "Ответ" };
     case "done":

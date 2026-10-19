@@ -1217,3 +1217,18 @@ input[type="date"]::-webkit-date-and-time-value {
   opacity: 1;
   transform: none;
 }
+
+/* Цветок на заглушке одноразового фото — медленно кружится. */
+@keyframes fem-photo-bloom {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.fem-photo-bloom {
+  animation: fem-photo-bloom 40s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fem-photo-bloom {
+    animation: none;
+  }
+}

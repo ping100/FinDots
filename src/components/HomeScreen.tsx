@@ -797,9 +797,15 @@ export function HomeScreen() {
             ? Math.max(balanceOf(dialog.from.id), 0)
             : undefined
         }
+        withFee
+        feeHint={
+          dialog?.kind === "transfer"
+            ? `Необязательно. Например, за перевод из другого банка. Спишется с «${dialog.from.name}» сверх суммы`
+            : undefined
+        }
         submitLabel="Перенести"
         onClose={() => setDialog(null)}
-        onSubmit={async ({ amount, note, occurredAt }) => {
+        onSubmit={async ({ amount, note, occurredAt, fee }) => {
           if (dialog?.kind !== "transfer") return;
           await addTransfer({
             fromWalletId: dialog.from.id,
@@ -808,6 +814,7 @@ export function HomeScreen() {
             currency: dialog.from.currency,
             note,
             occurredAt,
+            fee,
           });
         }}
       />

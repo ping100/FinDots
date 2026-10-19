@@ -95,6 +95,8 @@ export interface Store {
     currency: CurrencyCode;
     note?: string;
     occurredAt?: string;
+    /** Комиссия за перевод — спишется с кошелька-источника отдельной строкой. */
+    fee?: number;
   }) => Promise<void>;
   setWalletBalance: (walletId: string, target: number) => Promise<void>;
   /** Записать созревшие проценты по вкладу. Возвращает начисленную сумму. */
@@ -501,19 +503,38 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [pending.length, flushPending]);
 
   const addTransfer: Store["addTransfer"] = useCallback(
-    async ({ fromWalletId, toWalletId, amount, currency, note, occurredAt }) =>
-      guard(() =>
-        supabase().from("transactions").insert({
+    async ({ fromWalletId, toWalletId, amount, currency, note, occurredAt, fee }) => {
+      const transfer = {
+        id: crypto.randomUUID(),
+        user_id: userId,
+        type: "transfer",
+        amount,
+        currency,
+        from_wallet_id: fromWalletId,
+        to_wallet_id: toWalletId,
+        note: note || null,
+        occurred_at: occurredAt ?? new Date().toISOString(),
+      };
+      // Комиссия — как у трат (lib/fee.ts): расход без категории с parent_id
+      // на перевод. Удалили перевод — база удалит и комиссию.
+      const rows: Record<string, unknown>[] = [transfer];
+      if (fee && fee > 0) {
+        rows.push({
+          id: crypto.randomUUID(),
           user_id: userId,
-          type: "transfer",
-          amount,
+          type: "expense",
+          amount: fee,
           currency,
-          from_wallet_id: fromWalletId,
-          to_wallet_id: toWalletId,
-          note: note || null,
-          occurred_at: occurredAt ?? new Date().toISOString(),
-        }),
-      ),
+          wallet_id: fromWalletId,
+          category_id: null,
+          parent_id: transfer.id,
+          note: FEE_LABEL,
+          occurred_at: transfer.occurred_at,
+        });
+      }
+      // Одним запросом: перевод и комиссия сохраняются вместе или никак.
+      return guard(() => supabase().from("transactions").insert(rows));
+    },
     [guard, supabase, userId],
   );
 

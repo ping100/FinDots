@@ -37,6 +37,7 @@ export function AmountSheet({
   submitLabel = "Готово",
   extra,
   withFee,
+  feeHint,
   onSubmit,
   onClose,
 }: {
@@ -62,6 +63,8 @@ export function AmountSheet({
   extra?: ReactNode;
   /** Спросить комиссию: спишется вместе с суммой, но учтётся отдельно. */
   withFee?: boolean;
+  /** Подсказка под полем комиссии, если стандартная не подходит. */
+  feeHint?: string;
   onSubmit: (result: AmountResult) => Promise<void> | void;
   onClose: () => void;
 }) {
@@ -381,7 +384,7 @@ export function AmountSheet({
       ) : null}
 
       {withFee ? (
-        <Field label="Комиссия" hint="Необязательно. Спишется с того же кошелька, в статистике — отдельно">
+        <Field label="Комиссия" hint={feeHint ?? "Необязательно. Спишется с того же кошелька, в статистике — отдельно"}>
           <input
             className={inputClass}
             style={inputStyle}

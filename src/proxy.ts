@@ -20,6 +20,7 @@ const PUBLIC_PATHS = [
   "/api/admin-alert",
   "/api/fem-signal",
   "/api/fem-hints",
+  "/api/fem-nudge",
   // Лендинг по прямой ссылке.
   "/welcome",
   // Кнопки в уведомлении: маршрут сам проверяет вход и отвечает 401, а не

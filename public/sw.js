@@ -97,7 +97,12 @@ function answer(action, data) {
     .then((res) => {
       if (!res.ok) throw new Error(String(res.status));
       return self.registration
-        .showNotification("FemDots", { body: "Ответ отправлен ✓", tag: "fem-answered", silent: true, icon: "/icons/icon-192.png" })
+        .showNotification("FemDots", {
+          body: action === "send_heart" ? "Отправлено ❤️" : "Ответ отправлен ✓",
+          tag: "fem-answered",
+          silent: true,
+          icon: "/icons/icon-192.png",
+        })
         .then(() => new Promise((done) => setTimeout(done, 3000)))
         .then(() => self.registration.getNotifications({ tag: "fem-answered" }))
         .then((list) => list.forEach((n) => n.close()));

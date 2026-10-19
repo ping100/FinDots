@@ -5,6 +5,8 @@
  */
 import { addDays } from "@/lib/tasks/dates";
 import type { CycleInfo, Goal, Phase } from "./cycle";
+import type { Likes } from "./together";
+import { dislikeTip, likesTips, phrasesOfDay, pickWeighted } from "./partnerCare";
 
 /** Как поддержать при симптоме (и для прогноза «завтра возможно»). */
 export const CARE: Record<string, string> = {
@@ -69,6 +71,12 @@ const DO: Record<Phase, string[]> = {
     "Приготовьте или закажите её любимую еду",
     "Предложите массаж поясницы",
     "Спросите, чего ей сейчас хочется, — и сделайте",
+    "Наберите ей тёплую ванну",
+    "Сходите за продуктами сами",
+    "Включите её любимый сериал и посмотрите вместе",
+    "Купите ей что-нибудь сладкое к чаю",
+    "Укройте пледом и принесите грелку",
+    "Напишите днём, как она себя чувствует",
   ],
   follicular: [
     "Предложите что-то новое: прогулку, спорт, поездку",
@@ -76,6 +84,11 @@ const DO: Record<Phase, string[]> = {
     "Сходите куда-нибудь, где вы давно не были",
     "Поддержите её идеи и начинания",
     "Запланируйте выходные вдвоём",
+    "Позовите её на тренировку или в бассейн",
+    "Сходите вместе в новое кафе",
+    "Спросите, что она хочет успеть в этом месяце",
+    "Похвалите её за то, что она сделала",
+    "Предложите длинную прогулку",
   ],
   fertile: [
     "Отличное время для свидания",
@@ -83,12 +96,18 @@ const DO: Record<Phase, string[]> = {
     "Предложите что-то активное вдвоём",
     "Устройте вечер только для вас двоих",
     "Скажите, что она прекрасно выглядит",
+    "Подарите цветы без повода",
+    "Пригласите её на ужин в красивое место",
+    "Напишите ей днём что-нибудь игривое",
+    "Потанцуйте вместе дома",
   ],
   ovulation: [
     "Проведите день вместе — у неё пик энергии",
     "Скажите, как она вам нравится",
     "Пригласите её туда, где обоим весело",
     "Сделайте маленький сюрприз",
+    "Позовите её на свидание сегодня вечером",
+    "Сделайте ей комплимент при других",
   ],
   luteal: [
     "Чуть больше заботы и терпения",
@@ -97,6 +116,12 @@ const DO: Record<Phase, string[]> = {
     "Возьмите на себя ужин",
     "Предложите тихий вечер с фильмом",
     "Напомните ей, что она для вас значит",
+    "Возьмите на себя домашние дела сегодня",
+    "Купите её любимое лакомство",
+    "Сделайте ей массаж ног или плеч",
+    "Не торопите её с решениями, дайте время",
+    "Приготовьте тёплый ужин",
+    "Напишите днём пару тёплых слов",
   ],
   late: [
     "Будьте рядом и сохраняйте спокойствие",
@@ -163,23 +188,15 @@ const MOOD: Record<string, [string, string | null]> = {
   confused: ["Помогите разложить дела по полочкам", "Не торопите с решениями"],
 };
 
-/** Что можно сказать — по фазе. */
-const SAY: Record<Phase, string[]> = {
-  period: ["Как ты? Принести грелку или чай?", "Отдыхай, я сам всё сделаю", "Хочешь, закажу твоё любимое?"],
-  follicular: ["Давай в выходные куда-нибудь выберемся?", "Ты сегодня классно выглядишь", "Расскажи, что задумала, — я с тобой"],
-  fertile: ["Пойдём сегодня на свидание?", "Ты сегодня особенно красивая", "Хочу провести этот вечер только с тобой"],
-  ovulation: ["Проведём этот вечер вдвоём?", "Обожаю, когда ты такая", "Ты сегодня сияешь"],
-  luteal: ["Ты не одна — чем помочь?", "Хочешь, просто полежим и посмотрим фильм?", "Я рядом, если захочешь поговорить"],
-  late: ["Я рядом, что бы ни было", "Хочешь, сходим за тестом вместе?"],
-  protected: ["Как прошёл твой день?", "Я рад, что ты у меня есть"],
-  pregnant: ["Как ты себя чувствуешь?"],
-};
-
 /** Ей плохо или нет сил — тогда без свиданий и активностей, только бережно. */
 const LOW_MOODS = new Set(["sad", "irritated", "anxious", "tired", "down", "apathy", "swings", "confused"]);
 const PAIN = new Set(["cramps", "headache", "bellyache", "backache", "fatigue", "nausea", "insomnia"]);
 const ACTIVE = /свидан|активн|выбер|куда-нибудь|весело|сюрприз|пригласите|выходные|спорт|поездк|новое|вечер только|сияешь|такая/i;
-const GENTLE_SAY = ["Как ты? Чем тебе помочь?", "Отдыхай, я всё сделаю", "Хочешь, просто побуду рядом?", "Принести тебе что-нибудь?"];
+
+/** Ей грустно, тревожно или больно: советы и фразы бережнее, без свиданий. */
+export function isGentle(mood: string | null, symptoms: string[]): boolean {
+  return (!!mood && LOW_MOODS.has(mood)) || symptoms.some((s) => s !== "ok" && PAIN.has(s));
+}
 
 /** Детерминированная «случайная» подборка на день: каждый день — своя. */
 function pick<T>(list: T[], n: number, seed: number): T[] {
@@ -224,6 +241,8 @@ export function adviceFor({
   symptoms,
   goal,
   today,
+  likes,
+  votes,
 }: {
   phase: Phase;
   info: CycleInfo;
@@ -231,12 +250,16 @@ export function adviceFor({
   symptoms: string[];
   goal: Goal | null;
   today: string;
+  /** «Что я люблю» — советы конкретнее; пусто — как раньше. */
+  likes?: Likes;
+  /** Его оценки «Помогло / Не то». */
+  votes?: Record<string, number>;
 }): PartnerAdvice {
   const seed = Number(today.replace(/-/g, "")) % 100000;
   const conceive = goal === "conceive";
   const real = symptoms.filter((s) => s !== "ok");
   const moodTip = mood ? MOOD[mood] : null;
-  const gentle = (!!mood && LOW_MOODS.has(mood)) || real.some((s) => PAIN.has(s));
+  const gentle = isGentle(mood, real);
   const soft = (list: string[]) => (gentle ? list.filter((t) => !ACTIVE.test(t)) : list);
 
   // Что скоро: заранее, чтобы успеть подготовиться.
@@ -255,16 +278,25 @@ export function adviceFor({
   }
   if (info.ovulation && addDays(today, 1) === info.ovulation) soon.push("Завтра, по прогнозу, овуляция — пик цикла");
 
+  // Скоро месячные — совет подготовиться выходит первым.
+  const prepFirst =
+    !info.current && info.late === 0 && info.daysToNext != null && info.daysToNext >= 1 && info.daysToNext <= 3
+      ? [info.daysToNext === 1 ? "Месячные, скорее всего, завтра: купите заранее грелку и сладкое" : "Скоро месячные: загляните в список, что купить заранее"]
+      : [];
+  const fromLikes = pickWeighted(soft(likesTips(phase, likes)), 1, seed + 5, votes);
   const todo = uniq(
     [
       ...real.map((s) => CARE[s]).filter(Boolean).map(cap),
       ...(moodTip ? [moodTip[0]] : []),
+      ...prepFirst,
+      ...fromLikes,
       ...(conceive && (phase === "fertile" || phase === "ovulation") ? ["Лучшие дни для зачатия — побудьте вместе"] : []),
-      ...pick(soft(DO[phase]), 4, seed),
+      ...pickWeighted(soft(DO[phase]), 5, seed, votes),
       ...(gentle ? ["Спросите, чего ей сейчас хочется, — и сделайте"] : []),
-    ],
+    ].filter((t) => votes?.[t] !== -1),
     4,
   );
+  const dislike = dislikeTip(likes);
   const notTodo = uniq(
     [
       ...real.map((s) => SYMPTOM_DONT[s]).filter(Boolean),
@@ -275,6 +307,7 @@ export function adviceFor({
         seed + 7,
       ),
       ...(conceive ? ["Не давите разговорами о беременности"] : []),
+      ...(dislike ? [dislike] : []),
     ],
     4,
   );
@@ -283,6 +316,6 @@ export function adviceFor({
     soon,
     todo,
     notTodo,
-    say: pick(gentle ? GENTLE_SAY : SAY[phase], 2, seed + 11),
+    say: phrasesOfDay(phase, today, gentle).slice(0, 2),
   };
 }

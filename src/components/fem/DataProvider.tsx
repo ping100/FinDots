@@ -7,6 +7,7 @@ import { scaleFactor } from "@/lib/textScale";
 import type { Profile } from "@/lib/types";
 import type { FemDay, FemPeriod, FemSettings, Goal, Intim } from "@/lib/fem/cycle";
 import type { Likes } from "@/lib/fem/together";
+import type { PartnerState } from "@/lib/fem/partnerCare";
 
 /**
  * Данные FemDots: настройки, отметки месячных и дни с самочувствием.
@@ -66,6 +67,9 @@ export interface FemStore {
   proposeIntimacy: (day: string, kinds: string[], prot: boolean | null) => Promise<void>;
   /** Партнёр: совет на день утром. */
   setPartnerHint: (on: boolean) => Promise<void>;
+  setPartnerNudge: (on: boolean) => Promise<void>;
+  /** Сохранить его оценки советов и галочки (меняется сразу, пишется в фоне). */
+  setPartnerState: (change: (prev: PartnerState) => PartnerState) => void;
   /** Что ещё видит партнёр: статус, цель, напоминание про таблетку. */
   shareOptions: ShareOptions | null;
   setShareOptions: (next: ShareOptions) => Promise<void>;
@@ -105,6 +109,10 @@ export interface PartnerView {
   remind: boolean;
   /** Совет на день утром пушем. */
   hint: boolean;
+  /** Раз в день пуш «удели ей минутку». */
+  nudge?: boolean;
+  /** Его оценки советов и галочки заданий (lib/fem/partnerCare). */
+  state?: PartnerState;
   /** «Что она любит» — она заполняет сама. */
   likes: Likes;
   share_mood: boolean;
@@ -538,6 +546,27 @@ export function FemProvider({ children }: { children: ReactNode }) {
     [fail, supabase],
   );
 
+  const setPartnerNudge: FemStore["setPartnerNudge"] = useCallback(
+    async (on) => {
+      setPartner((prev) => (prev ? { ...prev, nudge: on } : prev));
+      const res = await supabase.rpc("fem_partner_nudge", { p_on: on });
+      fail(res.error?.message);
+    },
+    [fail, supabase],
+  );
+
+  const setPartnerState: FemStore["setPartnerState"] = useCallback(
+    (change) => {
+      setPartner((prev) => {
+        if (!prev) return prev;
+        const state = change(prev.state ?? {});
+        void supabase.rpc("fem_partner_state_set", { p_state: state }).then((res) => fail(res.error?.message));
+        return { ...prev, state };
+      });
+    },
+    [fail, supabase],
+  );
+
   const setShareOptions: FemStore["setShareOptions"] = useCallback(
     async (next) => {
       setShareOptionsState(next);
@@ -585,14 +614,14 @@ export function FemProvider({ children }: { children: ReactNode }) {
       ready, error, profile, settings, periods, days, saveSettings, saveProfile, startPeriod, endPeriod, deletePeriod, saveDay, deleteAll,
       partner, share, createShare, updateShare, revokeShare, acceptCode, leavePartner, setPartnerRemind, reloadShares,
       userId, signals, sendSignal, markSignalsSeen, dismissSignals, shareOptions, setShareOptions,
-      replySignal, confirmIntimacy, proposeIntimacy, setPartnerHint, refreshSignals: loadSignals, clearChat,
+      replySignal, confirmIntimacy, proposeIntimacy, setPartnerHint, setPartnerNudge, setPartnerState, refreshSignals: loadSignals, clearChat,
       intimacy, setIntimacy,
     }),
     [
       ready, error, profile, settings, periods, days, saveSettings, saveProfile, startPeriod, endPeriod, deletePeriod, saveDay, deleteAll,
       partner, share, createShare, updateShare, revokeShare, acceptCode, leavePartner, setPartnerRemind, reloadShares,
       userId, signals, sendSignal, markSignalsSeen, dismissSignals, shareOptions, setShareOptions,
-      replySignal, confirmIntimacy, proposeIntimacy, setPartnerHint, loadSignals, clearChat,
+      replySignal, confirmIntimacy, proposeIntimacy, setPartnerHint, setPartnerNudge, setPartnerState, loadSignals, clearChat,
       intimacy, setIntimacy,
     ],
   );

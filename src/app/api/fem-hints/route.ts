@@ -4,6 +4,7 @@ import { sendPush } from "@/lib/push";
 import { sameSecret } from "@/lib/serverSecret";
 import { cycleInfo, type FemPeriod, type Goal, type Method } from "@/lib/fem/cycle";
 import { adviceFor } from "@/lib/fem/partnerAdvice";
+import type { Likes } from "@/lib/fem/together";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,6 +21,8 @@ interface HintData {
   mucus_days: string[];
   mood: string | null;
   symptoms: string[];
+  likes?: Likes;
+  votes?: Record<string, number>;
 }
 
 /**
@@ -73,6 +76,8 @@ function tipFor(d: HintData): string | null {
     symptoms: (d.symptoms ?? []).filter((s) => s !== "ok"),
     goal: d.goal,
     today: d.today,
+    likes: d.likes,
+    votes: d.votes,
   });
   return advice.todo[0] ?? null;
 }

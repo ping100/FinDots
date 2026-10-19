@@ -8,6 +8,7 @@ import { chanceOf } from "@/lib/fem/phrases";
 import { adviceFor } from "@/lib/fem/partnerAdvice";
 import { today } from "@/lib/tasks/dates";
 import { plural } from "./parts";
+import type { Likes } from "@/lib/fem/together";
 
 /**
  * «Алиса сегодня» у партнёра: её день в цифрах (фаза, до месячных, шанс
@@ -21,6 +22,8 @@ export function PartnerToday({
   mood,
   symptoms,
   goal,
+  likes,
+  votes,
   onAbout,
 }: {
   name: string;
@@ -28,6 +31,8 @@ export function PartnerToday({
   mood: { value: string; label: string; emoji: string } | null;
   symptoms: { value: string; label: string; emoji: string }[];
   goal: Goal | null;
+  likes?: Likes;
+  votes?: Record<string, number>;
   onAbout: () => void;
 }) {
   // Раскрыто ли — запоминаем на телефоне.
@@ -59,6 +64,8 @@ export function PartnerToday({
     symptoms: real.map((s) => s.value),
     goal,
     today: today(),
+    likes,
+    votes,
   });
   const { todo, notTodo } = advice;
 

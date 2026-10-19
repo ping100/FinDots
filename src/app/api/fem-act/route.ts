@@ -11,13 +11,20 @@ export const dynamic = "force-dynamic";
  * общего списка, а не из запроса.
  *
  * - signal_id + action — ответ на сигнал («Уже бегу», «И я ❤️»…);
- * - intim_ok / intim_no — её ответ на отметку близости.
+ * - intim_ok / intim_no — её ответ на отметку близости;
+ * - send_heart — «Думаю о тебе» из дневного напоминания партнёру.
  */
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as { signal_id?: number; action?: string };
   const supabase = await createClient();
   const { data: auth } = await supabase.auth.getUser();
   if (!auth.user) return NextResponse.json({ error: "Нужно войти" }, { status: 401 });
+
+  // Кнопка в дневном напоминании партнёру: «❤️ Думаю о тебе» — без сигнала-повода.
+  if (body.action === "send_heart") {
+    const { error } = await supabase.rpc("fem_signal_send", { p_kind: "heart", p_item: null });
+    return error ? NextResponse.json({ error: error.message }, { status: 400 }) : NextResponse.json({ ok: true });
+  }
 
   if (!body.signal_id || !body.action) return NextResponse.json({ error: "Нет сигнала" }, { status: 400 });
   const { data: signal } = await supabase

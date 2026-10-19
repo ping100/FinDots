@@ -16,6 +16,7 @@ import { IntimForm } from "./TogetherParts";
 import { PartnerCalendar } from "./PartnerCalendar";
 import { ForecastCard } from "./Insights";
 import { PartnerToday } from "./PartnerToday";
+import { CareCard, WeekCard } from "./PartnerCare";
 import { adviceFor } from "@/lib/fem/partnerAdvice";
 import { THEMES } from "@/lib/look";
 import { TEXT_SCALES } from "@/lib/textScale";
@@ -76,7 +77,7 @@ const PARTNER_PHASE: Record<Phase, { title: string; about: string; tips: string[
  * она поделилась; отключиться можно в любой момент.
  */
 export function PartnerScreen() {
-  const { partner, leavePartner, setPartnerRemind, setPartnerHint, profile, saveProfile, signals, userId, settings, proposeIntimacy } = useFem();
+  const { partner, leavePartner, setPartnerRemind, setPartnerHint, setPartnerNudge, profile, saveProfile, signals, userId, settings, proposeIntimacy } = useFem();
   const now = today();
   const [confirm, setConfirm] = useState(false);
   const [prefs, setPrefs] = useState(false);
@@ -119,6 +120,8 @@ export function PartnerScreen() {
           symptoms: partner.share_symptoms ? symptoms.map((x) => x!.value).filter((v) => v !== "ok") : [],
           goal: partner.goal ?? null,
           today: now,
+          likes: partner.likes,
+          votes: partner.state?.votes,
         }).todo[0] ?? null)
       : null;
 
@@ -242,9 +245,24 @@ export function PartnerScreen() {
           mood={partner.share_mood ? (mood ?? null) : null}
           symptoms={partner.share_symptoms ? symptoms.filter((x) => !!x).map((x) => x!) : []}
           goal={partner.goal ?? null}
+          likes={partner.likes}
+          votes={partner.state?.votes}
           onAbout={() => setSheet("day")}
         />
       ) : null}
+
+      {/* Совет, факт дня, что написать, что купить заранее — и добрые дела недели. */}
+      {info.phase ? (
+        <CareCard
+          info={info}
+          phase={info.phase}
+          mood={partner.share_mood ? (mood?.value ?? null) : null}
+          symptoms={partner.share_symptoms ? symptoms.map((x) => x!.value).filter((v) => v !== "ok") : []}
+          goal={partner.goal ?? null}
+          likes={partner.likes ?? {}}
+        />
+      ) : null}
+      <WeekCard />
 
       {info.nextStart ? (
         <div className="mt-3 grid grid-cols-2 gap-2">
@@ -338,10 +356,19 @@ export function PartnerScreen() {
             <span className="min-w-0 flex-1">
               <span className="block text-[0.9375rem]">Совет на день</span>
               <span className="mt-0.5 block text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
-                Утром пришлём подсказку, как позаботиться о {name} сегодня
+                Утром пришлём подсказку, как позаботиться о ней сегодня
               </span>
             </span>
             <Switch checked={partner.hint ?? true} onChange={(v) => void setPartnerHint(v)} label="Совет на день" />
+          </div>
+          <div className="flex items-center gap-3 px-4 py-3.5" style={{ borderTop: "1px solid var(--border)" }}>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[0.9375rem]">Удели ей минутку</span>
+              <span className="mt-0.5 block text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
+                Раз в день, днём или вечером, напомним написать ей. Не придёт, если вы недавно ей писали
+              </span>
+            </span>
+            <Switch checked={partner.nudge ?? true} onChange={(v) => void setPartnerNudge(v)} label="Удели ей минутку" />
           </div>
           <div className="px-4 py-3" style={{ borderTop: "1px solid var(--border)" }}>
             <DialStyleRow />

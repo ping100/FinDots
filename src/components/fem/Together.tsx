@@ -508,7 +508,21 @@ function Item({
 
   let body: ReactNode;
   if (s.kind === "msg") body = <span className="whitespace-pre-wrap break-words">{s.item}</span>;
-  else if (REPLY_KINDS.has(s.kind)) {
+  else if (s.kind === "ok") {
+    // Старый формат «Уже бегу»: в item — на что ответ, «вид:подробности».
+    const [k, ...rest] = (s.item ?? "").split(":");
+    const o = k ? signalText(k, rest.join(":") || null) : null;
+    body = (
+      <>
+        {o ? (
+          <span className="mb-1 block truncate border-l-2 pl-2 text-[0.75rem] opacity-80" style={{ borderColor: "currentColor" }}>
+            {o.emoji} {o.text}
+          </span>
+        ) : null}
+        <span>Уже бегу! 🏃</span>
+      </>
+    );
+  } else if (REPLY_KINDS.has(s.kind)) {
     const o = orig ? signalText(orig.kind, orig.item) : null;
     body = (
       <>

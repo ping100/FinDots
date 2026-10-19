@@ -165,7 +165,7 @@ export function Chat({
   const { send, run, note, busy } = useSend();
   const now = today();
   const [text, setText] = useState("");
-  const [sheet, setSheet] = useState<"buy" | "invite" | "likes" | "ask" | "status" | "clear" | null>(null);
+  const [sheet, setSheet] = useState<"buy" | "invite" | "likes" | "ask" | "status" | "menu" | "clear" | null>(null);
   const [answered, setAnswered] = useState<Map<number, string>>(new Map());
 
   // Чат открыт — переписка подтягивается чаще, чем раз в 30 секунд.
@@ -276,14 +276,6 @@ export function Chat({
         </div>
       )}
 
-      {feed.length ? (
-        <div className="mt-3 flex justify-end">
-          <button onClick={() => setSheet("clear")} className="px-1 text-[0.75rem]" style={{ color: "var(--muted)" }}>
-            🗑 Очистить переписку
-          </button>
-        </div>
-      ) : null}
-
       {/* ───── лента ───── */}
       <div className="mt-4 flex flex-col gap-1.5">
         {feed.length === 0 ? (
@@ -353,6 +345,16 @@ export function Chat({
             )}
           </div>
           <div className="flex items-end gap-2">
+            {feed.length ? (
+              <button
+                onClick={() => setSheet("menu")}
+                aria-label="Ещё"
+                className="flex h-11 w-9 shrink-0 items-center justify-center rounded-2xl text-lg font-bold transition active:scale-95"
+                style={{ color: "var(--muted)" }}
+              >
+                ⋯
+              </button>
+            ) : null}
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
@@ -403,11 +405,23 @@ export function Chat({
           />
         ) : null}
       </Sheet>
+      <Sheet open={sheet === "menu"} title="Переписка" onClose={() => setSheet(null)}>
+        <div className="pb-3">
+          <button
+            onClick={() => setSheet("clear")}
+            className="flex w-full items-center gap-3 rounded-2xl px-4 py-3.5 text-left text-[0.9375rem] font-semibold transition active:scale-[0.98]"
+            style={{ background: "var(--surface-2)", color: "var(--danger)" }}
+          >
+            <span className="text-lg">🗑</span>
+            Очистить переписку
+          </button>
+        </div>
+      </Sheet>
       <Sheet open={sheet === "clear"} title="Очистить переписку?" onClose={() => setSheet(null)}>
         <div className="space-y-3 pb-3">
           <p className="text-[0.875rem] leading-snug" style={{ color: "var(--muted)" }}>
-            Удалятся все сообщения, просьбы, ответы и приглашения — у вас и у {who === "her" ? "партнёра" : name}. Вернуть их будет
-            нельзя. Цикл, дневник и отметки в календаре останутся.
+            Удалятся все сообщения, просьбы, ответы и приглашения у вас обоих. Вернуть их будет нельзя. Цикл, дневник и отметки
+            в календаре останутся.
           </p>
           <button
             onClick={() => {

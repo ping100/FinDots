@@ -5,7 +5,7 @@ import { Icon } from "@/lib/icons";
 import { PHASE_COLOR, daysBetween, type CycleInfo, type Phase } from "@/lib/fem/cycle";
 import { range, short } from "@/lib/fem/format";
 import { addDays } from "@/lib/tasks/dates";
-import { Sheet } from "@/components/ui";
+import { Sheet, Switch } from "@/components/ui";
 import { useFem } from "./DataProvider";
 import { CycleRing, plural, useLearned } from "./parts";
 
@@ -236,6 +236,7 @@ export function DialStyleRow({ className = "" }: { className?: string }) {
   const { profile, saveProfile } = useFem();
   const [open, setOpen] = useState(false);
   const cur: DialStyle = profile?.fem_ring ?? "flower";
+  const flowerish = cur === "flower" || cur === "life";
   return (
     <>
       <button onClick={() => setOpen(true)} className={`flex w-full items-center gap-3 text-left ${className}`}>
@@ -243,7 +244,8 @@ export function DialStyleRow({ className = "" }: { className?: string }) {
         <span className="min-w-0 flex-1">
           <span className="block text-[0.9375rem]">Вид круга цикла</span>
           <span className="block text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
-            {DIAL_STYLES.find((d) => d.id === cur)?.label} · {DIAL_STYLES.find((d) => d.id === cur)?.hint.toLowerCase()}
+            {DIAL_STYLES.find((d) => d.id === cur)?.label} ·{" "}
+            {flowerish && profile?.fem_daytime ? "живёт по времени суток" : DIAL_STYLES.find((d) => d.id === cur)?.hint.toLowerCase()}
           </span>
         </span>
         <Icon name="chevron-right" size={16} className="shrink-0 opacity-40" />
@@ -253,9 +255,29 @@ export function DialStyleRow({ className = "" }: { className?: string }) {
           value={cur}
           onChange={(v) => {
             void saveProfile({ fem_ring: v === "flower" ? null : v });
-            setOpen(false);
+            if (v !== "flower" && v !== "life") setOpen(false);
           }}
         />
+        {flowerish ? (
+          <div className="mb-3 flex items-center gap-3 rounded-2xl px-3 py-3" style={{ background: "var(--surface-2)" }}>
+            <span className="text-xl">{profile?.fem_daytime ? "🌙" : "☀️"}</span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[0.9375rem] font-semibold">
+                По времени суток
+                <span
+                  className="ml-1.5 rounded-full px-1.5 py-0.5 align-middle text-[0.625rem] font-semibold"
+                  style={{ background: "color-mix(in srgb, var(--accent) 15%, transparent)", color: "var(--accent)" }}
+                >
+                  эксперимент
+                </span>
+              </span>
+              <span className="block text-[0.75rem] leading-snug" style={{ color: "var(--muted)" }}>
+                Утром роса, днём солнце и бабочка, вечером закат, ночью луна и светлячки
+              </span>
+            </span>
+            <Switch checked={!!profile?.fem_daytime} onChange={(v) => void saveProfile({ fem_daytime: v })} label="Цветок по времени суток" />
+          </div>
+        ) : null}
       </Sheet>
     </>
   );
@@ -415,9 +437,10 @@ function Flower({ d, size, pick, late, life = false }: BodyProps & { life?: bool
   const ref = useRef<SVGSVGElement | null>(null);
   const uid = useId().replace(/:/g, "");
   const { N, day, fs, fe, ov, pl, phaseOf, lateDays } = d;
+  const { profile } = useFem();
   const clock = useTimeOfDay();
-  // Время суток живёт только в «Жизни цветка».
-  const tod: Tod | null = life ? clock : null;
+  // Время суток — отдельный переключатель (эксперимент), для обоих цветков.
+  const tod: Tod | null = profile?.fem_daytime ? clock : null;
   useEffect(() => {
     const svg = ref.current;
     if (!svg) return;

@@ -23,6 +23,8 @@ export interface Profile {
   gender?: "female" | "male" | null;
   /** Вид круга цикла в FemDots; null — цветок. */
   fem_ring?: "flower" | "life" | "ring" | "beads" | "comet" | "petals" | null;
+  /** Цветок по времени суток (эксперимент): утро, день, вечер, ночь. */
+  fem_daytime?: boolean;
 }
 
 export interface ExchangeRate {

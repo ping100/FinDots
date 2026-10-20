@@ -25,6 +25,10 @@ export interface Profile {
   fem_ring?: "flower" | "life" | "ring" | "beads" | "comet" | "petals" | null;
   /** Цветок по времени суток (эксперимент): утро, день, вечер, ночь. */
   fem_daytime?: boolean;
+  /** Цветок по погоде (эксперимент). */
+  fem_weather?: boolean;
+  /** Партнёру: своя погода или её. */
+  fem_weather_src?: "mine" | "hers";
 }
 
 export interface ExchangeRate {

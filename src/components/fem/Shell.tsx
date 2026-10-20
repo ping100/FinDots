@@ -1,7 +1,7 @@
 "use client";
 
 import { ConnectionStatus } from "@/components/ConnectionStatus";
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Icon } from "@/lib/icons";
@@ -11,6 +11,7 @@ import { Onboarding } from "./Onboarding";
 import { PartnerScreen } from "./PartnerScreen";
 import { Backdrop } from "./Backdrop";
 import { unread } from "./Together";
+import { publishWeather } from "@/lib/fem/weather";
 
 const TABS = [
   { href: "/fem", label: "Цикл", icon: "drop" },
@@ -27,7 +28,15 @@ const TABS = [
  */
 export function FemShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { ready, error, settings, partner, signals, userId, pendingCount } = useFem();
+  const { ready, error, settings, partner, signals, userId, pendingCount, share } = useFem();
+  // Есть партнёр — отдаём ему свою погоду для его цветка (только погоду, без города).
+  const sharing = !!share?.accepted_at;
+  useEffect(() => {
+    if (!sharing) return;
+    void publishWeather();
+    const t = setInterval(() => void publishWeather(), 30 * 60_000);
+    return () => clearInterval(t);
+  }, [sharing]);
   if (!ready) return <Loader />;
   // Непрочитанное от партнёра — красный кружок на «Вместе».
   const fresh = unread(signals, userId).length;

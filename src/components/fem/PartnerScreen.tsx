@@ -222,7 +222,7 @@ export function PartnerScreen() {
 
       <div className="fem-card rounded-[28px] px-4 pb-5 pt-6">
         {info.lastStart ? (
-          <CycleDial info={info} size={270} />
+          <CycleDial info={info} size={270} partnerView />
         ) : (
           <p className="py-10 text-center text-sm" style={{ color: "var(--muted)" }}>
             {name} ещё не отметила месячные — прогноз появится после первой отметки

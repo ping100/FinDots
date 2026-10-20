@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Icon } from "@/lib/icons";
 import { PHASE_COLOR, daysBetween, type CycleInfo, type Phase } from "@/lib/fem/cycle";
+import { hot, skyOf, useWeather, weatherLine, windy, type Sky } from "@/lib/fem/weather";
 import { range, short } from "@/lib/fem/format";
 import { addDays } from "@/lib/tasks/dates";
 import { Sheet, Switch } from "@/components/ui";
@@ -99,9 +100,13 @@ function el(tag: string, a: Record<string, string | number> = {}, parent?: Eleme
  * Круг цикла на главной — в виде, выбранном в настройках. Цветок по умолчанию; на
  * гормональной контрацепции и в беременность — всегда классическое кольцо.
  */
-export function CycleDial({ info, size: guess = 280 }: { info: CycleInfo; size?: number }) {
+export function CycleDial({ info, size: guess = 280, partnerView = false }: { info: CycleInfo; size?: number; partnerView?: boolean }) {
   const { profile } = useFem();
   const style: DialStyle = profile?.fem_ring ?? "flower";
+  // Погода (эксперимент) — только у цветка. Партнёр может смотреть на её погоду.
+  const wxOn = !!profile?.fem_weather && (style === "flower" || style === "life");
+  const wxNow = useWeather(wxOn, partnerView && profile?.fem_weather_src === "hers" ? "hers" : "mine");
+  const wx: WxLook | null = wxNow ? { sky: skyOf(wxNow.weather.code), windy: windy(wxNow.weather), hot: hot(wxNow.weather) } : null;
   const d = cycleDays(info);
   const [picked, setPicked] = useState<Picked>(null);
   const [known, learn] = useLearned("fem.hint.ring");
@@ -142,10 +147,16 @@ export function CycleDial({ info, size: guess = 280 }: { info: CycleInfo; size?:
     <>
       <div ref={boxRef} className="relative w-full" style={{ height }}>
         <div className="absolute left-1/2" style={{ width: size, height: size, top: (height - size) / 2, transform: "translateX(-50%)" }}>
-          <Body d={d} size={size} pick={pick} late={info.late > 0} />
+          <Body d={d} size={size} pick={pick} late={info.late > 0} wx={wx} />
           <DialCenter info={info} d={d} picked={picked} onClear={() => setPicked(null)} size={size} disk={flower} />
         </div>
       </div>
+      {wxNow ? (
+        <p className="animate-fade -mt-1 mb-1 text-center text-[0.75rem] font-medium" style={{ color: "var(--muted)" }}>
+          {partnerView ? (wxNow.whose === "hers" ? "У неё: " : "У вас: ") : ""}
+          {weatherLine(wxNow.weather)}
+        </p>
+      ) : null}
       {!known ? (
         <p className="animate-lift mt-1 text-center text-[0.75rem] font-medium" style={{ color: "var(--accent)" }}>
           👆 Нажмите на {style === "petals" ? "лепесток — покажу фазу" : flower ? "лепесток — покажу, что это за день" : "круг — покажу, что это за день"}
@@ -233,7 +244,7 @@ function DialCenter({
 
 /** Строка настроек «Вид круга цикла · [картинка] Цветок ›» — открывает выбор. */
 export function DialStyleRow({ className = "" }: { className?: string }) {
-  const { profile, saveProfile } = useFem();
+  const { profile, saveProfile, partner } = useFem();
   const [open, setOpen] = useState(false);
   const cur: DialStyle = profile?.fem_ring ?? "flower";
   const flowerish = cur === "flower" || cur === "life";
@@ -245,7 +256,9 @@ export function DialStyleRow({ className = "" }: { className?: string }) {
           <span className="block text-[0.9375rem]">Вид круга цикла</span>
           <span className="block text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
             {DIAL_STYLES.find((d) => d.id === cur)?.label} ·{" "}
-            {flowerish && profile?.fem_daytime ? "живёт по времени суток" : DIAL_STYLES.find((d) => d.id === cur)?.hint.toLowerCase()}
+            {flowerish && (profile?.fem_daytime || profile?.fem_weather)
+              ? [profile?.fem_daytime ? "по времени суток" : "", profile?.fem_weather ? "по погоде" : ""].filter(Boolean).join(" и ")
+              : DIAL_STYLES.find((d) => d.id === cur)?.hint.toLowerCase()}
           </span>
         </span>
         <Icon name="chevron-right" size={16} className="shrink-0 opacity-40" />
@@ -259,27 +272,90 @@ export function DialStyleRow({ className = "" }: { className?: string }) {
           }}
         />
         {flowerish ? (
-          <div className="mb-3 flex items-center gap-3 rounded-2xl px-3 py-3" style={{ background: "var(--surface-2)" }}>
-            <span className="text-xl">{profile?.fem_daytime ? "🌙" : "☀️"}</span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-[0.9375rem] font-semibold">
-                По времени суток
-                <span
-                  className="ml-1.5 rounded-full px-1.5 py-0.5 align-middle text-[0.625rem] font-semibold"
-                  style={{ background: "color-mix(in srgb, var(--accent) 15%, transparent)", color: "var(--accent)" }}
-                >
-                  эксперимент
-                </span>
-              </span>
-              <span className="block text-[0.75rem] leading-snug" style={{ color: "var(--muted)" }}>
-                Утром роса, днём солнце и бабочка, вечером закат, ночью луна и светлячки
-              </span>
-            </span>
-            <Switch checked={!!profile?.fem_daytime} onChange={(v) => void saveProfile({ fem_daytime: v })} label="Цветок по времени суток" />
+          <div className="space-y-2 pb-3">
+            <ExpRow
+              icon={profile?.fem_daytime ? "🌙" : "☀️"}
+              title="По времени суток"
+              hint="Утром роса, днём солнце и бабочка, вечером закат, ночью луна и светлячки"
+              on={!!profile?.fem_daytime}
+              onChange={(v) => void saveProfile({ fem_daytime: v })}
+            />
+            <ExpRow
+              icon="🌦"
+              title="По погоде"
+              hint="Дождь, снег, туман, гроза и ветер, как за окном. Город определяется по интернету"
+              on={!!profile?.fem_weather}
+              onChange={(v) => void saveProfile({ fem_weather: v })}
+            >
+              {profile?.fem_weather && partner ? (
+                <div className="mt-2.5 grid grid-cols-2 gap-1 rounded-xl p-1" style={{ background: "var(--surface)" }}>
+                  {(
+                    [
+                      ["mine", "Моя погода"],
+                      ["hers", "Её погода"],
+                    ] as const
+                  ).map(([id, label]) => {
+                    const sel = (profile?.fem_weather_src ?? "mine") === id;
+                    return (
+                      <button
+                        key={id}
+                        onClick={() => void saveProfile({ fem_weather_src: id })}
+                        aria-pressed={sel}
+                        className="rounded-lg py-1.5 text-[0.8125rem] font-semibold transition active:scale-[0.98]"
+                        style={sel ? { background: "var(--accent)", color: "#fff" } : { color: "var(--muted)" }}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </ExpRow>
           </div>
         ) : null}
       </Sheet>
     </>
+  );
+}
+
+/** Строка экспериментальной настройки цветка: значок, название, пояснение, выключатель. */
+function ExpRow({
+  icon,
+  title,
+  hint,
+  on,
+  onChange,
+  children,
+}: {
+  icon: string;
+  title: string;
+  hint: string;
+  on: boolean;
+  onChange: (v: boolean) => void;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl px-3 py-3" style={{ background: "var(--surface-2)" }}>
+      <div className="flex items-center gap-3">
+        <span className="text-xl">{icon}</span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[0.9375rem] font-semibold">
+            {title}
+            <span
+              className="ml-1.5 rounded-full px-1.5 py-0.5 align-middle text-[0.625rem] font-semibold"
+              style={{ background: "color-mix(in srgb, var(--accent) 15%, transparent)", color: "var(--accent)" }}
+            >
+              эксперимент
+            </span>
+          </span>
+          <span className="block text-[0.75rem] leading-snug" style={{ color: "var(--muted)" }}>
+            {hint}
+          </span>
+        </span>
+        <Switch checked={on} onChange={onChange} label={title} />
+      </div>
+      {children}
+    </div>
   );
 }
 
@@ -379,7 +455,25 @@ function DialThumb({ kind }: { kind: DialStyle }) {
   );
 }
 
-type BodyProps = { d: Days; size: number; pick: (p: Picked) => void; late: boolean };
+type BodyProps = { d: Days; size: number; pick: (p: Picked) => void; late: boolean; wx?: WxLook | null };
+
+/** Погода для цветка: какое небо, сильный ли ветер, жара ли. */
+type WxLook = { sky: Sky; windy: boolean; hot: boolean };
+
+/** Свет вокруг цветка по погоде — поверх света времени суток. */
+const wxSkyLook = (sky: Sky | null, hot: boolean): [string, string, number] | null =>
+  sky === "rain" ? ["#cbd5e1", "#94a3b8", 0.55]
+  : sky === "storm" ? ["#94a3b8", "#64748b", 0.6]
+  : sky === "snow" ? ["#e0f2fe", "#93c5fd", 0.55]
+  : sky === "fog" ? ["#f1f5f9", "#cbd5e1", 0.6]
+  : sky === "clouds" ? ["#e2e8f0", "#cbd5e1", 0.5]
+  : hot ? ["#fde68a", "#fdba74", 0.5]
+  : null;
+
+/** Облачко из кружков; ширина ~56, высота ~22 (до масштаба). */
+const CLOUD = `<ellipse cx="0" cy="6" rx="28" ry="9"/><circle cx="-12" cy="0" r="10"/><circle cx="4" cy="-5" r="13"/><circle cx="17" cy="2" r="9"/>`;
+/** Листик, который несёт ветер. */
+const LEAF = `<path d="M0 -6 C 5 -3, 5 3, 0 6 C -5 3, -5 -3, 0 -6Z" fill="#86c99a"/><path d="M0 -5 L0 5" stroke="#4d9a68" stroke-width=".7"/>`;
 
 /** Капля-лепесток, растущий вверх от точки (0, 0). */
 const petalD = (len: number, w: number) =>
@@ -433,7 +527,7 @@ const LifeFlower = (p: BodyProps) => <Flower {...p} life />;
  * Бутон в месячные → раскрытие → цветение с пыльцой → увядание и
  * опадающие лепестки перед месячными.
  */
-function Flower({ d, size, pick, late, life = false }: BodyProps & { life?: boolean }) {
+function Flower({ d, size, pick, late, life = false, wx = null }: BodyProps & { life?: boolean }) {
   const ref = useRef<SVGSVGElement | null>(null);
   const uid = useId().replace(/:/g, "");
   const { N, day, fs, fe, ov, pl, phaseOf, lateDays } = d;
@@ -441,6 +535,9 @@ function Flower({ d, size, pick, late, life = false }: BodyProps & { life?: bool
   const clock = useTimeOfDay();
   // Время суток — отдельный переключатель (эксперимент), для обоих цветков.
   const tod: Tod | null = profile?.fem_daytime ? clock : null;
+  const wxSky = wx?.sky ?? null;
+  const wxWindy = !!wx?.windy;
+  const wxHot = !!wx?.hot;
   useEffect(() => {
     const svg = ref.current;
     if (!svg) return;
@@ -450,6 +547,9 @@ function Flower({ d, size, pick, late, life = false }: BodyProps & { life?: bool
     // Задержка: цветок не увядает и не растёт, а спокойно «ждёт».
     const waiting = lateDays > 0;
     const R0 = 56 * k0;
+    const skyLook = wxSkyLook(wxSky, wxHot) ?? (tod ? TOD_LOOK[tod].sky : null);
+    const overcast = wxSky !== null && wxSky !== "clear";
+    const wet = wxSky === "rain" || wxSky === "storm";
     svg.innerHTML = "";
     const defs = el("defs", {}, svg);
     const phases: Phase[] = ["period", "follicular", "fertile", "ovulation", "luteal"];
@@ -470,13 +570,16 @@ function Flower({ d, size, pick, late, life = false }: BodyProps & { life?: bool
        <radialGradient id="${uid}-wait"><stop offset="0%" stop-color="${PHASE_COLOR.late}" stop-opacity=".45"/><stop offset="100%" stop-color="${PHASE_COLOR.late}" stop-opacity="0"/></radialGradient>
        <radialGradient id="${uid}-shade"><stop offset="0%" stop-color="#ec4899" stop-opacity=".16"/><stop offset="100%" stop-color="#ec4899" stop-opacity="0"/></radialGradient>
        <filter id="${uid}-glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="${4 * k0}"/></filter>` +
+      `<filter id="${uid}-soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="${14 * k0}"/></filter>
+       <radialGradient id="${uid}-fog"><stop offset="0%" stop-color="#fff" stop-opacity=".75"/><stop offset="100%" stop-color="#fff" stop-opacity="0"/></radialGradient>` +
+      (skyLook
+        ? `<radialGradient id="${uid}-sky"><stop offset="30%" stop-color="${skyLook[0]}" stop-opacity="${skyLook[2]}"/><stop offset="70%" stop-color="${skyLook[1]}" stop-opacity="${skyLook[2] * 0.6}"/><stop offset="100%" stop-color="${skyLook[1]}" stop-opacity="0"/></radialGradient>`
+        : "") +
       (tod
-        ? `<radialGradient id="${uid}-sky"><stop offset="30%" stop-color="${TOD_LOOK[tod].sky[0]}" stop-opacity="${TOD_LOOK[tod].sky[2]}"/><stop offset="70%" stop-color="${TOD_LOOK[tod].sky[1]}" stop-opacity="${TOD_LOOK[tod].sky[2] * 0.6}"/><stop offset="100%" stop-color="${TOD_LOOK[tod].sky[1]}" stop-opacity="0"/></radialGradient>
-           <radialGradient id="${uid}-sun"><stop offset="0%" stop-color="#fffbeb"/><stop offset="45%" stop-color="${tod === "evening" ? "#fdba74" : tod === "morning" ? "#fed7aa" : "#fde047"}"/><stop offset="100%" stop-color="${tod === "evening" ? "#f97316" : "#fbbf24"}"/></radialGradient>
+        ? `<radialGradient id="${uid}-sun"><stop offset="0%" stop-color="#fffbeb"/><stop offset="45%" stop-color="${tod === "evening" ? "#fdba74" : tod === "morning" ? "#fed7aa" : "#fde047"}"/><stop offset="100%" stop-color="${tod === "evening" ? "#f97316" : "#fbbf24"}"/></radialGradient>
            <radialGradient id="${uid}-tint"><stop offset="0%" stop-color="${TOD_LOOK[tod].tint?.[0] ?? "#fff"}"/><stop offset="70%" stop-color="${TOD_LOOK[tod].tint?.[0] ?? "#fff"}" stop-opacity=".8"/><stop offset="100%" stop-color="${TOD_LOOK[tod].tint?.[0] ?? "#fff"}" stop-opacity="0"/></radialGradient>
            <linearGradient id="${uid}-bf" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#f0abfc"/><stop offset="100%" stop-color="#a78bfa"/></linearGradient>
-           <linearGradient id="${uid}-bf2" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#f9a8d4"/><stop offset="100%" stop-color="#fb7185"/></linearGradient>
-           <filter id="${uid}-soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="${14 * k0}"/></filter>`
+           <linearGradient id="${uid}-bf2" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#f9a8d4"/><stop offset="100%" stop-color="#fb7185"/></linearGradient>`
         : "") +
       (life
         ? phases
@@ -489,25 +592,26 @@ function Flower({ d, size, pick, late, life = false }: BodyProps & { life?: bool
             .join("") +
           `<radialGradient id="${uid}-bud" cx=".45" cy=".4"><stop offset="0%" stop-color="#ffe4ec"/><stop offset="100%" stop-color="${PHASE_COLOR.period}"/></radialGradient>`
         : "");
-    if (tod) el("circle", { cx: C, cy: C, r: C * 0.98, fill: `url(#${uid}-sky)` }, svg);
+    if (skyLook) el("circle", { cx: C, cy: C, r: C * 0.98, fill: `url(#${uid}-sky)` }, svg);
     // Солнце или луна в углу — время суток видно сразу.
     let rays: Element | null = null;
     const stars: Element[] = [];
     if (tod) {
-      const sky = el("g", { style: "pointer-events:none" }, svg);
+      // В непогоду солнце и луна еле видны за облаками.
+      const sky = el("g", { style: "pointer-events:none", opacity: overcast ? 0.4 : 1 }, svg);
       const at = tod === "morning" ? [C - 0.7 * C, C - 0.74 * C] : tod === "evening" ? [C + 0.72 * C, C - 0.66 * C] : [C + 0.7 * C, C - 0.76 * C];
       const r = (tod === "evening" ? 15 : 13) * k0;
       if (tod === "night") {
         for (let j = 0; j < 14; j++) {
           const a = j * 2.39996 + 0.6;
           const rr = C * (0.78 + ((j * 37) % 17) / 100);
-          stars.push(el("circle", { cx: C + Math.cos(a) * rr, cy: C + Math.sin(a) * rr * 0.92, r: (0.8 + (j % 3) * 0.45) * k0, fill: "#e0e7ff" }, sky));
+          if (!overcast) stars.push(el("circle", { cx: C + Math.cos(a) * rr, cy: C + Math.sin(a) * rr * 0.92, r: (0.8 + (j % 3) * 0.45) * k0, fill: "#e0e7ff" }, sky));
         }
         el("circle", { cx: at[0], cy: at[1], r: r * 2.2, fill: "#e0e7ff", opacity: 0.6, filter: `url(#${uid}-glow)` }, sky);
         el("path", { d: `M0 ${-r} A ${r} ${r} 0 1 0 0 ${r} A ${r * 0.45} ${r} 0 1 1 0 ${-r}Z`, transform: `translate(${at[0] - r * 0.2} ${at[1]}) rotate(-25) scale(1.25)`, fill: "#fef3c7", stroke: "#fde68a", "stroke-width": 0.8 * k0 }, sky);
       } else {
         el("circle", { cx: at[0], cy: at[1], r: r * 2.3, fill: tod === "evening" ? "#fb923c" : "#fde047", opacity: tod === "day" ? 0.45 : 0.35, filter: `url(#${uid}-glow)` }, sky);
-        if (tod === "day") {
+        if (tod === "day" && !overcast) {
           rays = el("g", { transform: `translate(${at[0]} ${at[1]})` }, sky);
           for (let j = 0; j < 10; j++)
             el("path", { d: `M0 ${-r * 1.45} L0 ${-r * 2}`, transform: `rotate(${j * 36})`, stroke: "#fbbf24", "stroke-width": 2 * k0, "stroke-linecap": "round", opacity: 0.8 }, rays);
@@ -515,8 +619,19 @@ function Flower({ d, size, pick, late, life = false }: BodyProps & { life?: bool
         el("circle", { cx: at[0], cy: at[1], r, fill: `url(#${uid}-sun)`, opacity: tod === "morning" ? 0.9 : 1 }, sky);
       }
     }
+    // Облака: плывут по верху, в дождь серые, в грозу тёмные.
+    const clouds: Element[] = [];
+    if (wxSky === "clouds" || wet || wxSky === "snow") {
+      const fill = wxSky === "storm" ? "#64748b" : wxSky === "rain" ? "#94a3b8" : "#fff";
+      const cg = el("g", { style: "pointer-events:none", fill, stroke: wxSky === "clouds" || wxSky === "snow" ? "#e2e8f0" : "none", "stroke-width": 0.8 }, svg);
+      for (let j = 0; j < 3; j++) {
+        const c = el("g", { opacity: wxSky === "clouds" ? 0.92 : 0.85 }, cg);
+        c.innerHTML = CLOUD;
+        clouds.push(c);
+      }
+    }
     // Вечером солнце низко — тень длинная, вбок.
-    if (tod === "evening")
+    if (tod === "evening" && !overcast)
       el("ellipse", { cx: C + 40 * k0, cy: C + 52 * k0, rx: C * 0.7, ry: C * 0.32, transform: `rotate(18 ${C + 40 * k0} ${C + 52 * k0})`, fill: "#7c2d12", opacity: 0.12, filter: `url(#${uid}-soft)` }, svg);
     el("ellipse", { cx: C, cy: C + 14 * k0, rx: C * 0.86, ry: C * 0.8, fill: `url(#${uid}-shade)` }, svg);
     const aura = el("circle", { cx: C, cy: C, r: C * 0.95, fill: `url(#${uid}-${waiting ? "wait" : "aura"})`, opacity: 0 }, svg);
@@ -532,7 +647,8 @@ function Flower({ d, size, pick, late, life = false }: BodyProps & { life?: bool
     const ovStar = el("path", { d: "M0 -7 L1.8 -1.8 L7 0 L1.8 1.8 L0 7 L-1.8 1.8 L-7 0 L-1.8 -1.8 Z", fill: "#fff", stroke: "#14b8a6", "stroke-width": 1 }, ovStarG);
     // Утренняя роса — на каждом третьем лепестке.
     const dewG = el("g", { style: "pointer-events:none" }, svg);
-    const dews = tod === "morning"
+    // Роса утром и капли в дождь; в снег — белые шапочки на кончиках.
+    const dews = tod === "morning" || wet
       ? Array.from({ length: N }, (_, i) => {
           if (i % 2 !== 1) return null;
           const g = el("g", {}, dewG);
@@ -542,11 +658,27 @@ function Flower({ d, size, pick, late, life = false }: BodyProps & { life?: bool
           return g;
         })
       : [];
+    const caps = wxSky === "snow"
+      ? Array.from({ length: N }, (_, i) => {
+          if (i % 2 !== 0) return null;
+          return el("ellipse", { rx: 6 * k0, ry: 3.4 * k0, fill: "#fff", stroke: "#dbeafe", "stroke-width": 0.8 * k0 }, dewG);
+        })
+      : [];
     const stamenG = el("g", { style: "pointer-events:none" }, svg);
     const tintLook = tod ? TOD_LOOK[tod].tint : null;
     if (tintLook) el("circle", { cx: C, cy: C, r: C * 0.95, fill: `url(#${uid}-tint)`, opacity: tintLook[1], style: `pointer-events:none;mix-blend-mode:${tintLook[2]}` }, svg);
     // Днём по цветку скользит солнечный блик.
     const glint = tod === "day" ? el("ellipse", { rx: C * 0.34, ry: C * 0.1, fill: "#fff", opacity: 0.4, filter: `url(#${uid}-soft)`, style: "pointer-events:none;mix-blend-mode:soft-light" }, svg) : null;
+    // Туман: белая дымка поверх и две полосы, что медленно плывут.
+    const fogBands: Element[] = [];
+    if (wxSky === "fog") {
+      el("circle", { cx: C, cy: C, r: C * 0.95, fill: `url(#${uid}-fog)`, style: "pointer-events:none" }, svg);
+      for (let j = 0; j < 2; j++)
+        fogBands.push(el("ellipse", { rx: C * 0.9, ry: C * 0.12, fill: "#fff", opacity: 0.7, filter: `url(#${uid}-soft)`, style: "pointer-events:none" }, svg));
+    }
+    // Гроза: вспышка молнии.
+    const flash = wxSky === "storm" ? el("circle", { cx: C, cy: C, r: C * 1.05, fill: `url(#${uid}-fog)`, opacity: 0, style: "pointer-events:none" }, svg) : null;
+    let nextFlash = 2;
     const fx = el("g", { style: "pointer-events:none" }, svg);
     const todFx = el("g", { style: "pointer-events:none" }, svg);
     // Касание лепестка: цветок качается, утром с него скатывается капля.
@@ -618,7 +750,7 @@ function Flower({ d, size, pick, late, life = false }: BodyProps & { life?: bool
     const curl = lifeOn ? (ph === "luteal" ? 0.12 * ageK : 0) : waiting ? 0.12 : ph === "period" ? lerp(0.35, 0.15, frac(1, pl)) : ph === "luteal" ? lerp(0, 0.6, frac(fe + 1, N)) : 0;
     const wide = lifeOn && ph === "luteal" ? 1 : waiting ? 0.92 : ph === "period" ? 0.74 : ph === "follicular" ? lerp(0.8, 0.98, frac(pl + 1, fs - 1)) : ph === "luteal" ? lerp(1, 0.78, frac(fe + 1, N)) : 1.04;
     // Вечером лепестки понемногу прикрываются, ночью смыкаются.
-    const openT = open * (tod === "night" ? 0.72 : tod === "evening" ? 0.93 : 1);
+    const openT = open * (tod === "night" ? 0.72 : tod === "evening" ? 0.93 : 1) * (wxHot ? 0.95 : 1);
     const curlT = curl + (tod === "night" ? 0.3 : tod === "evening" ? 0.08 : 0);
     const bloomy = !waiting && (ph === "fertile" || ph === "ovulation");
     const shedding = !waiting && ph === "luteal" && N - day <= 5;
@@ -635,7 +767,7 @@ function Flower({ d, size, pick, late, life = false }: BodyProps & { life?: bool
     if (waiting) front.appendChild(fronts[todayK - 1]);
     const narrow = Math.sqrt(28 / Math.max(N, 24));
 
-    type Part = { pollen: boolean; fluff?: boolean; mote?: boolean; x: number; y: number; vx: number; vy: number; life: number; r: number; rot: number; vr: number; c: string };
+    type Part = { pollen: boolean; fluff?: boolean; mote?: boolean; rain?: boolean; ripple?: boolean; snow?: boolean; leaf?: boolean; x: number; y: number; vx: number; vy: number; life: number; r: number; rot: number; vr: number; c: string };
     let parts: Part[] = [];
     let raf = 0;
     const t0 = performance.now();
@@ -654,7 +786,11 @@ function Flower({ d, size, pick, late, life = false }: BodyProps & { life?: bool
       const g = easeOut(grow);
       const o = lerp(tod === "morning" ? 0.3 : 0.45, openT, g);
       const poke = reduce ? 0 : Math.max(0, 1 - (now - pokeAt) / 900);
-      const sway = reduce ? 0 : Math.sin(s * 0.7) * (tod === "day" ? 2.2 : tod === "night" ? 0.8 : 1.5) + poke * 5 * Math.sin(s * 11);
+      const sway = reduce
+        ? 0
+        : wxWindy
+          ? Math.sin(s * 1.3) * 6 + Math.sin(s * 3.1) * 1.5 + poke * 5 * Math.sin(s * 11)
+          : Math.sin(s * 0.7) * (tod === "day" ? 2.2 : tod === "night" ? 0.8 : 1.5) + poke * 5 * Math.sin(s * 11);
       for (let i = 0; i < N; i++) {
         const k = i + 1;
         const isToday = k === todayK;
@@ -687,6 +823,11 @@ function Flower({ d, size, pick, late, life = false }: BodyProps & { life?: bool
         const rad = (a * Math.PI) / 180;
         const reach = R0 - 6 * k0 + len;
         tips[i] = { x: C + Math.sin(rad) * reach, y: C - Math.cos(rad) * reach, a };
+        const cap = caps[i];
+        if (cap) {
+          cap.setAttribute("transform", `${tr} translate(0 ${-len * 0.9}) scale(${g})`);
+          cap.setAttribute("opacity", gone(i) ? "0" : "1");
+        }
         const dew = dews[i];
         if (dew) {
           let pos = 0.6;
@@ -731,13 +872,34 @@ function Flower({ d, size, pick, late, life = false }: BodyProps & { life?: bool
         const p = ((s * 0.06) % 1.4) - 0.7;
         glint.setAttribute("transform", `translate(${C + p * C * 1.6} ${C + p * C * 0.5}) rotate(-28)`);
       }
+      // Облака плывут в пределах карточки и тают у её краёв.
+      clouds.forEach((c, j) => {
+        const span = C * 1.5;
+        const x = ((((reduce ? 0.3 : s * (wxWindy ? 0.05 : 0.012)) + j * 0.37) % 1) + 1) % 1;
+        c.setAttribute("transform", `translate(${C - span / 2 + x * span} ${C - C * (0.8 - j * 0.09)}) scale(${k0 * (1.15 - j * 0.15)})`);
+        c.setAttribute("opacity", String((wxSky === "clouds" ? 0.92 : 0.85) * Math.min(1, Math.sin(Math.PI * x) * 3)));
+      });
+      fogBands.forEach((b, j) => {
+        const x = Math.sin((reduce ? 1 : s) * 0.15 + j * 2) * C * 0.3;
+        b.setAttribute("transform", `translate(${C + x} ${C + (j ? 0.35 : -0.25) * C})`);
+      });
+      if (flash && !reduce) {
+        if (s > nextFlash) {
+          nextFlash = s + 6 + Math.random() * 7;
+          pokeAt = now;
+        }
+        const t = s - (nextFlash - 6);
+        // Двойная вспышка в начале паузы.
+        const f = Math.max(0, 1 - Math.abs(t) * 6) + Math.max(0, 1 - Math.abs(t - 0.25) * 8) * 0.7;
+        flash.setAttribute("opacity", String(Math.min(1, f)));
+      }
       if (dews.length && !reduce && (s > nextRoll || (poke > 0.95 && s - roll.at > 1.6))) {
         const have = dews.map((x, i) => (x && !gone(i) ? i : -1)).filter((i) => i >= 0);
         if (have.length) roll = { i: have[Math.floor(Math.random() * have.length)], at: s };
         nextRoll = s + 5 + Math.random() * 4;
       }
       let extra = "";
-      if (tod === "day" && !reduce && tips.length) {
+      if (tod === "day" && !overcast && !reduce && tips.length) {
         // Прилёт 2.4 с, сидит 6 с, улетает 2 с, нет её 10 с.
         const t = s - bf.at;
         if (bf.to < 0 && t >= 0) {
@@ -767,7 +929,7 @@ function Flower({ d, size, pick, late, life = false }: BodyProps & { life?: bool
           if (bf.to >= 0) extra += `<g transform="translate(${x} ${y}) rotate(${rot}) scale(${k0 * 1.6})">${butterfly(uid, f)}</g>`;
         }
       }
-      if (tod === "night") {
+      if (tod === "night" && !wet && wxSky !== "snow") {
         // Три светлячка кружат и мигают; от касания разлетаются шире.
         for (let j = 0; j < 4; j++) {
           const spread = 1 + poke * 0.25;
@@ -778,11 +940,22 @@ function Flower({ d, size, pick, late, life = false }: BodyProps & { life?: bool
           extra += `<circle cx="${x}" cy="${y}" r="${10 * k0}" fill="#facc15" opacity="${0.6 * blink}" filter="url(#${uid}-glow)"/><circle cx="${x}" cy="${y}" r="${2.8 * k0}" fill="#fefce8" opacity="${blink}"/>`;
         }
       }
-      if (tod === "evening" && !reduce && g > 0.6 && Math.random() < 0.06) {
+      if (tod === "evening" && !overcast && !reduce && g > 0.6 && Math.random() < 0.06) {
         // Пылинки в закатном свете.
         const a = Math.random() * Math.PI * 2;
         const r = Math.random() * C * 0.85;
         parts.push({ pollen: false, mote: true, x: C + Math.cos(a) * r, y: C + Math.sin(a) * r, vx: (Math.random() - 0.3) * 0.25 * k0, vy: -(0.1 + Math.random() * 0.2) * k0, life: 1, r: (0.8 + Math.random() * 1.4) * k0, rot: 0, vr: 0, c: Math.random() < 0.5 ? "#fcd34d" : "#fdba74" });
+      }
+      if (!reduce && g > 0.5) {
+        // Дождь: косые струйки; у земли — круги, как на лужах.
+        if (wet && Math.random() < (wxSky === "storm" ? 1 : 0.55)) {
+          for (let n = wxSky === "storm" ? 2 : 1; n > 0; n--)
+            parts.push({ pollen: false, rain: true, x: C + (Math.random() * 1.6 - 0.6) * C, y: C - C * 0.95, vx: -(wxWindy ? 2.6 : 1.1) * k0, vy: (6 + Math.random() * 2) * k0, life: 1, r: C + C * (0.5 + Math.random() * 0.35), rot: 0, vr: 0, c: "" });
+        }
+        if (wxSky === "snow" && Math.random() < 0.3)
+          parts.push({ pollen: false, snow: true, x: C + (Math.random() * 1.6 - (wxWindy ? 0.6 : 0.8)) * C, y: C - C * 0.95, vx: (wxWindy ? -1.2 : -0.2) * k0, vy: (0.5 + Math.random() * 0.5) * k0, life: 1, r: (1.6 + Math.random() * 1.8) * k0, rot: Math.random() * 6, vr: 0, c: "" });
+        if (wxWindy && Math.random() < 0.02)
+          parts.push({ pollen: false, leaf: true, x: C + C * 0.8, y: C + (Math.random() - 0.6) * C, vx: -(2.2 + Math.random()) * k0, vy: (Math.random() - 0.5) * 0.6 * k0, life: 1, r: 0, rot: Math.random() * 360, vr: 5 + Math.random() * 4, c: "" });
       }
       todFx.innerHTML = extra;
 
@@ -804,11 +977,28 @@ function Flower({ d, size, pick, late, life = false }: BodyProps & { life?: bool
           parts.push({ pollen: false, x: C + Math.cos(a) * rr, y: C + Math.sin(a) * rr, vx: (Math.random() - 0.5) * 0.6 * k0, vy: (0.5 + Math.random() * 0.5) * k0, life: 1, r: 0, rot: Math.random() * 360, vr: (Math.random() - 0.5) * 4, c: PHASE_COLOR[phaseOf(k)] });
         }
       }
-      parts = parts.filter((q) => (q.life -= q.pollen ? 0.012 : q.fluff || q.mote ? 0.004 : 0.006) > 0);
+      // У каждой капли своя «земля» (r) — круги расходятся по всей нижней части.
+      for (const q of parts)
+        if (q.rain && (q.y > q.r || q.x < C - C * 0.8)) {
+          q.life = 0;
+          parts.push({ pollen: false, ripple: true, x: q.x, y: q.y, vx: 0, vy: 0, life: 1, r: 0, rot: 0, vr: 0, c: "" });
+        } else if ((q.snow || q.leaf) && (q.y > C + C * 0.9 || q.x < C - C * 0.82)) q.life = 0;
+      parts = parts.filter((q) => (q.life -= q.pollen ? 0.012 : q.ripple ? 0.035 : q.rain || q.snow || q.leaf ? 0.001 : q.fluff || q.mote ? 0.004 : 0.006) > 0);
       fx.innerHTML = parts
         .map((q) => {
           q.x += q.vx;
           q.y += q.vy;
+          if (q.rain) return `<path d="M0 0 l${q.vx * 1.6} ${q.vy * 1.6}" transform="translate(${q.x} ${q.y})" stroke="${wxSky === "storm" ? "#64748b" : "#7dd3fc"}" stroke-width="${1.3 * k0}" stroke-linecap="round" opacity=".7"/>`;
+          if (q.ripple) return `<ellipse cx="${q.x}" cy="${q.y}" rx="${(2 + (1 - q.life) * 10) * k0}" ry="${(0.8 + (1 - q.life) * 3) * k0}" fill="none" stroke="#7dd3fc" stroke-width="${0.9 * k0}" opacity="${q.life * 0.8}"/>`;
+          if (q.snow) {
+            q.x += Math.sin(q.y / (14 * k0) + q.rot) * 0.4 * k0;
+            return `<circle cx="${q.x}" cy="${q.y}" r="${q.r}" fill="#fff" stroke="#bfdbfe" stroke-width="${0.6 * k0}" opacity=".95"/>`;
+          }
+          if (q.leaf) {
+            q.rot += q.vr;
+            q.vy += Math.sin(q.x / (20 * k0)) * 0.03 * k0;
+            return `<g transform="translate(${q.x} ${q.y}) rotate(${q.rot}) scale(${k0 * 1.2})">${LEAF}</g>`;
+          }
           if (q.mote) return `<circle cx="${q.x}" cy="${q.y}" r="${q.r}" fill="${q.c}" opacity="${(4 * q.life * (1 - q.life) * 0.9).toFixed(2)}"/>`;
           if (!q.pollen) {
             q.rot += q.vr;
@@ -825,7 +1015,7 @@ function Flower({ d, size, pick, late, life = false }: BodyProps & { life?: bool
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [N, day, fs, fe, ov, pl, size, late, lateDays, life, tod]);
+  }, [N, day, fs, fe, ov, pl, size, late, lateDays, life, tod, wxSky, wxWindy, wxHot]);
   return <svg ref={ref} width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="absolute inset-0" style={{ overflow: "visible" }} />;
 }
 

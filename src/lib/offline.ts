@@ -78,7 +78,7 @@ export async function clearOffline(): Promise<void> {
   try {
     for (let i = localStorage.length - 1; i >= 0; i--) {
       const k = localStorage.key(i);
-      if (k && (k.startsWith(OUTBOX_PREFIX) || k === LAST_USER || k === "dots:wellness" || k.startsWith("dots:pending:")))
+      if (k && (k.startsWith(OUTBOX_PREFIX) || k === LAST_USER || k === "dots:wellness" || k.startsWith("dots:pending:") || k.startsWith("dots:weather:")))
         localStorage.removeItem(k);
     }
   } catch {

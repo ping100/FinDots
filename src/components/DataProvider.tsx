@@ -13,12 +13,15 @@ import {
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { FEE_LABEL } from "@/lib/fee";
 import {
+  applyMoneyOps,
   isNetworkError,
-  loadPending,
-  savePending,
-  type PendingOp,
-  type PendingRow,
+  loadMoneyOps,
+  moneyEffects,
+  saveMoneyOps,
+  type MoneyOp,
+  type TxRow,
 } from "@/lib/offlineQueue";
+import { lastUser, online, readSnapshot, writeSnapshot } from "@/lib/offline";
 import { createClient } from "@/lib/supabase/client";
 import { PALETTE } from "@/lib/icons";
 import { CURRENCIES, convert } from "@/lib/money";
@@ -148,6 +151,17 @@ function human(message: string): string {
   return message;
 }
 
+/** Снимок денег на телефоне — чтобы без сети приложение открывалось с последними данными. */
+interface MoneySnapshot {
+  profile: Profile | null;
+  rates: ExchangeRate[];
+  wallets: Wallet[];
+  categories: Category[];
+  balances: WalletBalance[];
+  pools: IncomePool[];
+  transactions: Transaction[];
+}
+
 export const StoreContext = createContext<Store | null>(null);
 
 export function useStore(): Store {
@@ -175,7 +189,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [balances, setBalances] = useState<WalletBalance[]>([]);
   const [pools, setPools] = useState<IncomePool[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [pending, setPending] = useState<PendingOp[]>([]);
+  // Операции без сети (lib/offlineQueue): на экране уже есть, на сервер уйдут при связи.
+  const [pending, setPending] = useState<MoneyOp[]>([]);
+  const pendingRef = useRef<MoneyOp[]>([]);
+  pendingRef.current = pending;
 
   const load = useCallback(async (retry = true) => {
     // Кто вошёл — из сохранённой сессии, без запроса к серверу входа:
@@ -183,13 +200,38 @@ export function DataProvider({ children }: { children: ReactNode }) {
     // решает база. Лишний круг до сервера — это полсекунды на мобильном.
     const {
       data: { session },
-    } = await supabase().auth.getSession();
-    const user = session?.user;
-    if (!user) {
+    } = await supabase()
+      .auth.getSession()
+      .catch(() => ({ data: { session: null } }));
+    // Без сети сессия может не прочитаться (истёк токен) — тогда тот, кто входил последним.
+    const uid = session?.user?.id ?? (online() ? null : lastUser());
+    if (!uid) {
       setReady(true);
       return;
     }
+    const user = { id: uid };
     setUserId(user.id);
+
+    // Без сети — последнее загруженное, с телефона.
+    const fromSnapshot = async () => {
+      const snap = await readSnapshot<MoneySnapshot>("money", uid);
+      if (snap) {
+        setProfile(snap.profile);
+        setRates(snap.rates);
+        setWallets(snap.wallets);
+        setCategories(snap.categories);
+        setBalances(snap.balances);
+        setPools(snap.pools);
+        setTransactions(snap.transactions);
+        setError(null);
+      }
+      setReady(true);
+      return !!snap;
+    };
+    if (!online()) {
+      await fromSnapshot();
+      return;
+    }
 
     const [p, r, w, c, b, ip, tx] = await Promise.all([
       supabase().from("profiles").select("*").eq("id", user.id).single(),
@@ -208,6 +250,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     ]);
 
     const firstError = [p, r, w, c, b, ip, tx].find((res) => res.error)?.error;
+    if (firstError && isNetworkError(firstError.message) && (await fromSnapshot())) return;
     if (firstError && transient(firstError.message) && retry) {
       // Сорвавшийся токен обновляем и заходим на второй круг: показывать
       // человеку «JWT issued at future» и оставлять пустой экран — худшее,
@@ -227,6 +270,17 @@ export function DataProvider({ children }: { children: ReactNode }) {
     setPools((ip.data ?? []) as IncomePool[]);
     setTransactions((tx.data ?? []) as Transaction[]);
     setReady(true);
+    if (!firstError) {
+      void writeSnapshot("money", uid, {
+        profile: (p.data ?? null) as Profile | null,
+        rates: (r.data ?? []) as ExchangeRate[],
+        wallets: (w.data ?? []) as Wallet[],
+        categories: (c.data ?? []) as Category[],
+        balances: (b.data ?? []) as WalletBalance[],
+        pools: (ip.data ?? []) as IncomePool[],
+        transactions: (tx.data ?? []) as Transaction[],
+      } satisfies MoneySnapshot);
+    }
   }, [supabase]);
 
   useEffect(() => {
@@ -260,7 +314,17 @@ export function DataProvider({ children }: { children: ReactNode }) {
     if (!b.error) setBalances((b.data ?? []) as WalletBalance[]);
     if (!ip.error) setPools((ip.data ?? []) as IncomePool[]);
     if (!tx.error) setTransactions((tx.data ?? []) as Transaction[]);
+    if (!b.error && !ip.error && !tx.error) setSnapshotDirty((n) => n + 1);
   }, [supabase]);
+
+  // Снимок на телефон — после каждой удачной загрузки с сервера.
+  const [snapshotDirty, setSnapshotDirty] = useState(0);
+  useEffect(() => {
+    if (!snapshotDirty || !userId) return;
+    void writeSnapshot("money", userId, { profile, rates, wallets, categories, balances, pools, transactions } satisfies MoneySnapshot);
+    // Только по сигналу refresh, а не на каждую правку состояния.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [snapshotDirty]);
 
   const guard = useCallback(
     async (run: () => PromiseLike<{ error: { message: string } | null }>) => {
@@ -282,30 +346,35 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [refresh, supabase],
   );
 
-  // Траты без сети уже ушли из кошелька для человека, хотя сервер о них
-  // ещё не знает: вычитаем их сами, пока не отправятся.
-  const pendingByWallet = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const row of pending.flat()) {
-      const wallet = wallets.find((w) => w.id === row.wallet_id);
-      const value = wallet
-        ? convert(Number(row.amount), row.currency as CurrencyCode, wallet.currency, rates)
-        : Number(row.amount);
-      map.set(row.wallet_id, (map.get(row.wallet_id) ?? 0) + value);
-    }
-    return map;
-  }, [pending, wallets, rates]);
+  // Операции из очереди уже в списке и в балансах: человек их сделал, а
+  // сервер о них ещё не знает — досчитываем их вклад сами (lib/offlineQueue).
+  const visibleTransactions = useMemo(() => applyMoneyOps(transactions, pending), [transactions, pending]);
+  const effects = useMemo(
+    () => moneyEffects(transactions, visibleTransactions, pending, wallets, rates),
+    [transactions, visibleTransactions, pending, wallets, rates],
+  );
 
   const balanceOf = useCallback(
     (walletId: string) =>
-      Number(balances.find((b) => b.wallet_id === walletId)?.balance ?? 0) -
-      (pendingByWallet.get(walletId) ?? 0),
-    [balances, pendingByWallet],
+      Number(balances.find((b) => b.wallet_id === walletId)?.balance ?? 0) + (effects.wallets.get(walletId) ?? 0),
+    [balances, effects],
   );
+
+  // «Нераспределённый доход» с учётом очереди: доход без сети сразу виден.
+  const effectivePools = useMemo(() => {
+    if (!effects.pools.size) return pools;
+    const map = new Map(pools.map((p) => [`${p.category_id}|${p.currency}`, { ...p, unallocated: Number(p.unallocated) }]));
+    for (const [key, delta] of effects.pools) {
+      const [category_id, currency] = key.split("|");
+      const row = map.get(key) ?? ({ category_id, currency, unallocated: 0 } as IncomePool);
+      map.set(key, { ...row, unallocated: Number(row.unallocated) + delta });
+    }
+    return [...map.values()].filter((p) => Number(p.unallocated) > 0.004);
+  }, [pools, effects]);
 
   const poolOf = useCallback(
     (categoryId: string) => {
-      const rows = pools.filter((p) => p.category_id === categoryId);
+      const rows = effectivePools.filter((p) => p.category_id === categoryId);
       const currency = rows[0]?.currency ?? profile?.base_currency ?? "KZT";
       const amount = rows.reduce(
         (sum, row) => sum + convert(Number(row.unallocated), row.currency, currency, rates),
@@ -313,7 +382,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       );
       return { amount, currency };
     },
-    [pools, profile, rates],
+    [effectivePools, profile, rates],
   );
 
   const toBase = useCallback(
@@ -324,134 +393,67 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   // ─────────────────────────── операции ───────────────────────────
 
-  const addIncome: Store["addIncome"] = useCallback(
-    async ({ categoryId, subcategoryId, amount, currency, note, occurredAt }) =>
-      guard(() =>
-        supabase().from("transactions").insert({
-          user_id: userId,
-          type: "income",
-          amount,
-          currency,
-          category_id: categoryId,
-          subcategory_id: subcategoryId || null,
-          note: note || null,
-          occurred_at: occurredAt ?? new Date().toISOString(),
-        }),
-      ),
-    [guard, supabase, userId],
-  );
-
-  /**
-   * Разнос дохода по кошелькам. Сумма списывается с самых ранних
-   * нераспределённых поступлений этой категории (FIFO) и может лечь
-   * на несколько строк дохода сразу — поэтому вставок может быть больше одной.
-   */
-  const allocate: Store["allocate"] = useCallback(
-    async ({ categoryId, walletId, amount, currency }) => {
-      const allocatedByParent = new Map<string, number>();
-      for (const t of transactions) {
-        if (t.type !== "allocation" || !t.parent_id) continue;
-        allocatedByParent.set(
-          t.parent_id,
-          (allocatedByParent.get(t.parent_id) ?? 0) + Number(t.amount),
-        );
-      }
-
-      const sources = transactions
-        .filter((t) => t.type === "income" && t.category_id === categoryId)
-        .sort((a, b) => a.occurred_at.localeCompare(b.occurred_at))
-        .map((t) => ({
-          tx: t,
-          left: Number(t.amount) - (allocatedByParent.get(t.id) ?? 0),
-        }))
-        .filter((s) => s.left > 0.004);
-
-      let remaining = amount;
-      const rows: Record<string, unknown>[] = [];
-      for (const source of sources) {
-        if (remaining <= 0.004) break;
-        // остаток источника — в его валюте, переносимая сумма — в валюте переноса
-        const leftInDragCurrency = convert(source.left, source.tx.currency, currency, rates);
-        const take = Math.min(remaining, leftInDragCurrency);
-        rows.push({
-          user_id: userId,
-          type: "allocation",
-          amount: Math.round(take * 100) / 100,
-          currency,
-          wallet_id: walletId,
-          parent_id: source.tx.id,
-          occurred_at: new Date().toISOString(),
-        });
-        remaining -= take;
-      }
-
-      if (!rows.length) throw new Error("Нечего переносить: нераспределённого дохода нет");
-      await guard(() => supabase().from("transactions").insert(rows));
-    },
-    [guard, rates, supabase, transactions, userId],
-  );
-
-  // Очередь трат без сети — у каждого вошедшего своя.
+  // Очередь операций без сети — у каждого вошедшего своя.
   useEffect(() => {
-    if (userId) setPending(loadPending(userId));
+    if (userId) setPending(loadMoneyOps(userId));
   }, [userId]);
 
+  // Через ref, а не функцию-обновлялку useState: отправка читает очередь в
+  // цикле сразу после правки, а обновлялка выполнится позже.
   const updatePending = useCallback(
-    (change: (ops: PendingOp[]) => PendingOp[]) =>
-      setPending((ops) => {
-        const next = change(ops);
-        if (userId) savePending(userId, next);
-        return next;
-      }),
+    (change: (ops: MoneyOp[]) => MoneyOp[]) => {
+      const next = change(pendingRef.current);
+      pendingRef.current = next;
+      if (userId) saveMoneyOps(userId, next);
+      setPending(next);
+    },
     [userId],
   );
 
-  const addExpense: Store["addExpense"] = useCallback(
-    async ({ categoryId, subcategoryId, walletId, amount, currency, note, occurredAt, fee }) => {
-      if (!userId) throw new Error("Нужно войти заново");
-      // id задаём здесь: по нему комиссия ссылается на трату, и по нему же
-      // повторная отправка из очереди не задвоит строку (lib/offlineQueue.ts).
-      const expense: PendingRow = {
-        id: crypto.randomUUID(),
-        user_id: userId,
-        type: "expense",
-        amount,
-        currency,
-        category_id: categoryId,
-        subcategory_id: subcategoryId || null,
-        wallet_id: walletId,
-        parent_id: null,
-        note: note || null,
-        occurred_at: occurredAt ?? new Date().toISOString(),
-      };
-      const op: PendingOp = [expense];
-      if (fee && fee > 0) {
-        // Отдельной строкой без категории — см. lib/fee.ts.
-        op.push({
-          ...expense,
-          id: crypto.randomUUID(),
-          amount: fee,
-          category_id: null,
-          subcategory_id: null,
-          parent_id: expense.id,
-          note: FEE_LABEL,
-        });
-      }
+  /** Полная строка операции: всё, чего нет, — null. id задаём здесь. */
+  const txRow = useCallback(
+    (fields: Partial<Transaction> & Pick<Transaction, "type" | "amount" | "currency">): TxRow => ({
+      id: crypto.randomUUID(),
+      user_id: userId ?? "",
+      category_id: null,
+      subcategory_id: null,
+      wallet_id: null,
+      from_wallet_id: null,
+      to_wallet_id: null,
+      parent_id: null,
+      note: null,
+      occurred_at: new Date().toISOString(),
+      ...fields,
+    }),
+    [userId],
+  );
 
-      if (!navigator.onLine) {
+  const runMoneyOp = useCallback(
+    (op: MoneyOp) => {
+      const q = supabase().from("transactions");
+      // При слабом сигнале запрос может висеть минуту — после 8 секунд
+      // считаем, что связи нет, и кладём в очередь.
+      const signal = AbortSignal.timeout(8000);
+      if (op.t === "insert") return q.upsert(op.rows, { onConflict: "id", ignoreDuplicates: true }).abortSignal(signal);
+      if (op.t === "update") return q.update(op.patch).eq("id", op.id).abortSignal(signal);
+      return q.delete().eq("id", op.id).abortSignal(signal);
+    },
+    [supabase],
+  );
+
+  /** Записать операцию: со связью — сразу, без неё (или если связь сорвалась) — в очередь. */
+  const submit = useCallback(
+    async (op: MoneyOp) => {
+      if (!userId) throw new Error("Нужно войти заново");
+      if (!online()) {
         updatePending((ops) => [...ops, op]);
         return;
       }
       try {
-        // Одним запросом: трата и комиссия сохраняются вместе или никак.
-        // При слабом сигнале запрос может висеть минуту — после 8 секунд
-        // считаем, что связи нет, и кладём в очередь.
-        await guard(() =>
-          supabase().from("transactions").insert(op).abortSignal(AbortSignal.timeout(8000)),
-        );
+        await guard(() => runMoneyOp(op));
       } catch (e) {
         const message = e instanceof Error ? e.message : "";
-        if (!navigator.onLine || isNetworkError(message)) {
+        if (!online() || isNetworkError(message)) {
           setError(null);
           updatePending((ops) => [...ops, op]);
           return;
@@ -459,36 +461,51 @@ export function DataProvider({ children }: { children: ReactNode }) {
         throw e;
       }
     },
-    [guard, supabase, updatePending, userId],
+    [guard, runMoneyOp, updatePending, userId],
+  );
+
+  const addExpense: Store["addExpense"] = useCallback(
+    async ({ categoryId, subcategoryId, walletId, amount, currency, note, occurredAt, fee }) => {
+      // id задаём здесь: по нему комиссия ссылается на трату, и по нему же
+      // повторная отправка из очереди не задвоит строку (lib/offlineQueue.ts).
+      const expense = txRow({
+        type: "expense",
+        amount,
+        currency,
+        category_id: categoryId,
+        subcategory_id: subcategoryId || null,
+        wallet_id: walletId,
+        note: note || null,
+        occurred_at: occurredAt ?? new Date().toISOString(),
+      });
+      const rows = [expense];
+      // Комиссия — отдельной строкой без категории (lib/fee.ts).
+      if (fee && fee > 0) rows.push(txRow({ ...expense, id: crypto.randomUUID(), amount: fee, category_id: null, subcategory_id: null, parent_id: expense.id, note: FEE_LABEL }));
+      // Одним запросом: трата и комиссия сохраняются вместе или никак.
+      await submit({ t: "insert", rows });
+    },
+    [submit, txRow],
   );
 
   // Отправить очередь, как только есть связь.
   const flushing = useRef(false);
   const flushPending = useCallback(async () => {
-    if (flushing.current || pending.length === 0 || !navigator.onLine) return;
+    if (flushing.current || pendingRef.current.length === 0 || !online()) return;
     flushing.current = true;
-    const sent = new Set<string>();
     try {
-      for (const op of pending) {
-        const res = await supabase()
-          .from("transactions")
-          .upsert(op, { onConflict: "id", ignoreDuplicates: true });
-        if (res.error) {
-          // Связь снова пропала — дождёмся следующей попытки.
-          if (transient(res.error.message)) break;
-          // Сервер отказал по существу: крутить вечно бессмысленно — говорим.
-          setError(`Трата, записанная без сети, не сохранилась: ${human(res.error.message)}`);
-        }
-        sent.add(op[0].id);
+      while (pendingRef.current.length) {
+        const res = await runMoneyOp(pendingRef.current[0]);
+        // Связь снова пропала — дождёмся следующей попытки.
+        if (res.error && (transient(res.error.message) || isNetworkError(res.error.message))) break;
+        // Сервер отказал по существу: крутить вечно бессмысленно — говорим.
+        if (res.error) setError(`Операция, записанная без сети, не сохранилась: ${human(res.error.message)}`);
+        updatePending((ops) => ops.slice(1));
       }
     } finally {
       flushing.current = false;
     }
-    if (sent.size) {
-      updatePending((ops) => ops.filter((op) => !sent.has(op[0].id)));
-      await refresh();
-    }
-  }, [pending, refresh, supabase, updatePending]);
+    await refresh();
+  }, [refresh, runMoneyOp, updatePending]);
 
   useEffect(() => {
     if (pending.length === 0) return;
@@ -502,11 +519,73 @@ export function DataProvider({ children }: { children: ReactNode }) {
     };
   }, [pending.length, flushPending]);
 
+  const addIncome: Store["addIncome"] = useCallback(
+    async ({ categoryId, subcategoryId, amount, currency, note, occurredAt }) =>
+      submit({
+        t: "insert",
+        rows: [
+          txRow({
+            type: "income",
+            amount,
+            currency,
+            category_id: categoryId,
+            subcategory_id: subcategoryId || null,
+            note: note || null,
+            occurred_at: occurredAt ?? new Date().toISOString(),
+          }),
+        ],
+      }),
+    [submit, txRow],
+  );
+
+  /**
+   * Разнос дохода по кошелькам. Сумма списывается с самых ранних
+   * нераспределённых поступлений этой категории (FIFO) и может лечь
+   * на несколько строк дохода сразу — поэтому вставок может быть больше одной.
+   */
+  const allocate: Store["allocate"] = useCallback(
+    async ({ categoryId, walletId, amount, currency }) => {
+      const allocatedByParent = new Map<string, number>();
+      // С очередью: доход и разносы, сделанные без сети, тоже учитываются.
+      for (const t of visibleTransactions) {
+        if (t.type !== "allocation" || !t.parent_id) continue;
+        allocatedByParent.set(
+          t.parent_id,
+          (allocatedByParent.get(t.parent_id) ?? 0) + Number(t.amount),
+        );
+      }
+
+      const sources = visibleTransactions
+        .filter((t) => t.type === "income" && t.category_id === categoryId)
+        .sort((a, b) => a.occurred_at.localeCompare(b.occurred_at))
+        .map((t) => ({
+          tx: t,
+          left: Number(t.amount) - (allocatedByParent.get(t.id) ?? 0),
+        }))
+        .filter((s) => s.left > 0.004);
+
+      let remaining = amount;
+      const rows: TxRow[] = [];
+      for (const source of sources) {
+        if (remaining <= 0.004) break;
+        // остаток источника — в его валюте, переносимая сумма — в валюте переноса
+        const leftInDragCurrency = convert(source.left, source.tx.currency, currency, rates);
+        const take = Math.min(remaining, leftInDragCurrency);
+        rows.push(
+          txRow({ type: "allocation", amount: Math.round(take * 100) / 100, currency, wallet_id: walletId, parent_id: source.tx.id }),
+        );
+        remaining -= take;
+      }
+
+      if (!rows.length) throw new Error("Нечего переносить: нераспределённого дохода нет");
+      await submit({ t: "insert", rows });
+    },
+    [rates, submit, txRow, visibleTransactions],
+  );
+
   const addTransfer: Store["addTransfer"] = useCallback(
     async ({ fromWalletId, toWalletId, amount, currency, note, occurredAt, fee }) => {
-      const transfer = {
-        id: crypto.randomUUID(),
-        user_id: userId,
+      const transfer = txRow({
         type: "transfer",
         amount,
         currency,
@@ -514,28 +593,19 @@ export function DataProvider({ children }: { children: ReactNode }) {
         to_wallet_id: toWalletId,
         note: note || null,
         occurred_at: occurredAt ?? new Date().toISOString(),
-      };
+      });
       // Комиссия — как у трат (lib/fee.ts): расход без категории с parent_id
       // на перевод. Удалили перевод — база удалит и комиссию.
-      const rows: Record<string, unknown>[] = [transfer];
+      const rows = [transfer];
       if (fee && fee > 0) {
-        rows.push({
-          id: crypto.randomUUID(),
-          user_id: userId,
-          type: "expense",
-          amount: fee,
-          currency,
-          wallet_id: fromWalletId,
-          category_id: null,
-          parent_id: transfer.id,
-          note: FEE_LABEL,
-          occurred_at: transfer.occurred_at,
-        });
+        rows.push(
+          txRow({ type: "expense", amount: fee, currency, wallet_id: fromWalletId, parent_id: transfer.id, note: FEE_LABEL, occurred_at: transfer.occurred_at }),
+        );
       }
       // Одним запросом: перевод и комиссия сохраняются вместе или никак.
-      return guard(() => supabase().from("transactions").insert(rows));
+      await submit({ t: "insert", rows });
     },
-    [guard, supabase, userId],
+    [submit, txRow],
   );
 
   /** Ручная правка баланса записывается отдельной операцией, а не затиранием истории. */
@@ -545,19 +615,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
       if (!wallet) throw new Error("Кошелёк не найден");
       const delta = Math.round((target - balanceOf(walletId)) * 100) / 100;
       if (Math.abs(delta) < 0.005) return;
-      await guard(() =>
-        supabase().from("transactions").insert({
-          user_id: userId,
-          type: "adjustment",
-          amount: delta,
-          currency: wallet.currency,
-          wallet_id: walletId,
-          note: "Ручная корректировка",
-          occurred_at: new Date().toISOString(),
-        }),
-      );
+      await submit({
+        t: "insert",
+        rows: [txRow({ type: "adjustment", amount: delta, currency: wallet.currency, wallet_id: walletId, note: "Ручная корректировка" })],
+      });
     },
-    [balanceOf, guard, supabase, userId, wallets],
+    [balanceOf, submit, txRow, wallets],
   );
 
   const reloadDictionaries = useCallback(async () => {
@@ -615,39 +678,39 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [rates, refresh, reloadDictionaries, supabase, transactions, userId, wallets],
   );
 
-  const isPending = useCallback(
-    (id: string) => pending.some((op) => op.some((row) => row.id === id)),
+  /** Операция ещё не ушла на сервер — правим её прямо в очереди. */
+  const queuedInsert = useCallback(
+    (id: string) => pending.some((op) => op.t === "insert" && op.rows.some((row) => row.id === id)),
     [pending],
   );
 
-  // Трату из очереди правим и удаляем прямо в очереди: на сервере её ещё нет.
   const updateTransaction: Store["updateTransaction"] = useCallback(
     async (id, patch) => {
-      if (isPending(id)) {
+      if (queuedInsert(id)) {
         updatePending((ops) =>
-          ops.map((op) => op.map((row) => (row.id === id ? ({ ...row, ...patch } as PendingRow) : row))),
+          ops.map((op) => (op.t === "insert" ? { ...op, rows: op.rows.map((row) => (row.id === id ? { ...row, ...patch } : row)) } : op)),
         );
         return;
       }
-      return guard(() => supabase().from("transactions").update(patch).eq("id", id));
+      await submit({ t: "update", id, patch });
     },
-    [guard, isPending, supabase, updatePending],
+    [queuedInsert, submit, updatePending],
   );
 
   const deleteTransaction: Store["deleteTransaction"] = useCallback(
     async (id) => {
-      if (isPending(id)) {
-        // Как и на сервере, с тратой уходит её комиссия.
+      if (queuedInsert(id)) {
+        // Как и на сервере, с операцией уходят её комиссия и разносы.
         updatePending((ops) =>
           ops
-            .map((op) => op.filter((row) => row.id !== id && row.parent_id !== id))
-            .filter((op) => op.length > 0),
+            .map((op) => (op.t === "insert" ? { ...op, rows: op.rows.filter((row) => row.id !== id && row.parent_id !== id) } : op))
+            .filter((op) => op.t !== "insert" || op.rows.length > 0),
         );
         return;
       }
-      return guard(() => supabase().from("transactions").delete().eq("id", id));
+      await submit({ t: "delete", id });
     },
-    [guard, isPending, supabase, updatePending],
+    [queuedInsert, submit, updatePending],
   );
 
   // ───────────────────── справочники ─────────────────────
@@ -1031,16 +1094,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const moneyHidden = useMoneyHidden();
 
-  // Траты из очереди показываем вместе с остальными — человек их уже записал.
-  const visibleTransactions = useMemo(() => {
-    if (pending.length === 0) return transactions;
-    const known = new Set(transactions.map((t) => t.id));
-    const queued = pending
-      .flat()
-      .filter((row) => !known.has(row.id))
-      .map((row) => ({ ...row, from_wallet_id: null, to_wallet_id: null }) as Transaction);
-    return [...queued, ...transactions].sort((a, b) => b.occurred_at.localeCompare(a.occurred_at));
-  }, [pending, transactions]);
   const pendingCount = pending.length;
 
   const value = useMemo<Store>(
@@ -1054,7 +1107,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       wallets,
       categories,
       balances,
-      pools,
+      pools: effectivePools,
       transactions: visibleTransactions,
       pendingCount,
       balanceOf,
@@ -1082,7 +1135,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       syncRates,
     }),
     [
-      ready, moneyHidden, error, userId, profile, rates, wallets, categories, balances, pools,
+      ready, moneyHidden, error, userId, profile, rates, wallets, categories, balances, effectivePools,
       visibleTransactions, pendingCount, balanceOf, poolOf, toBase, refresh, addIncome, allocate,
       addExpense, addTransfer, setWalletBalance, accrueInterest, updateTransaction, deleteTransaction,
       saveWallet, deleteWallet, resetMoneyData, saveCategory, reorderCategories, addSubcategory, importDrafts, deleteCategory, saveProfile, saveRate, syncRates,

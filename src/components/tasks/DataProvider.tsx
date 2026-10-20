@@ -18,6 +18,17 @@ import { today } from "@/lib/tasks/dates";
 import { nextAfterDone } from "@/lib/tasks/repeat";
 import type { Task, TaskCategory } from "@/lib/tasks/types";
 import type { Profile } from "@/lib/types";
+import {
+  isNetworkError,
+  lastUser,
+  loadOutbox,
+  online,
+  readSnapshot,
+  runOp,
+  saveOutbox,
+  writeSnapshot,
+  type OutOp,
+} from "@/lib/offline";
 
 export interface Store {
   ready: boolean;
@@ -28,6 +39,8 @@ export interface Store {
   categories: TaskCategory[];
 
   refresh: () => Promise<void>;
+  /** Изменений, ждущих связи. */
+  pendingCount: number;
 
   saveTask: (task: Partial<Task> & { id?: string }) => Promise<void>;
   toggleDone: (id: string) => Promise<void>;
@@ -79,6 +92,29 @@ function human(message: string): string {
   return message;
 }
 
+/** Наложить отложенные изменения на список с сервера — чтобы без сети и до отправки видно было своё. */
+function applyOps(list: Task[], ops: OutOp[]): Task[] {
+  let out = list;
+  for (const op of ops) {
+    if (op.t === "upsert" && op.table === "tasks") {
+      for (const row of op.rows as unknown as Task[]) {
+        out = out.some((t) => t.id === row.id) ? out.map((t) => (t.id === row.id ? { ...t, ...row } : t)) : [...out, row];
+      }
+    } else if (op.t === "update" && op.table === "tasks") {
+      out = out.map((t) => (t.id === op.match.id ? ({ ...t, ...op.patch } as Task) : t));
+    } else if (op.t === "delete" && op.table === "tasks") {
+      out = out.filter((t) => t.id !== op.match.id);
+    }
+  }
+  return out;
+}
+
+interface Snapshot {
+  profile: Profile | null;
+  categories: TaskCategory[];
+  tasks: Task[];
+}
+
 export const StoreContext = createContext<Store | null>(null);
 
 export function useStore(): Store {
@@ -104,6 +140,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const tasksRef = useRef<Task[]>([]);
   tasksRef.current = tasks;
   const [categories, setCategories] = useState<TaskCategory[]>([]);
+  // Изменения без сети: лежат на телефоне, пока не уйдут на сервер.
+  const [outbox, setOutbox] = useState<OutOp[]>([]);
+  const outboxRef = useRef<OutOp[]>([]);
+  outboxRef.current = outbox;
 
   const load = useCallback(async (retry = true) => {
     // Кто вошёл — из сохранённой сессии, без запроса к серверу входа:
@@ -111,13 +151,36 @@ export function DataProvider({ children }: { children: ReactNode }) {
     // решает база. Лишний круг до сервера — это полсекунды на мобильном.
     const {
       data: { session },
-    } = await supabase().auth.getSession();
-    const user = session?.user;
-    if (!user) {
+    } = await supabase()
+      .auth.getSession()
+      .catch(() => ({ data: { session: null } }));
+    // Без сети сессия может не прочитаться (истёк токен) — тогда тот, кто входил последним.
+    const uid = session?.user?.id ?? (online() ? null : lastUser());
+    if (!uid) {
       setReady(true);
       return;
     }
-    setUserId(user.id);
+    setUserId(uid);
+    const queued = loadOutbox("tasks", uid);
+    setOutbox(queued);
+
+    // Без сети — сразу снимок с телефона.
+    const fromSnapshot = async () => {
+      const snap = await readSnapshot<Snapshot>("tasks", uid);
+      if (snap) {
+        setProfile(snap.profile);
+        setCategories(snap.categories);
+        setTasks(applyOps(snap.tasks, queued));
+        setError(null);
+      }
+      setReady(true);
+      return !!snap;
+    };
+    if (!online()) {
+      await fromSnapshot();
+      return;
+    }
+    const user = { id: uid };
 
     const [p, c, t] = await Promise.all([
       supabase().from("profiles").select("*").eq("id", user.id).single(),
@@ -133,6 +196,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     ]);
 
     const firstError = [p, c, t].find((res) => res.error)?.error;
+    if (firstError && isNetworkError(firstError.message) && (await fromSnapshot())) return;
     if (firstError && transient(firstError.message) && retry) {
       await supabase().auth.refreshSession();
       await new Promise((done) => setTimeout(done, 600));
@@ -143,8 +207,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
     if (p.data) setProfile(p.data as Profile);
     setCategories((c.data ?? []) as TaskCategory[]);
-    setTasks(carryOver((t.data ?? []) as Task[]));
+    const list = carryOver((t.data ?? []) as Task[]);
+    setTasks(applyOps(list, queued));
     setReady(true);
+    if (!firstError) void writeSnapshot("tasks", uid, { profile: p.data ?? null, categories: c.data ?? [], tasks: list } satisfies Snapshot);
   }, [supabase]);
 
   useEffect(() => {
@@ -171,40 +237,128 @@ export function DataProvider({ children }: { children: ReactNode }) {
       .order("sort_order")
       .order("created_at")
       .limit(2000);
-    setTasks(carryOver((t.data ?? []) as Task[]));
-  }, [supabase]);
+    // Сорвалось — оставляем то, что на экране: пустой список хуже устаревшего.
+    if (t.error) return;
+    const list = carryOver((t.data ?? []) as Task[]);
+    setTasks(applyOps(list, outboxRef.current));
+    if (userId) void writeSnapshot("tasks", userId, { profile, categories, tasks: list } satisfies Snapshot);
+  }, [supabase, userId, profile, categories]);
 
-  const guard = useCallback(
-    async (run: () => PromiseLike<{ error: { message: string } | null }>) => {
+  // Очередь — через ref, а не через функцию-обновлялку useState: отправка
+  // читает её в цикле сразу после правки, а обновлялка выполнится позже.
+  const updateOutbox = useCallback(
+    (change: (ops: OutOp[]) => OutOp[]) => {
+      const next = change(outboxRef.current);
+      outboxRef.current = next;
+      if (userId) saveOutbox("tasks", userId, next);
+      setOutbox(next);
+    },
+    [userId],
+  );
+
+  /**
+   * Записать изменения: со связью — сразу на сервер, без неё (или если
+   * связь сорвалась) — в очередь. На экране они уже есть (оптимистично).
+   */
+  const write = useCallback(
+    async (ops: OutOp[]) => {
       setError(null);
-      let { error: err } = await run();
-      if (err && transient(err.message)) {
-        await supabase().auth.refreshSession();
-        await new Promise((done) => setTimeout(done, 600));
-        ({ error: err } = await run());
+      if (!online()) {
+        updateOutbox((q) => [...q, ...ops]);
+        return;
       }
-      if (err) {
-        setError(human(err.message));
-        throw new Error(human(err.message));
+      for (let i = 0; i < ops.length; i++) {
+        let { error: err } = await runOp(supabase(), ops[i]);
+        if (err && transient(err.message) && !isNetworkError(err.message)) {
+          await supabase().auth.refreshSession();
+          ({ error: err } = await runOp(supabase(), ops[i]));
+        }
+        if (err && isNetworkError(err.message)) {
+          updateOutbox((q) => [...q, ...ops.slice(i)]);
+          return;
+        }
+        if (err) {
+          setError(human(err.message));
+          void refresh();
+          throw new Error(human(err.message));
+        }
       }
       await refresh();
     },
-    [refresh, supabase],
+    [refresh, supabase, updateOutbox],
   );
+
+  // Связь вернулась — отправляем очередь по порядку.
+  const flushing = useRef(false);
+  const flush = useCallback(async () => {
+    if (flushing.current || !online() || outboxRef.current.length === 0) return;
+    flushing.current = true;
+    try {
+      while (outboxRef.current.length) {
+        const op = outboxRef.current[0];
+        const { error: err } = await runOp(supabase(), op);
+        if (err && isNetworkError(err.message)) break;
+        // Отказ по существу (например, задачу уже удалили на другом
+        // телефоне) — изменение бессмысленно крутить вечно.
+        if (err) setError(`Изменение без сети не сохранилось: ${human(err.message)}`);
+        updateOutbox((q) => q.slice(1));
+      }
+    } finally {
+      flushing.current = false;
+    }
+    if (!outboxRef.current.length) await refresh();
+  }, [refresh, supabase, updateOutbox]);
+
+  useEffect(() => {
+    if (outbox.length === 0) return;
+    void flush();
+    const retry = () => void flush();
+    window.addEventListener("online", retry);
+    const timer = setInterval(retry, 30_000);
+    return () => {
+      window.removeEventListener("online", retry);
+      clearInterval(timer);
+    };
+  }, [outbox.length, flush]);
 
   const saveTask: Store["saveTask"] = useCallback(
     async (task) => {
       const { id, ...fields } = task;
       // Правка существующей — сразу на экране (например, категория после
       // броска на плитку), сервер догоняет.
-      if (id) setTasks((prev) => prev.map((t) => (t.id === id ? ({ ...t, ...fields } as Task) : t)));
-      await guard(() =>
-        id
-          ? supabase().from("tasks").update(fields).eq("id", id)
-          : supabase().from("tasks").insert({ ...fields, user_id: userId }),
-      );
+      if (id) {
+        setTasks((prev) => prev.map((t) => (t.id === id ? ({ ...t, ...fields } as Task) : t)));
+        await write([{ t: "update", table: "tasks", match: { id }, patch: fields }]);
+        return;
+      }
+      // Новая — id задаём здесь: так её можно создать и без сети, а повтор не задвоит.
+      const row = {
+        title: "",
+        date: null,
+        time: null,
+        remind: false,
+        category_id: null,
+        priority: "medium",
+        done: false,
+        sort_order: 0,
+        note: null,
+        carry_over: false,
+        carried_from: null,
+        repeat: null,
+        repeat_days: null,
+        repeat_parent: null,
+        checklist: [],
+        ...fields,
+        id: crypto.randomUUID(),
+        user_id: userId,
+        created_at: new Date().toISOString(),
+      } as unknown as Task;
+      setTasks((prev) => [...prev, row]);
+      const { created_at: _c, ...insert } = row as unknown as Record<string, unknown>;
+      void _c;
+      await write([{ t: "upsert", table: "tasks", rows: [insert] }]);
     },
-    [guard, supabase, userId],
+    [write, userId],
   );
 
   const toggleDone: Store["toggleDone"] = useCallback(
@@ -236,16 +390,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
         ...(spawned ? [spawned] : []),
       ]);
       try {
-        await guard(async () => {
-          const res = await supabase().from("tasks").update({ done }).eq("id", id);
-          if (res.error) return res;
-          if (spawned) {
-            const { id: newId, ...fields } = spawned;
-            return supabase().from("tasks").insert({ ...fields, id: newId, user_id: userId });
-          }
-          if (orphans.length) return supabase().from("tasks").delete().in("id", orphans);
-          return res;
-        });
+        const ops: OutOp[] = [{ t: "update", table: "tasks", match: { id }, patch: { done } }];
+        if (spawned) {
+          const { created_at: _c, ...fields } = spawned as unknown as Record<string, unknown>;
+          void _c;
+          ops.push({ t: "upsert", table: "tasks", rows: [{ ...fields, user_id: userId }] });
+        }
+        for (const o of orphans) ops.push({ t: "delete", table: "tasks", match: { id: o } });
+        await write(ops);
       } catch {
         setTasks((prev) => [
           ...prev.filter((t) => t.id !== spawned?.id).map((t) => (t.id === id ? { ...t, done: task.done } : t)),
@@ -253,30 +405,33 @@ export function DataProvider({ children }: { children: ReactNode }) {
         ]);
       }
     },
-    [guard, supabase, userId],
+    [write, userId],
   );
 
   // Сами поставили день — пометка «перенесено с …» больше ни к чему.
   const rescheduleTask: Store["rescheduleTask"] = useCallback(
     async (id, date) => {
       setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, date, carried_from: null } : t)));
-      await guard(() => supabase().from("tasks").update({ date, carried_from: null }).eq("id", id));
+      await write([{ t: "update", table: "tasks", match: { id }, patch: { date, carried_from: null } }]);
     },
-    [guard, supabase],
+    [write],
   );
 
   const rescheduleMany: Store["rescheduleMany"] = useCallback(
     async (ids, date) => {
       if (ids.length === 0) return;
       setTasks((prev) => prev.map((t) => (ids.includes(t.id) ? { ...t, date, carried_from: null } : t)));
-      await guard(() => supabase().from("tasks").update({ date, carried_from: null }).in("id", ids));
+      await write(ids.map((id) => ({ t: "update", table: "tasks", match: { id }, patch: { date, carried_from: null } })));
     },
-    [guard, supabase],
+    [write],
   );
 
   const deleteTask: Store["deleteTask"] = useCallback(
-    async (id) => guard(() => supabase().from("tasks").delete().eq("id", id)),
-    [guard, supabase],
+    async (id) => {
+      setTasks((prev) => prev.filter((t) => t.id !== id));
+      await write([{ t: "delete", table: "tasks", match: { id } }]);
+    },
+    [write],
   );
 
   const reloadCategories = useCallback(async () => {
@@ -328,6 +483,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       tasks,
       categories,
       refresh,
+      pendingCount: outbox.length,
       saveTask,
       toggleDone,
       rescheduleTask,
@@ -338,7 +494,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       saveProfile,
     }),
     [
-      ready, error, userId, profile, tasks, categories, refresh,
+      ready, error, userId, profile, tasks, categories, refresh, outbox.length,
       saveTask, toggleDone, rescheduleTask, rescheduleMany, deleteTask, saveCategory, deleteCategory, saveProfile,
     ],
   );

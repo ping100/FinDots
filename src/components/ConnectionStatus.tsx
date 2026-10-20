@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { useStore } from "./DataProvider";
 
 function subscribe(onChange: () => void) {
   window.addEventListener("online", onChange);
@@ -14,11 +13,10 @@ function subscribe(onChange: () => void) {
 
 /**
  * Состояние связи — маленькой строкой вверху, и только когда есть что
- * сказать: нет сети, траты ждут отправки или связь только что вернулась.
+ * сказать: нет сети, изменения ждут отправки или связь только что вернулась.
  * Когда всё в порядке, места не занимает.
  */
-export function ConnectionStatus() {
-  const { pendingCount } = useStore();
+export function ConnectionStatus({ pendingCount }: { pendingCount: number }) {
   const online = useSyncExternalStore(
     subscribe,
     () => navigator.onLine,
@@ -43,7 +41,7 @@ export function ConnectionStatus() {
 
   const waiting = pendingCount > 0 ? ` · ждёт отправки: ${pendingCount}` : "";
   const state = !online
-    ? { dot: "var(--muted)", text: `Нет сети${waiting || " — траты сохранятся на телефоне"}` }
+    ? { dot: "var(--muted)", text: `Нет сети${waiting || " — изменения сохранятся на телефоне"}` }
     : pendingCount > 0
       ? { dot: "#f59e0b", text: `Сервер не отвечает${waiting}` }
       : restored

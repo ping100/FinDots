@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import Link from "next/link";
+import { ConnectionStatus } from "@/components/ConnectionStatus";
 import { usePathname } from "next/navigation";
 import { Icon } from "@/lib/icons";
 import { useStore } from "@/components/tasks/DataProvider";
@@ -39,7 +40,7 @@ export function useAddAction(action: () => void) {
 
 export function Shell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { ready, error } = useStore();
+  const { ready, error, pendingCount } = useStore();
   const [addAction, setAddAction] = useState<(() => void) | null>(null);
 
   // Через функцию, иначе useState примет само действие за ленивый инициализатор.
@@ -51,6 +52,7 @@ export function Shell({ children }: { children: ReactNode }) {
     <AddContext.Provider value={register}>
       {/* Тема общая с Findots: светлая «Аврора», тёмная «Ночь». */}
       <div className="money-theme min-h-dvh pt-safe">
+        <ConnectionStatus pendingCount={pendingCount} />
         {error ? (
           <p
             className="mx-4 mt-3 rounded-2xl px-4 py-2 text-xs"

@@ -1,13 +1,17 @@
-// Кэшируем только статику. Страницы и запросы к Supabase всегда идут в сеть:
-// это финансовые данные, и на общем телефоне кэш страницы одного пользователя
-// не должен достаться другому.
-//
 // Кэш — свой у каждой версии приложения: версия приходит в адресе самого
 // service worker (sw.js?v=…). Новая версия — новый worker, и при его
-// включении прежний кэш удаляется. Раньше кэш был один на всё время, и
-// файлы каждой выкладки копились на телефоне бесконечно.
+// включении прежний кэш удаляется.
+//
+// Два кэша:
+// - статика (/_next/static, иконки) — берётся из кэша, она не меняется;
+// - страницы приложения — чтобы оно открывалось без сети. Страница — только
+//   оболочка: данные (деньги, задачи, цикл) в неё не зашиты, их приложение
+//   грузит само и без сети берёт из своего снимка на телефоне. Страница
+//   всегда сначала просится из сети, кэш — только когда сети нет. При выходе
+//   из учётной записи приложение просит стереть страницы (clear-pages).
 const VERSION = new URL(self.location.href).searchParams.get("v") || "dev";
 const CACHE = `dots-static-${VERSION}`;
+const PAGES = `dots-pages-${VERSION}`;
 
 self.addEventListener("install", () => self.skipWaiting());
 
@@ -15,9 +19,57 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE && k !== PAGES).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
+});
+
+/** Какие страницы можно хранить: разделы приложения, без админки и API. */
+function pageKey(url) {
+  if (url.origin !== self.location.origin) return null;
+  const path = url.pathname.replace(/\/$/, "") || "/";
+  if (path.startsWith("/api") || path.startsWith("/admin") || path.startsWith("/auth") || path.startsWith("/_next")) return null;
+  if (!/^\/(money|tasks|fem)?(\/[a-z-]+)?$/.test(path)) return null;
+  return path;
+}
+
+const OFFLINE_HTML = `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dots</title></head>
+<body style="margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif;background:#f6f3fa;color:#221a2b;text-align:center;padding:24px">
+<div><div style="font-size:40px">📡</div><p style="font-weight:700;font-size:18px;margin:12px 0 6px">Нет связи</p>
+<p style="color:#857a8f;margin:0">Этот экран ещё не сохранён на телефоне. Откройте Dots с интернетом хотя бы раз — потом он будет открываться и без сети.</p>
+<button onclick="location.reload()" style="margin-top:18px;border:0;border-radius:14px;padding:12px 20px;background:#3b82f6;color:#fff;font-weight:600;font-size:15px">Попробовать снова</button></div></body></html>`;
+
+async function savePage(key, response) {
+  if (!response || !response.ok || response.redirected || response.type !== "basic") return;
+  const cache = await caches.open(PAGES);
+  await cache.put(key, response);
+}
+
+/** Страница и её скрипты — в кэш, чтобы открывалась без сети. */
+async function warm(path) {
+  const cache = await caches.open(PAGES);
+  if (await cache.match(path)) return;
+  const res = await fetch(path, { credentials: "same-origin" }).catch(() => null);
+  if (!res || !res.ok || res.redirected) return;
+  const html = await res.clone().text();
+  await cache.put(path, res);
+  const assets = [...new Set(html.match(/\/_next\/static\/[^"'\s)\\]+/g) || [])];
+  const stat = await caches.open(CACHE);
+  for (const url of assets) {
+    if (await stat.match(url)) continue;
+    const r = await fetch(url).catch(() => null);
+    if (r && r.ok) await stat.put(url, r);
+  }
+}
+
+self.addEventListener("message", (event) => {
+  const data = event.data || {};
+  if (data.type === "warm" && Array.isArray(data.paths)) {
+    event.waitUntil(data.paths.reduce((p, path) => p.then(() => warm(path)).catch(() => undefined), Promise.resolve()));
+  }
+  if (data.type === "clear-pages") {
+    event.waitUntil(caches.delete(PAGES));
+  }
 });
 
 self.addEventListener("fetch", (event) => {
@@ -26,6 +78,27 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
+
+  // Страница: сначала сеть, без сети — сохранённая копия.
+  if (request.mode === "navigate") {
+    const key = pageKey(url);
+    if (!key) return;
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          void savePage(key, response.clone());
+          return response;
+        })
+        .catch(async () => {
+          const cache = await caches.open(PAGES);
+          return (
+            (await cache.match(key)) ||
+            new Response(OFFLINE_HTML, { headers: { "content-type": "text/html; charset=utf-8" } })
+          );
+        }),
+    );
+    return;
+  }
 
   const cacheable =
     url.pathname.startsWith("/_next/static/") ||

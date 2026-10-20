@@ -8,6 +8,17 @@ import type { Profile } from "@/lib/types";
 import type { FemDay, FemPeriod, FemSettings, Goal, Intim } from "@/lib/fem/cycle";
 import { unpackPhoto, type Likes } from "@/lib/fem/together";
 import type { PartnerState } from "@/lib/fem/partnerCare";
+import {
+  isNetworkError,
+  lastUser,
+  loadOutbox,
+  online,
+  readSnapshot,
+  runOp,
+  saveOutbox,
+  writeSnapshot,
+  type OutOp,
+} from "@/lib/offline";
 
 /**
  * Данные FemDots: настройки, отметки месячных и дни с самочувствием.
@@ -16,6 +27,8 @@ import type { PartnerState } from "@/lib/fem/partnerCare";
  * следом.
  */
 export interface FemStore {
+  /** Изменений, ждущих связи. */
+  pendingCount: number;
   ready: boolean;
   error: string | null;
   profile: Profile | null;
@@ -152,6 +165,19 @@ export interface MyShare {
   share_symptoms: boolean;
 }
 
+/** Снимок FemDots на телефоне — чтобы без сети приложение открывалось с последними данными. */
+interface FemSnapshot {
+  profile: Profile | null;
+  settings: FemSettings | null;
+  periods: FemPeriod[];
+  days: FemDay[];
+  intimacy: [string, Intim][];
+  partner: PartnerView | null;
+  share: MyShare | null;
+  shareOptions: ShareOptions | null;
+  signals: FemSignal[];
+}
+
 const Ctx = createContext<FemStore | null>(null);
 
 export function useFem(): FemStore {
@@ -190,6 +216,10 @@ export function FemProvider({ children }: { children: ReactNode }) {
   const [signals, setSignals] = useState<FemSignal[]>([]);
   const [shareOptions, setShareOptionsState] = useState<ShareOptions | null>(null);
   const [intimacy, setIntimacyState] = useState<Map<string, Intim>>(new Map());
+  // Изменения без сети: на экране уже есть, на сервер уйдут при связи.
+  const [outbox, setOutbox] = useState<OutOp[]>([]);
+  const outboxRef = useRef<OutOp[]>([]);
+  outboxRef.current = outbox;
 
   const reloadShares = useCallback(async () => {
     const [view, mine, options] = await Promise.all([
@@ -197,9 +227,10 @@ export function FemProvider({ children }: { children: ReactNode }) {
       supabase.rpc("fem_share_mine"),
       supabase.rpc("fem_share_settings"),
     ]);
-    setPartner((view.data as PartnerView | null) ?? null);
-    setShare(((mine.data ?? []) as MyShare[])[0] ?? null);
-    setShareOptionsState((options.data as ShareOptions | null) ?? null);
+    // Без сети ответы пустые — не стираем то, что уже на экране.
+    if (!view.error) setPartner((view.data as PartnerView | null) ?? null);
+    if (!mine.error) setShare(((mine.data ?? []) as MyShare[])[0] ?? null);
+    if (!options.error) setShareOptionsState((options.data as ShareOptions | null) ?? null);
   }, [supabase]);
   // Свои отметки близости. Предложенные партнёром (pending) ждут её
   // ответа и до него не попадают ни в дневник, ни в прогноз.
@@ -230,15 +261,50 @@ export function FemProvider({ children }: { children: ReactNode }) {
   const settingsRef = useRef<FemSettings | null>(null);
   settingsRef.current = settings;
 
+  const fromSnapshot = useCallback(async (uid: string) => {
+    const snap = await readSnapshot<FemSnapshot>("fem", uid);
+    if (!snap) return false;
+    setProfile(snap.profile);
+    setSettings(snap.settings);
+    setPeriods(snap.periods);
+    setDays(new Map(snap.days.map((d) => [d.day, d])));
+    setIntimacyState(new Map(snap.intimacy));
+    setPartner(snap.partner);
+    setShare(snap.share);
+    setShareOptionsState(snap.shareOptions);
+    setSignals(snap.signals);
+    setError(null);
+    return true;
+  }, []);
+
   useEffect(() => {
     void (async () => {
-      const { data } = await supabase.auth.getSession();
-      const user = data.session?.user;
-      if (!user) {
+      const { data } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+      // Без сети сессия может не прочитаться (истёк токен) — тогда тот, кто входил последним.
+      const uid = data.session?.user?.id ?? (online() ? null : lastUser());
+      if (!uid) {
         setReady(true);
         return;
       }
+      const user = { id: uid };
       setUserId(user.id);
+      const queued = loadOutbox("fem", uid);
+      outboxRef.current = queued;
+      setOutbox(queued);
+      // Без сети — последнее с телефона (вместе со сделанным без сети).
+      if (!online()) {
+        await fromSnapshot(uid);
+        setReady(true);
+        return;
+      }
+      // Сначала отправить отложенное — иначе загрузка с сервера его затрёт.
+      for (const op of queued) {
+        const res = await runOp(supabase, op);
+        if (res.error && isNetworkError(res.error.message)) break;
+        outboxRef.current = outboxRef.current.slice(1);
+      }
+      saveOutbox("fem", uid, outboxRef.current);
+      setOutbox(outboxRef.current);
       // Партнёрские данные — своим запросом, параллельно: их отсутствие не ошибка.
       const shares = reloadShares().catch(() => undefined);
       const intim = loadIntimacy();
@@ -249,6 +315,10 @@ export function FemProvider({ children }: { children: ReactNode }) {
         supabase.from("fem_days").select("day, flow, symptoms, mood, note, lh, temp, meds, pill, status, tags, weight, preg_test").order("day").limit(3000),
       ]);
       const failed = [p, s, per, d].find((r) => r.error)?.error;
+      if (failed && isNetworkError(failed.message) && (await fromSnapshot(uid))) {
+        setReady(true);
+        return;
+      }
       if (failed) setError("Не получилось загрузить данные — проверьте интернет");
       if (p.data) setProfile(p.data as Profile);
       if (s.data) {
@@ -277,7 +347,61 @@ export function FemProvider({ children }: { children: ReactNode }) {
       await Promise.all([shares, intim]);
       setReady(true);
     })();
-  }, [supabase, reloadShares]);
+  }, [supabase, reloadShares, fromSnapshot]);
+
+  // Снимок на телефон — после каждого изменения (с паузой), вместе со
+  // сделанным без сети: перезапуск без сети откроет ровно то, что было.
+  useEffect(() => {
+    if (!ready || !userId) return;
+    const t = setTimeout(() => {
+      void writeSnapshot("fem", userId, {
+        profile,
+        settings,
+        periods,
+        days: [...days.values()],
+        intimacy: [...intimacy.entries()],
+        partner,
+        share,
+        shareOptions,
+        signals,
+      } satisfies FemSnapshot);
+    }, 800);
+    return () => clearTimeout(t);
+  }, [ready, userId, profile, settings, periods, days, intimacy, partner, share, shareOptions, signals]);
+
+  // Очередь — через ref: отправка читает её в цикле сразу после правки.
+  const updateOutbox = useCallback(
+    (change: (ops: OutOp[]) => OutOp[]) => {
+      const next = change(outboxRef.current);
+      outboxRef.current = next;
+      if (userId) saveOutbox("fem", userId, next);
+      setOutbox(next);
+    },
+    [userId],
+  );
+
+  /**
+   * Записать: со связью — сразу, без неё (или если связь сорвалась) — в
+   * очередь. На экране изменения уже есть. Возвращает текст ошибки сервера.
+   */
+  const persist = useCallback(
+    async (ops: OutOp[]): Promise<string | undefined> => {
+      if (!online()) {
+        updateOutbox((q) => [...q, ...ops]);
+        return undefined;
+      }
+      for (let i = 0; i < ops.length; i++) {
+        const res = await runOp(supabase, ops[i]);
+        if (res.error && isNetworkError(res.error.message)) {
+          updateOutbox((q) => [...q, ...ops.slice(i)]);
+          return undefined;
+        }
+        if (res.error) return res.error.message;
+      }
+      return undefined;
+    },
+    [supabase, updateOutbox],
+  );
 
   // Тема и размер шрифта — общие с остальными приложениями Dots.
   useEffect(() => {
@@ -293,10 +417,9 @@ export function FemProvider({ children }: { children: ReactNode }) {
     async (patch) => {
       if (!userId) return;
       setProfile((prev) => (prev ? { ...prev, ...patch } : prev));
-      const res = await supabase.from("profiles").update(patch).eq("id", userId);
-      fail(res.error?.message);
+      fail(await persist([{ t: "update", table: "profiles", match: { id: userId }, patch }]));
     },
-    [fail, supabase, userId],
+    [fail, persist, userId],
   );
 
   const saveSettings: FemStore["saveSettings"] = useCallback(
@@ -325,10 +448,9 @@ export function FemProvider({ children }: { children: ReactNode }) {
       };
       settingsRef.current = next;
       setSettings(next);
-      const res = await supabase.from("fem_settings").upsert({ user_id: userId, ...next }, { onConflict: "user_id" });
-      fail(res.error?.message);
+      fail(await persist([{ t: "upsert", table: "fem_settings", rows: [{ user_id: userId, ...next }], onConflict: "user_id" }]));
     },
-    [fail, supabase, userId],
+    [fail, persist, userId],
   );
 
   const startPeriod: FemStore["startPeriod"] = useCallback(
@@ -336,29 +458,27 @@ export function FemProvider({ children }: { children: ReactNode }) {
       if (!userId) return;
       const id = crypto.randomUUID();
       setPeriods((prev) => [...prev, { id, start_date: day, end_date: end }].sort((a, b) => a.start_date.localeCompare(b.start_date)));
-      const res = await supabase.from("fem_periods").insert({ id, user_id: userId, start_date: day, end_date: end });
-      if (res.error) setPeriods((prev) => prev.filter((p) => p.id !== id));
-      fail(res.error?.message);
+      const err = await persist([{ t: "upsert", table: "fem_periods", rows: [{ id, user_id: userId, start_date: day, end_date: end }] }]);
+      if (err) setPeriods((prev) => prev.filter((p) => p.id !== id));
+      fail(err);
     },
-    [fail, supabase, userId],
+    [fail, persist, userId],
   );
 
   const endPeriod: FemStore["endPeriod"] = useCallback(
     async (id, day) => {
       setPeriods((prev) => prev.map((p) => (p.id === id ? { ...p, end_date: day } : p)));
-      const res = await supabase.from("fem_periods").update({ end_date: day }).eq("id", id);
-      fail(res.error?.message);
+      fail(await persist([{ t: "update", table: "fem_periods", match: { id }, patch: { end_date: day } }]));
     },
-    [fail, supabase],
+    [fail, persist],
   );
 
   const deletePeriod: FemStore["deletePeriod"] = useCallback(
     async (id) => {
       setPeriods((prev) => prev.filter((p) => p.id !== id));
-      const res = await supabase.from("fem_periods").delete().eq("id", id);
-      fail(res.error?.message);
+      fail(await persist([{ t: "delete", table: "fem_periods", match: { id } }]));
     },
-    [fail, supabase],
+    [fail, persist],
   );
 
   const saveDay: FemStore["saveDay"] = useCallback(
@@ -385,12 +505,15 @@ export function FemProvider({ children }: { children: ReactNode }) {
         return map;
       });
       // Пустой день не храним — нечего хранить.
-      const res = empty
-        ? await supabase.from("fem_days").delete().eq("day", day)
-        : await supabase.from("fem_days").upsert({ user_id: userId, ...next }, { onConflict: "user_id,day" });
-      fail(res.error?.message);
+      fail(
+        await persist([
+          empty
+            ? { t: "delete", table: "fem_days", match: { user_id: userId, day } }
+            : { t: "upsert", table: "fem_days", rows: [{ user_id: userId, ...next }], onConflict: "user_id,day" },
+        ]),
+      );
     },
-    [fail, supabase, userId],
+    [fail, persist, userId],
   );
 
   const deleteAll: FemStore["deleteAll"] = useCallback(async () => {
@@ -483,13 +606,43 @@ export function FemProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(timer);
   }, [ready, paired, loadSignals]);
 
+  /** Без сети сообщение видно сразу (временный id), уходит при связи. */
+  const localSignal = useCallback(
+    (kind: SignalKind, item: string | null, replyTo: number | null) =>
+      setSignals((prev) => [
+        {
+          id: -Date.now(),
+          from_id: userId ?? "",
+          to_id: "",
+          kind,
+          item,
+          created_at: new Date().toISOString(),
+          seen_at: null,
+          dismissed_at: null,
+          reply_to: replyTo,
+        } as FemSignal,
+        ...prev,
+      ]),
+    [userId],
+  );
+
   const sendSignal: FemStore["sendSignal"] = useCallback(
     async (kind, item) => {
+      if (!online()) {
+        localSignal(kind, item ?? null, null);
+        updateOutbox((q) => [...q, { t: "rpc", fn: "fem_signal_send", args: { p_kind: kind, p_item: item ?? null } }]);
+        return;
+      }
       const res = await supabase.rpc("fem_signal_send", { p_kind: kind, p_item: item ?? null });
+      if (res.error && isNetworkError(res.error.message)) {
+        localSignal(kind, item ?? null, null);
+        updateOutbox((q) => [...q, { t: "rpc", fn: "fem_signal_send", args: { p_kind: kind, p_item: item ?? null } }]);
+        return;
+      }
       if (res.error) throw new Error(res.error.message);
       await loadSignals();
     },
-    [loadSignals, supabase],
+    [loadSignals, localSignal, supabase, updateOutbox],
   );
 
   const markSignalsSeen: FemStore["markSignalsSeen"] = useCallback(async () => {
@@ -562,11 +715,22 @@ export function FemProvider({ children }: { children: ReactNode }) {
 
   const replySignal: FemStore["replySignal"] = useCallback(
     async (to, kind, text) => {
+      const op: OutOp = { t: "rpc", fn: "fem_signal_reply", args: { p_to: to, p_kind: kind, p_item: text } };
+      if (!online()) {
+        localSignal(kind, text, to);
+        updateOutbox((q) => [...q, op]);
+        return;
+      }
       const res = await supabase.rpc("fem_signal_reply", { p_to: to, p_kind: kind, p_item: text });
+      if (res.error && isNetworkError(res.error.message)) {
+        localSignal(kind, text, to);
+        updateOutbox((q) => [...q, op]);
+        return;
+      }
       if (res.error) throw new Error(res.error.message);
       await loadSignals();
     },
-    [loadSignals, supabase],
+    [loadSignals, localSignal, supabase, updateOutbox],
   );
 
   const confirmIntimacy: FemStore["confirmIntimacy"] = useCallback(
@@ -643,28 +807,64 @@ export function FemProvider({ children }: { children: ReactNode }) {
         else map.delete(day);
         return map;
       });
-      const res = await supabase
-        .from("fem_intimacy")
-        .upsert(
+      fail(
+        await persist([
           {
-            owner_id: userId,
-            day,
-            protected: v?.protected ?? null,
-            kinds: v?.kinds ?? [],
-            shared: v?.shared ?? true,
-            added_by: userId,
-            active: !!v,
-            pending: false,
+            t: "upsert",
+            table: "fem_intimacy",
+            rows: [
+              {
+                owner_id: userId,
+                day,
+                protected: v?.protected ?? null,
+                kinds: v?.kinds ?? [],
+                shared: v?.shared ?? true,
+                added_by: userId,
+                active: !!v,
+                pending: false,
+              },
+            ],
+            onConflict: "owner_id,day",
           },
-          { onConflict: "owner_id,day" },
-        );
-      fail(res.error?.message);
+        ]),
+      );
     },
-    [fail, supabase, userId],
+    [fail, persist, userId],
   );
+
+  // Связь вернулась — отправляем очередь по порядку, потом обновляем сообщения.
+  const flushing = useRef(false);
+  const flush = useCallback(async () => {
+    if (flushing.current || !online() || outboxRef.current.length === 0) return;
+    flushing.current = true;
+    try {
+      while (outboxRef.current.length) {
+        const res = await runOp(supabase, outboxRef.current[0]);
+        if (res.error && isNetworkError(res.error.message)) break;
+        if (res.error) setError("Изменение без сети не сохранилось: " + res.error.message);
+        updateOutbox((q) => q.slice(1));
+      }
+    } finally {
+      flushing.current = false;
+    }
+    if (!outboxRef.current.length) void loadSignals();
+  }, [loadSignals, supabase, updateOutbox]);
+
+  useEffect(() => {
+    if (outbox.length === 0) return;
+    void flush();
+    const retry = () => void flush();
+    window.addEventListener("online", retry);
+    const timer = setInterval(retry, 30_000);
+    return () => {
+      window.removeEventListener("online", retry);
+      clearInterval(timer);
+    };
+  }, [outbox.length, flush]);
 
   const value = useMemo<FemStore>(
     () => ({
+      pendingCount: outbox.length,
       ready, error, profile, settings, periods, days, saveSettings, saveProfile, startPeriod, endPeriod, deletePeriod, saveDay, deleteAll,
       partner, share, createShare, updateShare, revokeShare, acceptCode, leavePartner, setPartnerRemind, reloadShares,
       userId, signals, sendSignal, sendPhoto, openPhoto, cleanupPhotos, markSignalsSeen, dismissSignals, shareOptions, setShareOptions,
@@ -672,7 +872,7 @@ export function FemProvider({ children }: { children: ReactNode }) {
       intimacy, setIntimacy,
     }),
     [
-      ready, error, profile, settings, periods, days, saveSettings, saveProfile, startPeriod, endPeriod, deletePeriod, saveDay, deleteAll,
+      outbox.length, ready, error, profile, settings, periods, days, saveSettings, saveProfile, startPeriod, endPeriod, deletePeriod, saveDay, deleteAll,
       partner, share, createShare, updateShare, revokeShare, acceptCode, leavePartner, setPartnerRemind, reloadShares,
       userId, signals, sendSignal, sendPhoto, openPhoto, cleanupPhotos, markSignalsSeen, dismissSignals, shareOptions, setShareOptions,
       replySignal, confirmIntimacy, proposeIntimacy, setPartnerHint, setPartnerNudge, setPartnerState, loadSignals, clearChat,

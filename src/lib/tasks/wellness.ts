@@ -56,10 +56,19 @@ export function useWellness() {
 
   useEffect(() => {
     const supabase = createClient();
+    // Без сети — последнее сохранённое на телефоне (и стаканы, если день тот же).
+    const cached = readWellness();
+    if (cached) {
+      settingsRef.current = cached.settings;
+      glassesRef.current = cached.day === day.current ? cached.glasses : 0;
+      setSettings(cached.settings);
+      setGlasses(glassesRef.current);
+    }
     void Promise.all([
       supabase.from("wellness_settings").select(FIELDS).maybeSingle(),
       supabase.from("water_log").select("glasses").eq("day", day.current).maybeSingle(),
     ]).then(([s, w]) => {
+      if (s.error || w.error) return;
       const row = s.data as Wellness | null;
       settingsRef.current = row
         ? {
@@ -71,9 +80,17 @@ export function useWellness() {
           }
         : WELLNESS_DEFAULTS;
       glassesRef.current = (w.data as { glasses: number } | null)?.glasses ?? 0;
+      // Стаканы, отмеченные без сети, ещё не на сервере — их счёт главнее.
+      const waiting = readWellness();
+      if (waiting?.unsent && waiting.day === day.current) glassesRef.current = waiting.glasses;
       setSettings(settingsRef.current);
       setGlasses(glassesRef.current);
+      writeWellness({ settings: settingsRef.current, day: day.current, glasses: glassesRef.current, unsent: !!waiting?.unsent });
+      if (waiting?.unsent) void sendGlasses();
     });
+    const retry = () => void sendGlasses();
+    window.addEventListener("online", retry);
+    return () => window.removeEventListener("online", retry);
   }, []);
 
   const save = useCallback(async (patch: Partial<Wellness>) => {
@@ -81,6 +98,8 @@ export function useWellness() {
     const next = { ...settingsRef.current, ...patch };
     settingsRef.current = next;
     setSettings(next);
+    const cached = readWellness();
+    writeWellness({ settings: next, day: day.current, glasses: glassesRef.current, unsent: !!cached?.unsent });
     const { data } = await createClient().auth.getSession();
     const userId = data.session?.user.id;
     if (!userId) return;
@@ -96,23 +115,71 @@ export function useWellness() {
     const count = Math.max(0, Math.min(50, glassesRef.current + delta));
     glassesRef.current = count;
     setGlasses(count);
+    // Сначала на телефон с пометкой «не отправлено»: без сети стакан не теряется.
+    writeWellness({ settings: settingsRef.current, day: day.current, glasses: count, unsent: true });
     const supabase = createClient();
+    const res = await sendGlasses();
+    if (res === "offline") return;
+    if (res === "failed") {
+      setProblem("Стакан не сохранился — попробуйте ещё раз");
+      return;
+    }
     const { data } = await supabase.auth.getSession();
     const userId = data.session?.user.id;
     if (!userId) return;
-    const res = await supabase
-      .from("water_log")
-      .upsert({ user_id: userId, day: day.current, glasses: count }, { onConflict: "user_id,day" });
-    if (res.error) {
-      setProblem("Стакан не сохранился — проверьте интернет");
-      return;
-    }
     if (delta > 0) {
       await supabase.from("wellness_settings").update({ water_reminded_at: new Date().toISOString() }).eq("user_id", userId);
     }
   }, []);
 
   return { settings, glasses, problem, save, addGlass };
+}
+
+// ───────── вода без сети ─────────
+
+const WELLNESS_KEY = "dots:wellness";
+interface WellnessCache {
+  settings: Wellness;
+  day: string;
+  glasses: number;
+  /** Стаканы отмечены без сети и ещё не ушли на сервер. */
+  unsent: boolean;
+}
+
+function readWellness(): WellnessCache | null {
+  try {
+    const raw = localStorage.getItem(WELLNESS_KEY);
+    return raw ? (JSON.parse(raw) as WellnessCache) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeWellness(value: WellnessCache) {
+  try {
+    localStorage.setItem(WELLNESS_KEY, JSON.stringify(value));
+  } catch {
+    // Нет хранилища — без сети стаканы не сохранятся, как и раньше.
+  }
+}
+
+/** Отправить стаканы, отмеченные без сети. Число — итоговое, повтор безопасен. */
+async function sendGlasses(): Promise<"ok" | "offline" | "failed"> {
+  const cache = readWellness();
+  if (!cache?.unsent) return "ok";
+  if (!navigator.onLine) return "offline";
+  const supabase = createClient();
+  const { data } = await supabase.auth.getSession();
+  const userId = data.session?.user.id;
+  if (!userId) return "offline";
+  const res = await supabase
+    .from("water_log")
+    .upsert({ user_id: userId, day: cache.day, glasses: cache.glasses }, { onConflict: "user_id,day" });
+  if (res.error) return /fetch|network|load failed/i.test(res.error.message) ? "offline" : "failed";
+  const now = readWellness();
+  // Пока шла отправка, могли добавить ещё стакан — тогда пометку не снимаем.
+  if (now && now.day === cache.day && now.glasses === cache.glasses) writeWellness({ ...now, unsent: false });
+  return "ok";
 }
 
 /** «каждые 2 ч», «каждые 1,5 ч», «каждые 45 мин». */

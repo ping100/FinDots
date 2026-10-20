@@ -1,5 +1,6 @@
 "use client";
 
+import { ConnectionStatus } from "@/components/ConnectionStatus";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -26,7 +27,7 @@ const TABS = [
  */
 export function FemShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { ready, error, settings, partner, signals, userId } = useFem();
+  const { ready, error, settings, partner, signals, userId, pendingCount } = useFem();
   if (!ready) return <Loader />;
   // Непрочитанное от партнёра — красный кружок на «Вместе».
   const fresh = unread(signals, userId).length;
@@ -40,6 +41,7 @@ export function FemShell({ children }: { children: ReactNode }) {
     return (
       <div className="fem-theme min-h-dvh overflow-x-clip pt-safe">
         {partner ? <Backdrop /> : null}
+        <ConnectionStatus pendingCount={pendingCount} />
         {partner ? <PartnerScreen /> : <Onboarding />}
       </div>
     );
@@ -48,6 +50,7 @@ export function FemShell({ children }: { children: ReactNode }) {
   return (
     <div className="fem-theme min-h-dvh overflow-x-clip pt-safe">
       <Backdrop />
+      <ConnectionStatus pendingCount={pendingCount} />
       {error ? (
         <p className="mx-4 mt-3 rounded-2xl px-4 py-2 text-xs" style={{ background: "var(--danger)", color: "#fff" }}>
           {error}

@@ -18,7 +18,7 @@ const TABS = [
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { ready, error } = useStore();
+  const { ready, error, pendingCount } = useStore();
 
   if (!ready) return <Loader />;
 
@@ -37,7 +37,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         </p>
       ) : null}
 
-      <ConnectionStatus />
+      <ConnectionStatus pendingCount={pendingCount} />
 
       {/* key по маршруту — иначе анимация не повторится при смене вкладки */}
       <div key={pathname} className="animate-page">

@@ -2,6 +2,44 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { CURRENT_BUILD, applyUpdate, updateAvailable } from "@/lib/update";
+import { createClient } from "@/lib/supabase/client";
+import { clearOffline, lastUser } from "@/lib/offline";
+
+/** Разделы, которые должны открываться без сети. */
+const OFFLINE_PAGES = [
+  "/",
+  "/money",
+  "/money/analytics",
+  "/money/operations",
+  "/money/debts",
+  "/money/settings",
+  "/tasks",
+  "/tasks/settings",
+  "/fem",
+  "/fem/calendar",
+  "/fem/together",
+  "/fem/stats",
+  "/fem/settings",
+];
+
+/**
+ * Без сети приложение открывается из сохранённых страниц. Сохраняем их,
+ * только когда кто-то вошёл (гостю лендинга они ни к чему), и стираем всё
+ * сохранённое, если человек вышел: при связи сессии нет, а следы остались.
+ */
+async function prepareOffline(reg: ServiceWorkerRegistration) {
+  if (!navigator.onLine) return;
+  const {
+    data: { session },
+  } = await createClient().auth.getSession();
+  if (!session) {
+    if (lastUser()) await clearOffline();
+    return;
+  }
+  if (!lastUser()) return;
+  // Чуть позже: сначала пусть загрузится то, что человек открыл.
+  setTimeout(() => reg.active?.postMessage({ type: "warm", paths: OFFLINE_PAGES }), 6000);
+}
 
 /**
  * Регистрация service worker и присмотр за обновлениями.
@@ -25,12 +63,16 @@ export function RegisterSW() {
 
     if ("serviceWorker" in navigator) {
       // Версия в адресе — у каждой выкладки свой worker и свой кэш.
-      navigator.serviceWorker.register(`/sw.js?v=${CURRENT_BUILD}`).catch((error) => {
+      navigator.serviceWorker
+        .register(`/sw.js?v=${CURRENT_BUILD}`)
+        .then(() => navigator.serviceWorker.ready)
+        .then((reg) => prepareOffline(reg))
+        .catch((error) => {
         // Без service worker приложение работает как обычный сайт, но без
         // уведомлений — след в консоли остаётся, чтобы это можно было
         // отличить от «просто не нажал» при разборе жалобы.
         console.error("Service worker registration failed", error);
-      });
+        });
     }
 
     void check();

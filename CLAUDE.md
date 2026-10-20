@@ -112,6 +112,21 @@ category, rescheduling a task to another day) uses `@dnd-kit/core`'s
 `DragPayload`/`DropTarget` types (`src/lib/types.ts` for money,
 `src/lib/tasks/types.ts` for tasks).
 
+### Offline mode
+
+All three apps work without internet. `public/sw.js` caches page shells
+(network-first, `dots-pages-*`; pages carry no user data) plus static
+assets, and pre-warms the main routes after login (`RegisterSW`). Each
+`DataProvider` saves a snapshot of what it loaded to IndexedDB
+(`src/lib/offline.ts`) and, offline, loads from it. Writes go through an
+outbox: money uses `src/lib/offlineQueue.ts` (insert/update/delete of
+transactions, with `moneyEffects` recomputing wallet balances and income
+pools client-side by the same rules as the SQL views); tasks and FemDots use
+generic `OutOp`s (`upsert`/`update`/`delete`/`rpc`). New rows get client-side
+ids so retries never duplicate. Everything is wiped on sign-out
+(`clearOffline`). Wallet/category/settings edits, photos and AI stay
+online-only.
+
 ### Auth gating
 
 `src/proxy.ts` (Next middleware) redirects unauthenticated requests to

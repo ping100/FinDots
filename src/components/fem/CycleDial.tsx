@@ -373,6 +373,35 @@ const FLUFF = `<path d="M0 0 L0 -9" stroke="#b8a48c" stroke-width=".8"/>${Array.
   return `<path d="M0 -9 l${(Math.cos(a) * 5).toFixed(1)} ${(Math.sin(a) * 5).toFixed(1)}" stroke="#e8dccb" stroke-width=".7"/>`;
 }).join("")}<ellipse cx="0" cy="1" rx="1.4" ry="2" fill="#8a6a3a"/>`;
 
+/** Время суток по часам телефона: утро 5–10, день 10–17, вечер 17–21, ночь. */
+export type Tod = "morning" | "day" | "evening" | "night";
+export const timeOfDay = (h: number): Tod => (h >= 5 && h < 10 ? "morning" : h >= 10 && h < 17 ? "day" : h >= 17 && h < 21 ? "evening" : "night");
+
+function useTimeOfDay(): Tod {
+  const [tod, setTod] = useState<Tod>(() => timeOfDay(new Date().getHours()));
+  useEffect(() => {
+    const t = setInterval(() => setTod(timeOfDay(new Date().getHours())), 60_000);
+    return () => clearInterval(t);
+  }, []);
+  return tod;
+}
+
+/** Свет вокруг цветка и оттенок поверх него — у каждого времени суток свой. */
+const TOD_LOOK: Record<Tod, { sky: [string, string, number]; tint: [string, number, string] | null }> = {
+  morning: { sky: ["#fed7aa", "#f9a8d4", 0.6], tint: ["#e0f2fe", 0.3, "soft-light"] },
+  day: { sky: ["#fef9c3", "#bae6fd", 0.65], tint: null },
+  evening: { sky: ["#fdba74", "#fb7185", 0.55], tint: ["#fb923c", 0.32, "multiply"] },
+  night: { sky: ["#4338ca", "#1e1b4b", 0.4], tint: ["#1e3a8a", 0.3, "multiply"] },
+};
+
+/** Бабочка: два крыла с каждой стороны, f — насколько раскрыты (0…1). */
+const BF_UP = "M0 -1 C 5 -12, 16 -12, 13 -2 C 12 2, 5 2, 0 0Z";
+const BF_LO = "M0 0 C 7 1, 11 8, 6 10 C 2 11, 0 6, 0 1Z";
+const butterfly = (uid: string, f: number) => {
+  const wing = `<path d="${BF_UP}" fill="url(#${uid}-bf)" stroke="#fff" stroke-width=".5"/><path d="${BF_LO}" fill="url(#${uid}-bf2)" stroke="#fff" stroke-width=".5"/><circle cx="9" cy="-5" r="1.4" fill="#fff" opacity=".75"/>`;
+  return `<g transform="scale(${f.toFixed(2)} 1)">${wing}</g><g transform="scale(${(-f).toFixed(2)} 1)">${wing}</g><ellipse rx="1.2" ry="6" fill="#4a3657"/><path d="M-.4 -5.5 Q-3 -10 -4 -11 M.4 -5.5 Q3 -10 4 -11" stroke="#4a3657" stroke-width=".6" fill="none"/>`;
+};
+
 /** «Жизнь цветка» (эксперимент): тот же цветок, но живёт по-настоящему. */
 const LifeFlower = (p: BodyProps) => <Flower {...p} life />;
 
@@ -386,6 +415,9 @@ function Flower({ d, size, pick, late, life = false }: BodyProps & { life?: bool
   const ref = useRef<SVGSVGElement | null>(null);
   const uid = useId().replace(/:/g, "");
   const { N, day, fs, fe, ov, pl, phaseOf, lateDays } = d;
+  const clock = useTimeOfDay();
+  // Время суток живёт только в «Жизни цветка».
+  const tod: Tod | null = life ? clock : null;
   useEffect(() => {
     const svg = ref.current;
     if (!svg) return;
@@ -415,6 +447,14 @@ function Flower({ d, size, pick, late, life = false }: BodyProps & { life?: bool
        <radialGradient id="${uid}-wait"><stop offset="0%" stop-color="${PHASE_COLOR.late}" stop-opacity=".45"/><stop offset="100%" stop-color="${PHASE_COLOR.late}" stop-opacity="0"/></radialGradient>
        <radialGradient id="${uid}-shade"><stop offset="0%" stop-color="#ec4899" stop-opacity=".16"/><stop offset="100%" stop-color="#ec4899" stop-opacity="0"/></radialGradient>
        <filter id="${uid}-glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="${4 * k0}"/></filter>` +
+      (tod
+        ? `<radialGradient id="${uid}-sky"><stop offset="30%" stop-color="${TOD_LOOK[tod].sky[0]}" stop-opacity="${TOD_LOOK[tod].sky[2]}"/><stop offset="70%" stop-color="${TOD_LOOK[tod].sky[1]}" stop-opacity="${TOD_LOOK[tod].sky[2] * 0.6}"/><stop offset="100%" stop-color="${TOD_LOOK[tod].sky[1]}" stop-opacity="0"/></radialGradient>
+           <radialGradient id="${uid}-sun"><stop offset="0%" stop-color="#fffbeb"/><stop offset="45%" stop-color="${tod === "evening" ? "#fdba74" : tod === "morning" ? "#fed7aa" : "#fde047"}"/><stop offset="100%" stop-color="${tod === "evening" ? "#f97316" : "#fbbf24"}"/></radialGradient>
+           <radialGradient id="${uid}-tint"><stop offset="0%" stop-color="${TOD_LOOK[tod].tint?.[0] ?? "#fff"}"/><stop offset="70%" stop-color="${TOD_LOOK[tod].tint?.[0] ?? "#fff"}" stop-opacity=".8"/><stop offset="100%" stop-color="${TOD_LOOK[tod].tint?.[0] ?? "#fff"}" stop-opacity="0"/></radialGradient>
+           <linearGradient id="${uid}-bf" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#f0abfc"/><stop offset="100%" stop-color="#a78bfa"/></linearGradient>
+           <linearGradient id="${uid}-bf2" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#f9a8d4"/><stop offset="100%" stop-color="#fb7185"/></linearGradient>
+           <filter id="${uid}-soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="${14 * k0}"/></filter>`
+        : "") +
       (life
         ? phases
             .map(
@@ -426,22 +466,75 @@ function Flower({ d, size, pick, late, life = false }: BodyProps & { life?: bool
             .join("") +
           `<radialGradient id="${uid}-bud" cx=".45" cy=".4"><stop offset="0%" stop-color="#ffe4ec"/><stop offset="100%" stop-color="${PHASE_COLOR.period}"/></radialGradient>`
         : "");
+    if (tod) el("circle", { cx: C, cy: C, r: C * 0.98, fill: `url(#${uid}-sky)` }, svg);
+    // Солнце или луна в углу — время суток видно сразу.
+    let rays: Element | null = null;
+    const stars: Element[] = [];
+    if (tod) {
+      const sky = el("g", { style: "pointer-events:none" }, svg);
+      const at = tod === "morning" ? [C - 0.7 * C, C - 0.74 * C] : tod === "evening" ? [C + 0.72 * C, C - 0.66 * C] : [C + 0.7 * C, C - 0.76 * C];
+      const r = (tod === "evening" ? 15 : 13) * k0;
+      if (tod === "night") {
+        for (let j = 0; j < 14; j++) {
+          const a = j * 2.39996 + 0.6;
+          const rr = C * (0.78 + ((j * 37) % 17) / 100);
+          stars.push(el("circle", { cx: C + Math.cos(a) * rr, cy: C + Math.sin(a) * rr * 0.92, r: (0.8 + (j % 3) * 0.45) * k0, fill: "#e0e7ff" }, sky));
+        }
+        el("circle", { cx: at[0], cy: at[1], r: r * 2.2, fill: "#e0e7ff", opacity: 0.6, filter: `url(#${uid}-glow)` }, sky);
+        el("path", { d: `M0 ${-r} A ${r} ${r} 0 1 0 0 ${r} A ${r * 0.45} ${r} 0 1 1 0 ${-r}Z`, transform: `translate(${at[0] - r * 0.2} ${at[1]}) rotate(-25) scale(1.25)`, fill: "#fef3c7", stroke: "#fde68a", "stroke-width": 0.8 * k0 }, sky);
+      } else {
+        el("circle", { cx: at[0], cy: at[1], r: r * 2.3, fill: tod === "evening" ? "#fb923c" : "#fde047", opacity: tod === "day" ? 0.45 : 0.35, filter: `url(#${uid}-glow)` }, sky);
+        if (tod === "day") {
+          rays = el("g", { transform: `translate(${at[0]} ${at[1]})` }, sky);
+          for (let j = 0; j < 10; j++)
+            el("path", { d: `M0 ${-r * 1.45} L0 ${-r * 2}`, transform: `rotate(${j * 36})`, stroke: "#fbbf24", "stroke-width": 2 * k0, "stroke-linecap": "round", opacity: 0.8 }, rays);
+        }
+        el("circle", { cx: at[0], cy: at[1], r, fill: `url(#${uid}-sun)`, opacity: tod === "morning" ? 0.9 : 1 }, sky);
+      }
+    }
+    // Вечером солнце низко — тень длинная, вбок.
+    if (tod === "evening")
+      el("ellipse", { cx: C + 40 * k0, cy: C + 52 * k0, rx: C * 0.7, ry: C * 0.32, transform: `rotate(18 ${C + 40 * k0} ${C + 52 * k0})`, fill: "#7c2d12", opacity: 0.12, filter: `url(#${uid}-soft)` }, svg);
     el("ellipse", { cx: C, cy: C + 14 * k0, rx: C * 0.86, ry: C * 0.8, fill: `url(#${uid}-shade)` }, svg);
     const aura = el("circle", { cx: C, cy: C, r: C * 0.95, fill: `url(#${uid}-${waiting ? "wait" : "aura"})`, opacity: 0 }, svg);
     const back = el("g", {}, svg);
     const ovGlow = el("path", { fill: "#14b8a6", opacity: 0.55, filter: `url(#${uid}-glow)` }, svg);
     const glow = el("path", { fill: late ? PHASE_COLOR.late : "#ec4899", opacity: 0.45, filter: `url(#${uid}-glow)` }, svg);
+    // Ночью серединка тихо светится сквозь сомкнутые лепестки.
+    const nightGlow = tod === "night" ? el("circle", { cx: C, cy: C, r: R0 + 14 * k0, fill: "#fde68a", filter: `url(#${uid}-glow)`, opacity: 0 }, svg) : null;
     const front = el("g", {}, svg);
     const veinsG = el("g", { style: "pointer-events:none" }, svg);
     // Звёздочка на кончике лепестка овуляции.
     const ovStarG = el("g", { style: "pointer-events:none" }, svg);
     const ovStar = el("path", { d: "M0 -7 L1.8 -1.8 L7 0 L1.8 1.8 L0 7 L-1.8 1.8 L-7 0 L-1.8 -1.8 Z", fill: "#fff", stroke: "#14b8a6", "stroke-width": 1 }, ovStarG);
+    // Утренняя роса — на каждом третьем лепестке.
+    const dewG = el("g", { style: "pointer-events:none" }, svg);
+    const dews = tod === "morning"
+      ? Array.from({ length: N }, (_, i) => {
+          if (i % 2 !== 1) return null;
+          const g = el("g", {}, dewG);
+          el("ellipse", { cx: 0.6 * k0, cy: 1.2 * k0, rx: 3.6 * k0, ry: 3.9 * k0, fill: "rgba(80,40,90,.12)" }, g);
+          el("ellipse", { rx: 3.6 * k0, ry: 4 * k0, fill: "rgba(255,255,255,.4)", stroke: "rgba(255,255,255,.95)", "stroke-width": 1 * k0 }, g);
+          el("circle", { cx: -1.2 * k0, cy: -1.5 * k0, r: 1.3 * k0, fill: "#fff" }, g);
+          return g;
+        })
+      : [];
     const stamenG = el("g", { style: "pointer-events:none" }, svg);
+    const tintLook = tod ? TOD_LOOK[tod].tint : null;
+    if (tintLook) el("circle", { cx: C, cy: C, r: C * 0.95, fill: `url(#${uid}-tint)`, opacity: tintLook[1], style: `pointer-events:none;mix-blend-mode:${tintLook[2]}` }, svg);
+    // Днём по цветку скользит солнечный блик.
+    const glint = tod === "day" ? el("ellipse", { rx: C * 0.34, ry: C * 0.1, fill: "#fff", opacity: 0.4, filter: `url(#${uid}-soft)`, style: "pointer-events:none;mix-blend-mode:soft-light" }, svg) : null;
     const fx = el("g", { style: "pointer-events:none" }, svg);
+    const todFx = el("g", { style: "pointer-events:none" }, svg);
+    // Касание лепестка: цветок качается, утром с него скатывается капля.
+    let pokeAt = -1e9;
     const backs = Array.from({ length: N }, (_, i) => el("path", { fill: PHASE_COLOR[phaseOf(i + 1)] }, back));
     const fronts = Array.from({ length: N }, (_, i) => {
       const p = el("path", { role: "button", "aria-label": `${i + 1}-й день: ${TITLE[phaseOf(i + 1)]}`, fill: `url(#${uid}-${phaseOf(i + 1)})`, style: "cursor:pointer" }, front);
-      p.addEventListener("click", () => pick({ day: i + 1 }));
+      p.addEventListener("click", () => {
+        pokeAt = performance.now();
+        pick({ day: i + 1 });
+      });
       return p;
     });
     // Овуляция и сегодня — поверх соседей, чтобы их не перекрывало.
@@ -501,6 +594,9 @@ function Flower({ d, size, pick, late, life = false }: BodyProps & { life?: bool
       : lerp(0.96, 0.62, frac(fe + 1, N));
     const curl = lifeOn ? (ph === "luteal" ? 0.12 * ageK : 0) : waiting ? 0.12 : ph === "period" ? lerp(0.35, 0.15, frac(1, pl)) : ph === "luteal" ? lerp(0, 0.6, frac(fe + 1, N)) : 0;
     const wide = lifeOn && ph === "luteal" ? 1 : waiting ? 0.92 : ph === "period" ? 0.74 : ph === "follicular" ? lerp(0.8, 0.98, frac(pl + 1, fs - 1)) : ph === "luteal" ? lerp(1, 0.78, frac(fe + 1, N)) : 1.04;
+    // Вечером лепестки понемногу прикрываются, ночью смыкаются.
+    const openT = open * (tod === "night" ? 0.72 : tod === "evening" ? 0.93 : 1);
+    const curlT = curl + (tod === "night" ? 0.3 : tod === "evening" ? 0.08 : 0);
     const bloomy = !waiting && (ph === "fertile" || ph === "ovulation");
     const shedding = !waiting && ph === "luteal" && N - day <= 5;
     const fluffy = lifeOn && ph === "luteal" && N - day <= 3;
@@ -516,17 +612,26 @@ function Flower({ d, size, pick, late, life = false }: BodyProps & { life?: bool
     if (waiting) front.appendChild(fronts[todayK - 1]);
     const narrow = Math.sqrt(28 / Math.max(N, 24));
 
-    type Part = { pollen: boolean; fluff?: boolean; x: number; y: number; vx: number; vy: number; life: number; r: number; rot: number; vr: number; c: string };
+    type Part = { pollen: boolean; fluff?: boolean; mote?: boolean; x: number; y: number; vx: number; vy: number; life: number; r: number; rot: number; vr: number; c: string };
     let parts: Part[] = [];
     let raf = 0;
     const t0 = performance.now();
     let grow = reduce ? 1 : 0;
+    // Кончики лепестков — для бабочки.
+    const tips: { x: number; y: number; a: number }[] = [];
+    // Капля, что скатывается: какая и когда начала.
+    let roll = { i: -1, at: -99 };
+    let nextRoll = 2.5;
+    // Бабочка: прилетает, сидит на лепестке, улетает.
+    let bf = { at: 1.2, from: { x: 0, y: 0 }, to: -1 };
     const frame = (now: number) => {
       const s = (now - t0) / 1000;
-      grow = reduce ? 1 : Math.min(1, grow + 0.018);
+      // Утром цветок просыпается: раскрывается медленнее, из почти сомкнутого.
+      grow = reduce ? 1 : Math.min(1, grow + (tod === "morning" ? 0.007 : 0.018));
       const g = easeOut(grow);
-      const o = lerp(0.45, open, g);
-      const sway = reduce ? 0 : Math.sin(s * 0.7) * 1.5;
+      const o = lerp(tod === "morning" ? 0.3 : 0.45, openT, g);
+      const poke = reduce ? 0 : Math.max(0, 1 - (now - pokeAt) / 900);
+      const sway = reduce ? 0 : Math.sin(s * 0.7) * (tod === "day" ? 2.2 : tod === "night" ? 0.8 : 1.5) + poke * 5 * Math.sin(s * 11);
       for (let i = 0; i < N; i++) {
         const k = i + 1;
         const isToday = k === todayK;
@@ -539,7 +644,7 @@ function Flower({ d, size, pick, late, life = false }: BodyProps & { life?: bool
         const w = 15 * k0 * wide * (isToday ? 1.15 : isOv ? 1.25 : 1) * narrow * (1 - 0.25 * age);
         const twist = age * 0.9;
         // Пока бутон раскрывается, лепестки ещё закручены спиралью.
-        const a = ((k - 0.5) / N) * 360 + curl * 28 * g + sway + (1 - growK) * 40;
+        const a = ((k - 0.5) / N) * 360 + curlT * 28 * g + sway + (1 - growK) * 40;
         const tr = `translate(${C} ${C}) rotate(${a}) translate(0 ${-R0 + 6 * k0})`;
         fronts[i].setAttribute("d", age > 0 ? petalCurlD(len, w, twist) : petalD(len, w));
         if (life && !waiting) fronts[i].setAttribute("fill", `url(#${uid}-${phaseOf(k)}${age > 0.4 ? "-dry" : ""})`);
@@ -552,10 +657,27 @@ function Flower({ d, size, pick, late, life = false }: BodyProps & { life?: bool
         veins[i].setAttribute("stroke-opacity", String(past || isToday ? 0.5 : 0.25));
         veins[i].setAttribute("stroke-width", String(1.1 * k0));
         // Задний ряд — между днями, длиннее и шире: цветок пышнее.
-        const ab = (k / N) * 360 + curl * 34 * g + sway * 0.6;
+        const ab = (k / N) * 360 + curlT * 34 * g + sway * 0.6;
         backs[i].setAttribute("d", age > 0 ? petalCurlD(len * 1.06 + 6 * k0, w * 1.25, twist * 0.7) : petalD(len * 1.06 + 6 * k0, w * 1.25));
         backs[i].setAttribute("transform", `translate(${C} ${C}) rotate(${ab}) translate(0 ${-R0 + 8 * k0})`);
         backs[i].setAttribute("opacity", String((past ? 0.24 : 0.1) * g));
+        const rad = (a * Math.PI) / 180;
+        const reach = R0 - 6 * k0 + len;
+        tips[i] = { x: C + Math.sin(rad) * reach, y: C - Math.cos(rad) * reach, a };
+        const dew = dews[i];
+        if (dew) {
+          let pos = 0.6;
+          let op = 1;
+          if (i === roll.i) {
+            const t = (s - roll.at) / 1.6;
+            if (t < 1) {
+              pos = 0.6 + 0.55 * t * t;
+              op = 1 - t * t * t;
+            } else op = Math.min(1, t - 1);
+          }
+          dew.setAttribute("transform", `${tr} translate(${w * 0.15} ${-len * pos}) rotate(${-a}) scale(${g})`);
+          dew.setAttribute("opacity", String(gone(i) ? 0 : op));
+        }
         if (isToday) {
           glow.setAttribute("d", petalD(len + 6 * k0, w + 4 * k0));
           glow.setAttribute("transform", tr);
@@ -579,6 +701,67 @@ function Flower({ d, size, pick, late, life = false }: BodyProps & { life?: bool
       if (budK > 0) budG.setAttribute("transform", `translate(${C} ${C}) scale(${g * (1 + (reduce ? 0 : 0.015 * Math.sin(s * 1.4)))}) translate(${-C} ${-C})`);
       if (seedK > 0) seedG.setAttribute("transform", `translate(${C} ${C}) rotate(${s * 4}) scale(${g}) translate(${-C} ${-C})`);
       aura.setAttribute("opacity", String(bloomy || waiting ? (0.55 + 0.15 * Math.sin(s * (waiting ? 1.2 : 2))) * g : 0));
+      if (rays && !reduce) rays.setAttribute("transform", `${rays.getAttribute("transform")!.split(" rotate")[0]} rotate(${s * 6})`);
+      if (!reduce) stars.forEach((st, j) => st.setAttribute("opacity", String(0.35 + 0.65 * Math.abs(Math.sin(s * (0.6 + (j % 4) * 0.2) + j)))));
+      nightGlow?.setAttribute("opacity", String((0.35 + (reduce ? 0 : 0.15 * Math.sin(s * 1.1))) * g));
+      if (glint) {
+        const p = ((s * 0.06) % 1.4) - 0.7;
+        glint.setAttribute("transform", `translate(${C + p * C * 1.6} ${C + p * C * 0.5}) rotate(-28)`);
+      }
+      if (dews.length && !reduce && (s > nextRoll || (poke > 0.95 && s - roll.at > 1.6))) {
+        const have = dews.map((x, i) => (x && !gone(i) ? i : -1)).filter((i) => i >= 0);
+        if (have.length) roll = { i: have[Math.floor(Math.random() * have.length)], at: s };
+        nextRoll = s + 5 + Math.random() * 4;
+      }
+      let extra = "";
+      if (tod === "day" && !reduce && tips.length) {
+        // Прилёт 2.4 с, сидит 6 с, улетает 2 с, нет её 10 с.
+        const t = s - bf.at;
+        if (bf.to < 0 && t >= 0) {
+          const picks = tips.map((_, i) => i).filter((i) => !gone(i) && i + 1 !== day);
+          const a = Math.random() * Math.PI * 2;
+          bf = { at: bf.at, from: { x: C + Math.cos(a) * C * 1.5, y: C + Math.sin(a) * C * 1.5 - C * 0.4 }, to: picks[Math.floor(Math.random() * picks.length)] ?? 0 };
+        }
+        if (bf.to >= 0) {
+          const tip = tips[bf.to];
+          const land = { x: tip.x, y: tip.y };
+          let x = land.x, y = land.y, rot = tip.a, f = 0.55 + 0.4 * Math.abs(Math.cos(s * 1.8));
+          if (t < 2.4) {
+            const q = easeOut(t / 2.4);
+            x = lerp(bf.from.x, land.x, q) + Math.sin(t * 5) * 8 * k0 * (1 - q);
+            y = lerp(bf.from.y, land.y, q) + Math.cos(t * 4) * 6 * k0 * (1 - q);
+            rot = (Math.atan2(land.y - bf.from.y, land.x - bf.from.x) * 180) / Math.PI + 90;
+            f = 0.2 + 0.8 * Math.abs(Math.cos(s * 14));
+          } else if (t > 8.4) {
+            const q = (t - 8.4) / 2;
+            const away = { x: land.x + (land.x - C) * 2, y: land.y - C * 1.2 };
+            x = lerp(land.x, away.x, q * q);
+            y = lerp(land.y, away.y, q * q) + Math.sin(t * 5) * 6 * k0;
+            rot = (Math.atan2(away.y - land.y, away.x - land.x) * 180) / Math.PI + 90;
+            f = 0.2 + 0.8 * Math.abs(Math.cos(s * 14));
+            if (q >= 1) bf = { at: s + 10, from: bf.from, to: -1 };
+          }
+          if (bf.to >= 0) extra += `<g transform="translate(${x} ${y}) rotate(${rot}) scale(${k0 * 1.6})">${butterfly(uid, f)}</g>`;
+        }
+      }
+      if (tod === "night") {
+        // Три светлячка кружат и мигают; от касания разлетаются шире.
+        for (let j = 0; j < 4; j++) {
+          const spread = 1 + poke * 0.25;
+          const t = reduce ? j * 2 : s;
+          const x = C + Math.sin(t * (0.21 + j * 0.07) + j * 2.1) * C * 0.78 * spread;
+          const y = C + Math.sin(t * (0.17 + j * 0.05) + j * 1.3) * C * 0.62 * spread;
+          const blink = reduce ? 1 : Math.pow(Math.max(0, Math.sin(s * 1.3 + j * 2.2)), 1.5) * 0.85 + 0.15;
+          extra += `<circle cx="${x}" cy="${y}" r="${10 * k0}" fill="#facc15" opacity="${0.6 * blink}" filter="url(#${uid}-glow)"/><circle cx="${x}" cy="${y}" r="${2.8 * k0}" fill="#fefce8" opacity="${blink}"/>`;
+        }
+      }
+      if (tod === "evening" && !reduce && g > 0.6 && Math.random() < 0.06) {
+        // Пылинки в закатном свете.
+        const a = Math.random() * Math.PI * 2;
+        const r = Math.random() * C * 0.85;
+        parts.push({ pollen: false, mote: true, x: C + Math.cos(a) * r, y: C + Math.sin(a) * r, vx: (Math.random() - 0.3) * 0.25 * k0, vy: -(0.1 + Math.random() * 0.2) * k0, life: 1, r: (0.8 + Math.random() * 1.4) * k0, rot: 0, vr: 0, c: Math.random() < 0.5 ? "#fcd34d" : "#fdba74" });
+      }
+      todFx.innerHTML = extra;
 
 
       if (!reduce && g > 0.6) {
@@ -598,11 +781,12 @@ function Flower({ d, size, pick, late, life = false }: BodyProps & { life?: bool
           parts.push({ pollen: false, x: C + Math.cos(a) * rr, y: C + Math.sin(a) * rr, vx: (Math.random() - 0.5) * 0.6 * k0, vy: (0.5 + Math.random() * 0.5) * k0, life: 1, r: 0, rot: Math.random() * 360, vr: (Math.random() - 0.5) * 4, c: PHASE_COLOR[phaseOf(k)] });
         }
       }
-      parts = parts.filter((q) => (q.life -= q.pollen ? 0.012 : q.fluff ? 0.004 : 0.006) > 0);
+      parts = parts.filter((q) => (q.life -= q.pollen ? 0.012 : q.fluff || q.mote ? 0.004 : 0.006) > 0);
       fx.innerHTML = parts
         .map((q) => {
           q.x += q.vx;
           q.y += q.vy;
+          if (q.mote) return `<circle cx="${q.x}" cy="${q.y}" r="${q.r}" fill="${q.c}" opacity="${(4 * q.life * (1 - q.life) * 0.9).toFixed(2)}"/>`;
           if (!q.pollen) {
             q.rot += q.vr;
             q.vx += Math.sin(q.y / 20) * 0.02;
@@ -618,7 +802,7 @@ function Flower({ d, size, pick, late, life = false }: BodyProps & { life?: bool
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [N, day, fs, fe, ov, pl, size, late, lateDays, life]);
+  }, [N, day, fs, fe, ov, pl, size, late, lateDays, life, tod]);
   return <svg ref={ref} width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="absolute inset-0" style={{ overflow: "visible" }} />;
 }
 

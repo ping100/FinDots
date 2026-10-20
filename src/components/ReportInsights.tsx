@@ -434,36 +434,97 @@ function MonthsCard({ data, base }: { data: Insights; base: CurrencyCode }) {
   );
 }
 
+/** «4,7к», «19к», «850» — коротко, чтобы влезло над столбиком. */
+function compact(v: number): string {
+  const n = Math.round(v);
+  if (n < 1000) return String(n);
+  if (n < 10000) return `${(n / 1000).toFixed(1).replace(".", ",").replace(",0", "")}к`;
+  if (n < 1_000_000) return `${Math.round(n / 1000)}к`;
+  return `${(n / 1_000_000).toFixed(1).replace(".", ",")}м`;
+}
+
+const DAY_FULL = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"];
+
 function WeekCard({ days, base }: { days: { label: string; avg: number }[]; base: CurrencyCode }) {
+  const [open, setOpen] = useState(false);
   const top = Math.max(...days.map((d) => d.avg)) || 1;
   const peak = days.findIndex((d) => d.avg === top);
   const weekday = days.slice(0, 5).reduce((s, d) => s + d.avg, 0) / 5;
   const weekend = (days[5].avg + days[6].avg) / 2;
   const FULL = ["понедельникам", "вторникам", "средам", "четвергам", "пятницам", "субботам", "воскресеньям"];
+  const money = (v: number) => formatMoney(Math.round(v), base);
   return (
-    <Card title="Когда вы тратите" aside="за 3 месяца">
-      <div className="mt-2 flex h-[5.5rem] items-end gap-2">
-        {days.map((d, i) => (
-          <div key={d.label} className="flex h-full flex-1 flex-col items-center justify-end gap-1">
-            <span
-              className="w-full rounded-t-lg rounded-b-sm"
-              title={formatMoney(Math.round(d.avg), base)}
-              style={{
-                height: Math.max(3, (d.avg / top) * 64),
-                background: i === peak ? "linear-gradient(#10b981, #06b6d4)" : "var(--surface-2)",
-              }}
-            />
-            <span className="text-[0.625rem]" style={{ color: i === peak ? "var(--text)" : "var(--muted)", fontWeight: i === peak ? 700 : 400 }}>
-              {d.label}
-            </span>
+    <>
+      <button onClick={() => setOpen(true)} className="block w-full text-left transition active:scale-[0.99]">
+        <Card title="Когда вы тратите" aside="за 3 месяца ›">
+          <div className="mt-2 flex h-[6.5rem] items-end gap-2">
+            {days.map((d, i) => (
+              <div key={d.label} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1">
+                {/* Сумма над столбиком — коротко: «4,7к». */}
+                <span
+                  className="text-[0.625rem] tabular-nums"
+                  style={{ color: i === peak ? "var(--text)" : "var(--muted)", fontWeight: i === peak ? 700 : 500 }}
+                >
+                  {compact(d.avg)}
+                </span>
+                <span
+                  className="w-full rounded-t-lg rounded-b-sm"
+                  style={{
+                    height: Math.max(3, (d.avg / top) * 60),
+                    background: i === peak ? "linear-gradient(#10b981, #06b6d4)" : "var(--surface-2)",
+                  }}
+                />
+                <span className="text-[0.625rem]" style={{ color: i === peak ? "var(--text)" : "var(--muted)", fontWeight: i === peak ? 700 : 400 }}>
+                  {d.label}
+                </span>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-      <p className="mt-1.5 text-[0.75rem] leading-snug" style={{ color: "var(--muted)" }}>
-        Больше всего — по {FULL[peak]}, в среднем {formatMoney(Math.round(top), base)}. В будни —{" "}
-        {formatMoney(Math.round(weekday), base)} в день, в выходные — {formatMoney(Math.round(weekend), base)}.
-      </p>
-    </Card>
+          <p className="mt-1.5 text-[0.75rem] leading-snug" style={{ color: "var(--muted)" }}>
+            Больше всего — по {FULL[peak]}, в среднем {money(top)}. В будни — {money(weekday)} в день, в выходные — {money(weekend)}.
+          </p>
+        </Card>
+      </button>
+
+      <Sheet open={open} title="Траты по дням недели" onClose={() => setOpen(false)}>
+        <div className="pb-3">
+          <p className="mb-1 text-[0.75rem]" style={{ color: "var(--muted)" }}>
+            Сколько в среднем уходит за один такой день, по последним 3 месяцам
+          </p>
+          <ul>
+            {days.map((d, i) => (
+              <li key={d.label} className="py-2.5" style={{ borderBottom: "1px solid var(--border)" }}>
+                <div className="flex items-baseline gap-3">
+                  <span className="min-w-0 flex-1 text-[0.9375rem]" style={{ fontWeight: i === peak ? 700 : 400 }}>
+                    {DAY_FULL[i]}
+                    {i === peak ? <span className="ml-1.5 text-[0.75rem] font-medium" style={{ color: "#059669" }}>больше всего</span> : null}
+                  </span>
+                  <span className="text-[1rem] font-semibold tabular-nums">{money(d.avg)}</span>
+                </div>
+                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full" style={{ background: "var(--surface-2)" }}>
+                  <div
+                    className="h-full rounded-full"
+                    style={{ width: `${Math.max(2, (d.avg / top) * 100)}%`, background: i === peak ? "linear-gradient(90deg, #10b981, #06b6d4)" : "var(--muted)", opacity: i === peak ? 1 : 0.45 }}
+                  />
+                </div>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <div className="rounded-2xl px-3.5 py-3" style={{ background: "var(--surface-2)" }}>
+              <p className="text-[0.75rem]" style={{ color: "var(--muted)" }}>В будни</p>
+              <p className="text-[1.0625rem] font-extrabold tabular-nums">{money(weekday)}</p>
+              <p className="text-[0.6875rem]" style={{ color: "var(--muted)" }}>в день</p>
+            </div>
+            <div className="rounded-2xl px-3.5 py-3" style={{ background: "var(--surface-2)" }}>
+              <p className="text-[0.75rem]" style={{ color: "var(--muted)" }}>В выходные</p>
+              <p className="text-[1.0625rem] font-extrabold tabular-nums">{money(weekend)}</p>
+              <p className="text-[0.6875rem]" style={{ color: "var(--muted)" }}>в день</p>
+            </div>
+          </div>
+        </div>
+      </Sheet>
+    </>
   );
 }
 

@@ -23,9 +23,10 @@ const LOOK: Record<State, { color: string; anim: string }> = {
 };
 
 /**
- * Связь — маленькой точкой вверху по центру, над шапкой: на iPhone в полосе
- * под вырезом (центр точки на 4px выше края безопасной зоны), без выреза —
- * у самого края экрана. Так она не наезжает на месяц в шапке.
+ * Связь — маленькой точкой вверху по центру, над шапкой: сразу под полосой
+ * с часами, выше заголовков, так что на месяц в шапке не наезжает. В саму
+ * полосу с часами не заходит: iPhone принимает такой блок за верхнюю панель
+ * и размывает под ней весь экран.
  *
  * Зелёная — всё подключено,
  * янтарная — отправляются изменения, серая — нет сети. Нажатие раскрывает
@@ -74,8 +75,8 @@ export function ConnectionStatus({ pendingCount }: { pendingCount: number }) {
   return (
     <div
       className="pointer-events-none fixed inset-x-0 z-[45] flex justify-center"
-      // Кнопка 18px: центр точки = top + 9 = max(5px, safe − 4px).
-      style={{ top: "max(-4px, calc(env(safe-area-inset-top) - 13px))" }}
+      // Кнопка 12px: центр точки на 7px ниже полосы с часами.
+      style={{ top: "calc(env(safe-area-inset-top) + 1px)" }}
       data-connection
       role="status"
       aria-live="polite"
@@ -83,7 +84,7 @@ export function ConnectionStatus({ pendingCount }: { pendingCount: number }) {
       <button
         onClick={() => (open ? setOpen(false) : show(2500))}
         aria-label={text}
-        className="pointer-events-auto flex h-[18px] items-center justify-center px-3 transition-transform duration-300 ease-out"
+        className="pointer-events-auto flex h-3 items-center justify-center px-4 transition-transform duration-300 ease-out"
         // Подпись выше точки не помещается: раскрываясь, чуть опускается.
         style={{ transform: open ? "translateY(10px)" : "none" }}
       >

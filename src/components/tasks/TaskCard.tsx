@@ -173,20 +173,25 @@ export function TaskCard({
         </button>
 
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          {/* Зачёркивание — линией, которая прочерчивается слева направо,
-              а не мгновенным line-through. */}
-          <p
-            className="min-w-0 flex-1 truncate text-[0.9375rem] font-medium"
-            style={{
-              color: task.done ? "var(--muted)" : "var(--text)",
-              backgroundImage: "linear-gradient(currentColor, currentColor)",
-              backgroundRepeat: "no-repeat",
-              backgroundPosition: "0 55%",
-              backgroundSize: task.done ? "100% 1.5px" : "0% 1.5px",
-              transition: "background-size 320ms ease-out, color 200ms",
-            }}
-          >
-            {task.title}
+          {/* Длинное название переносится, карточка растёт. Зачёркивание —
+              линией, которая прочерчивается слева направо, а не мгновенным
+              line-through; box-decoration-break: clone — своя линия на
+              каждой строке. */}
+          <p className="min-w-0 flex-1 break-words text-[0.9375rem] font-medium leading-snug">
+            <span
+              style={{
+                color: task.done ? "var(--muted)" : "var(--text)",
+                backgroundImage: "linear-gradient(currentColor, currentColor)",
+                backgroundRepeat: "no-repeat",
+                backgroundPosition: "0 55%",
+                backgroundSize: task.done ? "100% 1.5px" : "0% 1.5px",
+                transition: "background-size 320ms ease-out, color 200ms",
+                WebkitBoxDecorationBreak: "clone",
+                boxDecorationBreak: "clone",
+              }}
+            >
+              {task.title}
+            </span>
           </p>
           {overdue && task.date ? (
             <span className="shrink-0 text-xs" style={{ color: "var(--danger)" }}>

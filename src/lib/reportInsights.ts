@@ -32,6 +32,8 @@ export interface Insights {
   spent: number;
   earned: number;
   usual: { month: number; toDate: number; income: number; months: number } | null;
+  /** Из каких месяцев сложился «обычный» — для окна по нажатию, новые сверху. */
+  history: { key: string; label: string; value: number }[];
   noSpend: { days: number; prev: number | null; prevMonth: string | null };
   months: { key: string; label: string; value: number; selected: boolean; partial: boolean }[];
   frequent: (InsightItem & { count: number; avg: number })[];
@@ -46,6 +48,11 @@ export interface Insights {
 
 const WEEK = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 const SHORT = ["янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
+/** Месяц в именительном падеже — для списка «траты по месяцам». */
+const MONTH_FULL = [
+  "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
+  "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь",
+];
 /** «в сентябре было 5» — месяц в предложном падеже. */
 export const MONTH_IN = [
   "январе", "феврале", "марте", "апреле", "мае", "июне",
@@ -143,6 +150,12 @@ export function buildInsights(
   const usual = history.length
     ? { month: mean((h) => h.month), toDate: mean((h) => h.toDate), income: mean((h) => h.income), months: history.length }
     : null;
+  const monthName = (shift: number) => {
+    const start = monthRange(shift).from;
+    const name = MONTH_FULL[start.getMonth()];
+    return start.getFullYear() === now.getFullYear() ? name : `${name} ${start.getFullYear()}`;
+  };
+  const historyRows = history.map((h) => ({ key: String(h.shift), label: monthName(h.shift), value: h.month }));
 
   // ── траты по дням: дни без трат и самый дорогой день ──
   const perDay = (list: Transaction[], n: number) => {
@@ -350,5 +363,5 @@ export function buildInsights(
     }
   }
 
-  return { cutoff, days, spent, earned, usual, noSpend, months, frequent, biggest, regular, weekdays, rise, priciestDay };
+  return { cutoff, days, spent, earned, usual, history: historyRows, noSpend, months, frequent, biggest, regular, weekdays, rise, priciestDay };
 }

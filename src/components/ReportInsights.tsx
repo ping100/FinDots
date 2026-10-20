@@ -5,6 +5,7 @@ import { Icon } from "@/lib/icons";
 import { formatMoney } from "@/lib/money";
 import type { InsightItem, Insights } from "@/lib/reportInsights";
 import type { CurrencyCode } from "@/lib/types";
+import { Sheet } from "./ui";
 
 /**
  * Верх «Отчёта»: яркие карточки-истории с главными выводами месяца
@@ -16,6 +17,7 @@ export function ReportInsights({ data, base, current }: { data: Insights; base: 
   const money = (v: number) => formatMoney(Math.round(v), base);
   const vsUsual = data.usual && data.usual.toDate > 0 ? (data.spent - data.usual.toDate) / data.usual.toDate : null;
   const saved = data.earned - data.spent;
+  const [usualOpen, setUsualOpen] = useState(false);
 
   return (
     <>
@@ -26,6 +28,7 @@ export function ReportInsights({ data, base, current }: { data: Insights; base: 
           label="Обычно за месяц"
           value={data.usual ? money(data.usual.month) : "—"}
           note={data.usual ? `в среднем за ${data.usual.months} ${plural(data.usual.months, "месяц", "месяца", "месяцев")}` : "появится через месяц"}
+          onClick={data.history.length ? () => setUsualOpen(true) : undefined}
         />
         <Tile
           label={current ? "Этот месяц" : "За месяц"}
@@ -68,6 +71,10 @@ export function ReportInsights({ data, base, current }: { data: Insights; base: 
       </div>
 
       <MonthsCard data={data} base={base} />
+
+      <Sheet open={usualOpen} title="Траты по месяцам" onClose={() => setUsualOpen(false)}>
+        <UsualList data={data} base={base} current={current} />
+      </Sheet>
 
       {data.frequent.length ? (
         <Card title="Самые частые покупки" aside="за месяц">
@@ -245,11 +252,25 @@ function monthOfInsights(data: Insights): { from: Date } {
 
 // ─────────────────────────── карточки ───────────────────────────
 
-function Tile({ label, value, note, tone }: { label: string; value: React.ReactNode; note: string; tone?: "good" | "bad" }) {
-  return (
-    <div className="money-card min-w-0 rounded-[1.25rem] px-3 py-2.5">
-      <p className="text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+function Tile({
+  label,
+  value,
+  note,
+  tone,
+  onClick,
+}: {
+  label: string;
+  value: React.ReactNode;
+  note: string;
+  tone?: "good" | "bad";
+  /** Есть подробности — плитка нажимается и показывает стрелку. */
+  onClick?: () => void;
+}) {
+  const body = (
+    <>
+      <p className="flex items-center justify-between gap-1 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
         {label}
+        {onClick ? <Icon name="chevron-right" size={12} className="shrink-0 opacity-60" /> : null}
       </p>
       <p className="truncate text-[1.25rem] font-extrabold leading-tight tracking-tight tabular-nums">{value}</p>
       <p
@@ -257,6 +278,62 @@ function Tile({ label, value, note, tone }: { label: string; value: React.ReactN
         style={{ color: tone === "bad" ? "var(--danger)" : tone === "good" ? "#059669" : "var(--muted)" }}
       >
         {note}
+      </p>
+    </>
+  );
+  return onClick ? (
+    <button onClick={onClick} className="money-card min-w-0 rounded-[1.25rem] px-3 py-2.5 text-left transition active:scale-[0.97]">
+      {body}
+    </button>
+  ) : (
+    <div className="money-card min-w-0 rounded-[1.25rem] px-3 py-2.5">{body}</div>
+  );
+}
+
+/** Окно «Траты по месяцам»: из чего сложился обычный месяц — строками. */
+function UsualList({ data, base, current }: { data: Insights; base: CurrencyCode; current: boolean }) {
+  const money = (v: number) => formatMoney(Math.round(v), base);
+  const avg = data.usual?.month ?? 0;
+  const diff = (v: number) => {
+    if (!avg) return null;
+    const d = (v - avg) / avg;
+    if (Math.abs(d) < 0.05) return { text: "как обычно", color: "var(--muted)" };
+    return { text: `${d > 0 ? "↑" : "↓"} ${Math.round(Math.abs(d) * 100)}%`, color: d > 0 ? "var(--danger)" : "#059669" };
+  };
+  return (
+    <div className="pb-3">
+      <ul>
+        <li className="flex items-baseline gap-3 py-2.5" style={{ borderBottom: "1px solid var(--border)" }}>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[0.9375rem] font-semibold">{current ? "Этот месяц" : "Выбранный месяц"}</span>
+            <span className="block text-[0.75rem]" style={{ color: "var(--muted)" }}>
+              {current ? `идёт, за ${data.days} ${plural(data.days, "день", "дня", "дней")}` : "весь месяц"}
+            </span>
+          </span>
+          <span className="text-[1rem] font-bold tabular-nums">{money(data.spent)}</span>
+        </li>
+        {data.history.map((m) => {
+          const d = diff(m.value);
+          return (
+            <li key={m.key} className="flex items-baseline gap-3 py-2.5" style={{ borderBottom: "1px solid var(--border)" }}>
+              <span className="min-w-0 flex-1 text-[0.9375rem]">{m.label}</span>
+              {d ? (
+                <span className="text-[0.75rem] font-medium tabular-nums" style={{ color: d.color }}>
+                  {d.text}
+                </span>
+              ) : null}
+              <span className="text-[1rem] font-semibold tabular-nums">{money(m.value)}</span>
+            </li>
+          );
+        })}
+      </ul>
+      <div className="mt-3 flex items-baseline justify-between rounded-2xl px-3.5 py-3" style={{ background: "var(--surface-2)" }}>
+        <span className="text-[0.875rem] font-semibold">Обычно за месяц</span>
+        <span className="text-[1.0625rem] font-extrabold tabular-nums">{money(avg)}</span>
+      </div>
+      <p className="mt-2 text-[0.75rem] leading-snug" style={{ color: "var(--muted)" }}>
+        Среднее за {data.history.length} {plural(data.history.length, "прошлый месяц", "прошлых месяца", "прошлых месяцев")} с операциями, не
+        больше полугода. Месяцы без записей не считаются.
       </p>
     </div>
   );

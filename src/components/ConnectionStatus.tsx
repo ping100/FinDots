@@ -23,7 +23,11 @@ const LOOK: Record<State, { color: string; anim: string }> = {
 };
 
 /**
- * Связь — маленькой точкой вверху по центру: зелёная — всё подключено,
+ * Связь — маленькой точкой вверху по центру, над шапкой: на iPhone в полосе
+ * под вырезом (центр точки на 4px выше края безопасной зоны), без выреза —
+ * у самого края экрана. Так она не наезжает на месяц в шапке.
+ *
+ * Зелёная — всё подключено,
  * янтарная — отправляются изменения, серая — нет сети. Нажатие раскрывает
  * её в подпись. Сама раскрывается, когда что-то случилось: пропала сеть,
  * изменения ждут отправки, связь вернулась.
@@ -70,7 +74,8 @@ export function ConnectionStatus({ pendingCount }: { pendingCount: number }) {
   return (
     <div
       className="pointer-events-none fixed inset-x-0 z-[45] flex justify-center"
-      style={{ top: "calc(env(safe-area-inset-top) + 4px)" }}
+      // Кнопка 18px: центр точки = top + 9 = max(5px, safe − 4px).
+      style={{ top: "max(-4px, calc(env(safe-area-inset-top) - 13px))" }}
       data-connection
       role="status"
       aria-live="polite"
@@ -78,7 +83,9 @@ export function ConnectionStatus({ pendingCount }: { pendingCount: number }) {
       <button
         onClick={() => (open ? setOpen(false) : show(2500))}
         aria-label={text}
-        className="pointer-events-auto flex h-7 items-center justify-center px-3"
+        className="pointer-events-auto flex h-[18px] items-center justify-center px-3 transition-transform duration-300 ease-out"
+        // Подпись выше точки не помещается: раскрываясь, чуть опускается.
+        style={{ transform: open ? "translateY(10px)" : "none" }}
       >
         <span
           className="flex items-center overflow-hidden rounded-full transition-all duration-300 ease-out"

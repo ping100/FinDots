@@ -195,6 +195,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const saveTask: Store["saveTask"] = useCallback(
     async (task) => {
       const { id, ...fields } = task;
+      // Правка существующей — сразу на экране (например, категория после
+      // броска на плитку), сервер догоняет.
+      if (id) setTasks((prev) => prev.map((t) => (t.id === id ? ({ ...t, ...fields } as Task) : t)));
       await guard(() =>
         id
           ? supabase().from("tasks").update(fields).eq("id", id)

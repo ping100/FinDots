@@ -3,7 +3,8 @@
 import type { ReactNode } from "react";
 import { Icon } from "@/lib/icons";
 import { Logo } from "@/components/Logo";
-import type { Task, TaskCategory } from "@/lib/tasks/types";
+import { useDroppable } from "@dnd-kit/core";
+import type { DropTarget, Task, TaskCategory } from "@/lib/tasks/types";
 
 function GroupTitle({ icon, title, hint }: { icon: string; title: string; hint?: string }) {
   return (
@@ -143,67 +144,108 @@ export function CategoryTiles({
   tasks,
   filter,
   onFilter,
+  dragging = false,
 }: {
   categories: TaskCategory[];
   tasks: Task[];
   filter: string | null;
   onFilter: (id: string | null) => void;
+  /** Задачу тащат — плитки подсвечены: на них можно бросить. */
+  dragging?: boolean;
 }) {
   if (!categories.length) return null;
   return (
     <div className="mb-1 grid grid-cols-2 gap-2">
-      {categories.map((c) => {
-        const mine = tasks.filter((t) => t.category_id === c.id);
-        const doneN = mine.filter((t) => t.done).length;
-        const on = filter === c.id;
-        return (
-          <button
-            key={c.id}
-            onClick={() => onFilter(on ? null : c.id)}
-            aria-pressed={on}
-            className="money-card flex min-w-0 items-center gap-2.5 rounded-[1.125rem] px-2.5 py-2 text-left transition active:scale-[0.97]"
-            style={{
-              opacity: filter && !on ? 0.45 : 1,
-              outline: on ? `2px solid ${c.color}` : "none",
-              outlineOffset: 1,
-            }}
-          >
-            <span
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.7rem]"
-              style={{ color: c.color, background: `color-mix(in srgb, ${c.color} 16%, transparent)`, boxShadow: `0 0 16px -6px ${c.color}` }}
-            >
-              <Icon name={c.icon} size={16} />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="flex items-baseline justify-between gap-1">
-                <span className="truncate text-[0.8125rem] font-semibold">{c.name}</span>
-                <span className="shrink-0 text-[0.6875rem] tabular-nums" style={{ color: "var(--muted)" }}>
-                  {mine.length ? `${doneN}/${mine.length}` : "—"}
-                </span>
-              </span>
-              <span className="mt-1 flex h-2 items-center gap-1">
-                {mine.slice(0, 8).map((t) => (
-                  <span
-                    key={t.id}
-                    className="h-2 w-2 rounded-full"
-                    style={
-                      t.done
-                        ? { background: c.color, boxShadow: `0 0 6px ${c.color}` }
-                        : { border: `1.5px solid ${c.color}` }
-                    }
-                  />
-                ))}
-                {mine.length > 8 ? (
-                  <span className="text-[0.5625rem]" style={{ color: "var(--muted)" }}>
-                    +{mine.length - 8}
-                  </span>
-                ) : null}
-              </span>
-            </span>
-          </button>
-        );
-      })}
+      {categories.map((c) => (
+        <CategoryTile
+          key={c.id}
+          category={c}
+          tasks={tasks.filter((t) => t.category_id === c.id)}
+          on={filter === c.id}
+          dim={!!filter && filter !== c.id && !dragging}
+          dragging={dragging}
+          onClick={() => onFilter(filter === c.id ? null : c.id)}
+        />
+      ))}
     </div>
+  );
+}
+
+/** Плитка категории: нажатие — фильтр, бросок задачи — сменить ей категорию. */
+function CategoryTile({
+  category: c,
+  tasks: mine,
+  on,
+  dim,
+  dragging,
+  onClick,
+}: {
+  category: TaskCategory;
+  tasks: Task[];
+  on: boolean;
+  dim: boolean;
+  dragging: boolean;
+  onClick: () => void;
+}) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `cat-${c.id}`,
+    data: { categoryId: c.id } satisfies DropTarget,
+  });
+  const doneN = mine.filter((t) => t.done).length;
+  return (
+    <button
+      ref={setNodeRef}
+      data-drop-id={`cat-${c.id}`}
+      onClick={onClick}
+      aria-pressed={on}
+      className="money-card flex min-w-0 items-center gap-2.5 rounded-[1.125rem] px-2.5 py-2 text-left transition active:scale-[0.97]"
+      style={{
+        opacity: dim ? 0.45 : 1,
+        outline: isOver ? `2.5px solid ${c.color}` : on ? `2px solid ${c.color}` : dragging ? `1.5px dashed ${c.color}` : "none",
+        outlineOffset: 1,
+        // Под задачей плитка упруго раздувается и светится — видно, куда она попадёт.
+        transform: isOver ? "scale(1.06)" : undefined,
+        boxShadow: isOver ? `0 10px 26px -10px ${c.color}` : undefined,
+        transition: "transform 280ms cubic-bezier(.34,1.56,.64,1), box-shadow 200ms ease, opacity 200ms ease",
+      }}
+    >
+      <span
+        data-disc
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.7rem]"
+        style={
+          {
+            color: c.color,
+            background: `color-mix(in srgb, ${c.color} ${isOver ? 30 : 16}%, transparent)`,
+            boxShadow: `0 0 16px -6px ${c.color}`,
+            "--c": c.color,
+          } as React.CSSProperties
+        }
+      >
+        <Icon name={c.icon} size={16} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-baseline justify-between gap-1">
+          <span className="truncate text-[0.8125rem] font-semibold">{c.name}</span>
+          <span className="shrink-0 text-[0.6875rem] tabular-nums" style={{ color: "var(--muted)" }}>
+            {mine.length ? `${doneN}/${mine.length}` : "—"}
+          </span>
+        </span>
+        <span className="mt-1 flex h-2 items-center gap-1">
+          {mine.slice(0, 8).map((t) => (
+            <span
+              key={t.id}
+              className="h-2 w-2 rounded-full"
+              style={t.done ? { background: c.color, boxShadow: `0 0 6px ${c.color}` } : { border: `1.5px solid ${c.color}` }}
+            />
+          ))}
+          {mine.length > 8 ? (
+            <span className="text-[0.5625rem]" style={{ color: "var(--muted)" }}>
+              +{mine.length - 8}
+            </span>
+          ) : null}
+        </span>
+      </span>
+    </button>
   );
 }
 

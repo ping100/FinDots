@@ -154,6 +154,18 @@ export default function TodayPage() {
     }
     landOn(String(event.over.id));
     buzz([10, 40, 14]);
+    if ("categoryId" in target) {
+      const task = tasks.find((t) => t.id === payload.taskId);
+      if (!task || task.category_id === target.categoryId) return;
+      const before = task.category_id;
+      const name = categories.find((c) => c.id === target.categoryId)?.name ?? "категория";
+      void saveTask({ id: task.id, category_id: target.categoryId });
+      showToast(`Теперь в «${name}»`, () => {
+        setToast(null);
+        void saveTask({ id: task.id, category_id: before });
+      });
+      return;
+    }
     void rescheduleTask(payload.taskId, target.date);
   };
 
@@ -207,6 +219,7 @@ export default function TodayPage() {
             tasks={tasks.filter((t) => t.date === selected)}
             filter={categoryFilter}
             onFilter={setCategoryFilter}
+            dragging={!!dragging}
           />
         </div>
 

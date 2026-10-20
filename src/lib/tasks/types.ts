@@ -55,5 +55,5 @@ export interface ChecklistItem {
 
 /** Что тащат пальцем: карточку задачи. */
 export type DragPayload = { taskId: string };
-/** Куда её можно бросить: на кружок даты в ленте. */
-export type DropTarget = { date: string };
+/** Куда её можно бросить: на кружок даты в ленте или на плитку категории. */
+export type DropTarget = { date: string } | { categoryId: string };

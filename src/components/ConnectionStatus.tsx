@@ -11,10 +11,22 @@ function subscribe(onChange: () => void) {
   };
 }
 
+type State = "ok" | "sending" | "offline";
+
+const LOOK: Record<State, { color: string; anim: string }> = {
+  // Всё хорошо — зелёная, тихо «дышит» волной.
+  ok: { color: "#22c55e", anim: "conn-ok" },
+  // Связь есть, очередь уходит — янтарная, пульсирует чаще.
+  sending: { color: "#f59e0b", anim: "conn-busy" },
+  // Нет сети — серая, медленно мигает.
+  offline: { color: "#94a3b8", anim: "conn-off" },
+};
+
 /**
- * Состояние связи — маленькой строкой вверху, и только когда есть что
- * сказать: нет сети, изменения ждут отправки или связь только что вернулась.
- * Когда всё в порядке, места не занимает.
+ * Связь — маленькой точкой вверху по центру: зелёная — всё подключено,
+ * янтарная — отправляются изменения, серая — нет сети. Нажатие раскрывает
+ * её в подпись. Сама раскрывается, когда что-то случилось: пропала сеть,
+ * изменения ждут отправки, связь вернулась.
  */
 export function ConnectionStatus({ pendingCount }: { pendingCount: number }) {
   const online = useSyncExternalStore(
@@ -22,42 +34,77 @@ export function ConnectionStatus({ pendingCount }: { pendingCount: number }) {
     () => navigator.onLine,
     () => true,
   );
+  const state: State = !online ? "offline" : pendingCount > 0 ? "sending" : "ok";
 
-  // «Связь восстановлена» — пару секунд после того, как сеть вернулась
-  // и очередь ушла. Иначе непонятно, отправилось ли записанное без сети.
+  const [open, setOpen] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const show = (ms: number) => {
+    clearTimeout(timer.current);
+    setOpen(true);
+    timer.current = setTimeout(() => setOpen(false), ms);
+  };
+  useEffect(() => () => clearTimeout(timer.current), []);
+
+  // Что-то поменялось — раскрываемся сами: «нет сети», «связь восстановлена».
+  const prev = useRef<State>(state);
   const [restored, setRestored] = useState(false);
-  const wasDown = useRef(false);
   useEffect(() => {
-    if (!online || pendingCount > 0) {
-      wasDown.current = true;
-      return;
-    }
-    if (!wasDown.current) return;
-    wasDown.current = false;
-    setRestored(true);
-    const timer = setTimeout(() => setRestored(false), 2500);
-    return () => clearTimeout(timer);
-  }, [online, pendingCount]);
+    if (prev.current === state) return;
+    const wasDown = prev.current !== "ok";
+    prev.current = state;
+    setRestored(state === "ok" && wasDown);
+    show(state === "ok" ? 2500 : 3500);
+  }, [state]);
 
   const waiting = pendingCount > 0 ? ` · ждёт отправки: ${pendingCount}` : "";
-  const state = !online
-    ? { dot: "var(--muted)", text: `Нет сети${waiting || " — изменения сохранятся на телефоне"}` }
-    : pendingCount > 0
-      ? { dot: "#f59e0b", text: `Сервер не отвечает${waiting}` }
-      : restored
-        ? { dot: "#22c55e", text: "Связь восстановлена" }
-        : null;
-  if (!state) return null;
+  const text =
+    state === "offline"
+      ? `Нет сети${waiting || " · изменения сохранятся на телефоне"}`
+      : state === "sending"
+        ? `Отправляю изменения: ${pendingCount}`
+        : restored
+          ? "Связь восстановлена · всё отправлено"
+          : "Всё подключено · данные сохранены";
+  const look = LOOK[state];
 
   return (
-    <div className="animate-fade flex justify-center px-4 pt-2" data-connection role="status" aria-live="polite">
-      <span
-        className="flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[0.6875rem]"
-        style={{ background: "var(--surface)", color: "var(--muted)", border: "1px solid var(--border)" }}
+    <div
+      className="pointer-events-none fixed inset-x-0 z-[45] flex justify-center"
+      style={{ top: "calc(env(safe-area-inset-top) + 4px)" }}
+      data-connection
+      role="status"
+      aria-live="polite"
+    >
+      <button
+        onClick={() => (open ? setOpen(false) : show(2500))}
+        aria-label={text}
+        className="pointer-events-auto flex h-7 items-center justify-center px-3"
       >
-        <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: state.dot }} />
-        {state.text}
-      </span>
+        <span
+          className="flex items-center overflow-hidden rounded-full transition-all duration-300 ease-out"
+          style={{
+            height: open ? 22 : 8,
+            maxWidth: open ? 320 : 8,
+            padding: open ? "0 10px 0 7px" : 0,
+            gap: open ? 6 : 0,
+            background: open ? "var(--surface)" : "transparent",
+            border: open ? "1px solid var(--border)" : "none",
+            boxShadow: open ? "0 6px 18px -8px rgba(0,0,0,.3)" : "none",
+          }}
+        >
+          <span className="relative flex h-2 w-2 shrink-0">
+            {/* Волна вокруг точки — у каждого состояния своя. */}
+            <span className={`absolute inset-0 rounded-full ${look.anim}`} style={{ background: look.color }} />
+            <span className="relative h-2 w-2 rounded-full" style={{ background: look.color, boxShadow: `0 0 6px ${look.color}` }} />
+          </span>
+          <span
+            className="whitespace-nowrap text-[0.6875rem] font-medium transition-opacity duration-200"
+            style={{ color: "var(--muted)", opacity: open ? 1 : 0 }}
+          >
+            {text}
+          </span>
+        </span>
+      </button>
     </div>
   );
 }

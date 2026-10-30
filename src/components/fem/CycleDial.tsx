@@ -45,7 +45,7 @@ const LIFE_STAGE: Record<string, string> = {
   follicular: "Раскрытие",
   fertile: "Цветение",
   ovulation: "Пик цветения",
-  late: "Ожидание",
+  late: "Новый бутон зреет",
 };
 
 /** «Цветение · » перед названием фазы — только когда показан цветок. */
@@ -706,7 +706,11 @@ function Flower({ d, size, pick, late, life = false, wx = null }: BodyProps & { 
     const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
     // «Жизнь цветка»: бутон в месячные, семена и увядание после овуляции, облетание в конце.
     const lifeOn = life && !waiting;
-    const budK = !lifeOn ? 0 : ph === "period" ? 1 : ph === "follicular" ? clamp01(1 - frac(pl + 1, fs - 1) * 1.6) : 0;
+    // Задержка в «Жизни цветка»: старый цветок облетел, в центре зреет новый
+    // бутон и с каждым днём задержки чуть набухает.
+    const lifeWait = life && waiting;
+    const budSwell = lifeWait ? 0.9 + Math.min(lateDays, 10) * 0.025 : 1;
+    const budK = lifeWait ? 1 : !lifeOn ? 0 : ph === "period" ? 1 : ph === "follicular" ? clamp01(1 - frac(pl + 1, fs - 1) * 1.6) : 0;
     const ageK = lifeOn && ph === "luteal" ? clamp01(frac(fe + 1, N)) : 0;
     const seedK = lifeOn && ph === "luteal" ? 0.35 + 0.65 * ageK : 0;
     const fallK = lifeOn && ph === "luteal" ? (N - day <= 1 ? 0.5 : N - day === 2 ? 0.25 : 0) : 0;
@@ -798,7 +802,7 @@ function Flower({ d, size, pick, late, life = false, wx = null }: BodyProps & { 
         const wave = reduce ? 1 : 1 + 0.03 * Math.sin(s * 1.6 - i * 0.45);
         const isOv = k === ov;
         // Возраст лепестка после овуляции: у каждого свой, чтобы сохли не разом.
-        const age = ageK > 0 ? clamp01(ageK * 1.5 - ((i * 7) % 10) * 0.05 - (past ? 0 : 0.1)) : 0;
+        const age = lifeWait ? 0.85 : ageK > 0 ? clamp01(ageK * 1.5 - ((i * 7) % 10) * 0.05 - (past ? 0 : 0.1)) : 0;
         const len = (78 + (isToday ? 18 : 0) + (isOv ? 16 : 0)) * k0 * o * wave * (1 - 0.32 * age);
         const w = 15 * k0 * wide * (isToday ? 1.15 : isOv ? 1.25 : 1) * narrow * (1 - 0.25 * age);
         const twist = age * 0.9;
@@ -806,9 +810,10 @@ function Flower({ d, size, pick, late, life = false, wx = null }: BodyProps & { 
         const a = ((k - 0.5) / N) * 360 + curlT * 28 * g + sway + (1 - growK) * 40;
         const tr = `translate(${C} ${C}) rotate(${a}) translate(0 ${-R0 + 6 * k0})`;
         fronts[i].setAttribute("d", age > 0 ? petalCurlD(len, w, twist) : petalD(len, w));
-        if (life && !waiting) fronts[i].setAttribute("fill", `url(#${uid}-${phaseOf(k)}${age > 0.4 ? "-dry" : ""})`);
+        if (lifeWait) fronts[i].setAttribute("fill", `url(#${uid}-${phaseOf(k)}-dry)`);
+        else if (life && !waiting) fronts[i].setAttribute("fill", `url(#${uid}-${phaseOf(k)}${age > 0.4 ? "-dry" : ""})`);
         fronts[i].setAttribute("transform", tr);
-        fronts[i].setAttribute("opacity", String(isToday || isOv ? 1 : past ? 1 : 0.5 + 0.12 * o));
+        fronts[i].setAttribute("opacity", String(lifeWait ? (isToday ? 0.75 : 0.45) : isToday || isOv ? 1 : past ? 1 : 0.5 + 0.12 * o));
         fronts[i].setAttribute("stroke", isToday || isOv ? "#fff" : "rgba(255,255,255,0.5)");
         fronts[i].setAttribute("stroke-width", String((isToday ? 2.5 : isOv ? 1.8 : 0.6) * k0));
         veins[i].setAttribute("d", `M0 ${-len * 0.14} Q ${w * 0.18 + twist * w * 0.5} ${-len * 0.5} ${twist * w * 1.1} ${-len * 0.8}`);
@@ -819,7 +824,7 @@ function Flower({ d, size, pick, late, life = false, wx = null }: BodyProps & { 
         const ab = (k / N) * 360 + curlT * 34 * g + sway * 0.6;
         backs[i].setAttribute("d", age > 0 ? petalCurlD(len * 1.06 + 6 * k0, w * 1.25, twist * 0.7) : petalD(len * 1.06 + 6 * k0, w * 1.25));
         backs[i].setAttribute("transform", `translate(${C} ${C}) rotate(${ab}) translate(0 ${-R0 + 8 * k0})`);
-        backs[i].setAttribute("opacity", String((past ? 0.24 : 0.1) * g));
+        backs[i].setAttribute("opacity", String((lifeWait ? 0.05 : past ? 0.24 : 0.1) * g));
         const rad = (a * Math.PI) / 180;
         const reach = R0 - 6 * k0 + len;
         tips[i] = { x: C + Math.sin(rad) * reach, y: C - Math.cos(rad) * reach, a };
@@ -862,7 +867,7 @@ function Flower({ d, size, pick, late, life = false, wx = null }: BodyProps & { 
         stamens[i].setAttribute("cy", String(C + Math.sin(a) * rr));
         stamens[i].setAttribute("r", String(seedK > 0 || budK > 0.5 ? 0 : (1.6 + 1.2 * o + (reduce ? 0 : 0.5 * Math.sin(s * 3 + i))) * k0 * g));
       }
-      if (budK > 0) budG.setAttribute("transform", `translate(${C} ${C}) scale(${g * (1 + (reduce ? 0 : 0.015 * Math.sin(s * 1.4)))}) translate(${-C} ${-C})`);
+      if (budK > 0) budG.setAttribute("transform", `translate(${C} ${C}) scale(${g * budSwell * (1 + (reduce ? 0 : 0.015 * Math.sin(s * 1.4)))}) translate(${-C} ${-C})`);
       if (seedK > 0) seedG.setAttribute("transform", `translate(${C} ${C}) rotate(${s * 4}) scale(${g}) translate(${-C} ${-C})`);
       aura.setAttribute("opacity", String(bloomy || waiting ? (0.55 + 0.15 * Math.sin(s * (waiting ? 1.2 : 2))) * g : 0));
       if (rays && !reduce) rays.setAttribute("transform", `${rays.getAttribute("transform")!.split(" rotate")[0]} rotate(${s * 6})`);

@@ -24,9 +24,11 @@ const LOOK: Record<State, { color: string; anim: string }> = {
 
 /**
  * Связь — маленькой точкой вверху по центру, над шапкой: сразу под полосой
- * с часами, выше заголовков, так что на месяц в шапке не наезжает. В саму
- * полосу с часами не заходит: iPhone принимает такой блок за верхнюю панель
- * и размывает под ней весь экран.
+ * с часами, выше заголовков, так что на месяц в шапке не наезжает.
+ *
+ * Точка — часть страницы (absolute), а не закреплённый блок: под любым
+ * fixed-блоком у верхнего края iPhone (iOS 26) размывает экран, как под
+ * панелью. При прокрутке она уезжает вместе со страницей.
  *
  * Зелёная — всё подключено,
  * янтарная — отправляются изменения, серая — нет сети. Нажатие раскрывает
@@ -74,7 +76,7 @@ export function ConnectionStatus({ pendingCount }: { pendingCount: number }) {
 
   return (
     <div
-      className="pointer-events-none fixed inset-x-0 z-[45] flex justify-center"
+      className="pointer-events-none absolute inset-x-0 z-[45] flex justify-center"
       // Кнопка 12px: центр точки на 7px ниже полосы с часами.
       style={{ top: "calc(env(safe-area-inset-top) + 1px)" }}
       data-connection

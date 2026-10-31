@@ -333,7 +333,13 @@ function DebtCard({
           <Icon name={wallet.icon} size={18} />
         </span>
         <button className="flex-1 text-left" onClick={onEdit}>
-          <span className="block text-sm font-medium">{wallet.name}</span>
+          <span className="flex items-center gap-1.5 text-sm font-medium">
+            {wallet.name}
+            {/* Нажатие на имя открывает правку — карандаш, чтобы это было видно. */}
+            <span className="opacity-40">
+              <Icon name="edit" size={12} />
+            </span>
+          </span>
           {nextDue ? (
             <span
               className="block text-[0.6875rem]"

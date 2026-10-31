@@ -276,7 +276,7 @@ export function WalletEditor({
           <div className="flex flex-wrap gap-2">
             {[
               ...payFromOptions.map((w) => ({ id: w.id, label: w.name })),
-              { id: "none", label: kind === "debt_out" ? "Никуда — уже потрачены" : "Ниоткуда — давно отдал" },
+              { id: "none", label: kind === "debt_out" ? "Старый долг, не зачислять" : "Старый долг, не списывать" },
             ].map((option) => (
               <button
                 key={option.id}

@@ -192,7 +192,7 @@ export default function DebtsPage() {
       <AmountSheet
         open={!!lending}
         title={lending ? `Дал в долг: ${lending.name}` : ""}
-        subtitle="Деньги спишутся с выбранного кошелька. Старый долг — «Ниоткуда»"
+        subtitle="Деньги спишутся с выбранного кошелька. Для старого долга выбери «Старый долг»"
         currency={lending?.currency ?? "KZT"}
         options={[
           ...moneyWallets.map((w) => ({
@@ -200,7 +200,7 @@ export default function DebtsPage() {
             name: w.name,
             caption: formatMoney(balanceOf(w.id), w.currency),
           })),
-          { id: OLD, name: "Ниоткуда", caption: "давно отдал" },
+          { id: OLD, name: "Старый долг", caption: "не списывать" },
         ]}
         optionLabel="Из какого кошелька"
         submitLabel="Записать"
@@ -224,7 +224,7 @@ export default function DebtsPage() {
       <AmountSheet
         open={!!borrowing}
         title={borrowing ? `Взял в долг: ${borrowing.name}` : ""}
-        subtitle="Деньги придут в выбранный кошелёк, долг вырастет на эту сумму. Старый долг — «Никуда»"
+        subtitle="Деньги придут в выбранный кошелёк, долг вырастет на эту сумму. Для старого долга выбери «Старый долг»"
         currency={borrowing?.currency ?? "KZT"}
         options={[
           ...moneyWallets.map((w) => ({
@@ -232,7 +232,7 @@ export default function DebtsPage() {
             name: w.name,
             caption: formatMoney(balanceOf(w.id), w.currency),
           })),
-          { id: OLD, name: "Никуда", caption: "уже потрачены" },
+          { id: OLD, name: "Старый долг", caption: "не зачислять" },
         ]}
         optionLabel="Куда пришли деньги"
         submitLabel="Записать"

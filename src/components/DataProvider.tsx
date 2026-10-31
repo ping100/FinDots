@@ -102,6 +102,11 @@ export interface Store {
     fee?: number;
   }) => Promise<void>;
   setWalletBalance: (walletId: string, target: number) => Promise<void>;
+  /**
+   * Добавить к долгу сумму без кошелька: старый долг, деньги давно
+   * потрачены или отданы. Пишется корректировкой с подписью и датой.
+   */
+  addToDebt: (walletId: string, amount: number, note: string, occurredAt?: string) => Promise<void>;
   /** Записать созревшие проценты по вкладу. Возвращает начисленную сумму. */
   accrueInterest: (walletId: string) => Promise<number>;
 
@@ -623,6 +628,18 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [balanceOf, submit, txRow, wallets],
   );
 
+  const addToDebt: Store["addToDebt"] = useCallback(
+    async (walletId, amount, note, occurredAt) => {
+      const wallet = wallets.find((w) => w.id === walletId);
+      if (!wallet) throw new Error("Долг не найден");
+      await submit({
+        t: "insert",
+        rows: [txRow({ type: "adjustment", amount, currency: wallet.currency, wallet_id: walletId, note, occurred_at: occurredAt ?? new Date().toISOString() })],
+      });
+    },
+    [submit, txRow, wallets],
+  );
+
   const reloadDictionaries = useCallback(async () => {
     const [w, c] = await Promise.all([
       supabase().from("wallets").select("*").order("sort_order"),
@@ -1119,6 +1136,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       addExpense,
       addTransfer,
       setWalletBalance,
+      addToDebt,
       accrueInterest,
       updateTransaction,
       deleteTransaction,
@@ -1137,7 +1155,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [
       ready, moneyHidden, error, userId, profile, rates, wallets, categories, balances, effectivePools,
       visibleTransactions, pendingCount, balanceOf, poolOf, toBase, refresh, addIncome, allocate,
-      addExpense, addTransfer, setWalletBalance, accrueInterest, updateTransaction, deleteTransaction,
+      addExpense, addTransfer, setWalletBalance, addToDebt, accrueInterest, updateTransaction, deleteTransaction,
       saveWallet, deleteWallet, resetMoneyData, saveCategory, reorderCategories, addSubcategory, importDrafts, deleteCategory, saveProfile, saveRate, syncRates,
     ],
   );

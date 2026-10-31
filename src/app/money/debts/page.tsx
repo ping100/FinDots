@@ -11,6 +11,9 @@ import { buildSchedule } from "@/lib/amortization";
 import { WalletEditor } from "@/components/WalletEditor";
 import { Button } from "@/components/ui";
 
+/** Вариант «без кошелька» в окнах «Дал в долг» / «Взял ещё»: старый долг. */
+const OLD = "old";
+
 /** Сколько дней осталось до даты; отрицательное — просрочено. */
 function daysLeft(date: string): number {
   const today = new Date();
@@ -26,7 +29,7 @@ function nextRecurringDate(day: number, today = new Date()): Date {
 }
 
 export default function DebtsPage() {
-  const { wallets, transactions, rates, balanceOf, addTransfer } = useStore();
+  const { wallets, transactions, rates, balanceOf, addTransfer, addToDebt } = useStore();
   const [paying, setPaying] = useState<Wallet | null>(null);
   // Взял ещё в долг: деньги идут из долга в выбранный кошелёк.
   const [borrowing, setBorrowing] = useState<Wallet | null>(null);
@@ -189,18 +192,22 @@ export default function DebtsPage() {
       <AmountSheet
         open={!!lending}
         title={lending ? `Дал в долг: ${lending.name}` : ""}
-        subtitle="Деньги спишутся с выбранного кошелька"
+        subtitle="Деньги спишутся с выбранного кошелька. Старый долг — «Ниоткуда»"
         currency={lending?.currency ?? "KZT"}
-        options={moneyWallets.map((w) => ({
-          id: w.id,
-          name: w.name,
-          caption: formatMoney(balanceOf(w.id), w.currency),
-        }))}
+        options={[
+          ...moneyWallets.map((w) => ({
+            id: w.id,
+            name: w.name,
+            caption: formatMoney(balanceOf(w.id), w.currency),
+          })),
+          { id: OLD, name: "Ниоткуда", caption: "давно отдал" },
+        ]}
         optionLabel="Из какого кошелька"
         submitLabel="Записать"
         onClose={() => setLending(null)}
         onSubmit={async ({ amount, note, occurredAt, optionId }) => {
           if (!lending || !optionId) throw new Error("Выбери кошелёк");
+          if (optionId === OLD) return addToDebt(lending.id, amount, note || "Дал в долг раньше", occurredAt);
           const from = wallets.find((w) => w.id === optionId);
           if (!from) throw new Error("Кошелёк не найден");
           await addTransfer({
@@ -217,18 +224,22 @@ export default function DebtsPage() {
       <AmountSheet
         open={!!borrowing}
         title={borrowing ? `Взял в долг: ${borrowing.name}` : ""}
-        subtitle="Деньги придут в выбранный кошелёк, долг вырастет на эту сумму"
+        subtitle="Деньги придут в выбранный кошелёк, долг вырастет на эту сумму. Старый долг — «Никуда»"
         currency={borrowing?.currency ?? "KZT"}
-        options={moneyWallets.map((w) => ({
-          id: w.id,
-          name: w.name,
-          caption: formatMoney(balanceOf(w.id), w.currency),
-        }))}
+        options={[
+          ...moneyWallets.map((w) => ({
+            id: w.id,
+            name: w.name,
+            caption: formatMoney(balanceOf(w.id), w.currency),
+          })),
+          { id: OLD, name: "Никуда", caption: "уже потрачены" },
+        ]}
         optionLabel="Куда пришли деньги"
         submitLabel="Записать"
         onClose={() => setBorrowing(null)}
         onSubmit={async ({ amount, note, occurredAt, optionId }) => {
           if (!borrowing || !optionId) throw new Error("Выбери кошелёк");
+          if (optionId === OLD) return addToDebt(borrowing.id, amount, note || "Взял в долг раньше", occurredAt);
           await addTransfer({
             fromWalletId: borrowing.id,
             toWalletId: optionId,

@@ -46,7 +46,7 @@ export function signalPush(row: SignalRow): { title: string; body: string; actio
   const what = row.reply_kind ? signalText(row.reply_kind, row.reply_item).text : null;
   switch (row.kind) {
     case "care":
-      return { title: `💗 ${name}`, body: "Нужна твоя забота — обними, принеси чай, просто будь рядом", actions };
+      return { title: `💗 ${name}`, body: "Нужна твоя забота: напиши, позвони или просто будь рядом", actions };
     case "buy": {
       const it = BUY_ITEMS.find((x) => x.value === row.item);
       return { title: `🛍 ${name}`, body: `Купи, пожалуйста, по дороге: ${it ? it.label.toLowerCase() : "что-нибудь вкусное"}`, actions };

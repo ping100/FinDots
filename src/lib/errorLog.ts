@@ -22,7 +22,7 @@ const sent = new Set<string>();
 /** Приложение по адресу: money, tasks, fem, admin или home. */
 function appOf(path: string): string {
   const first = path.split("/")[1] ?? "";
-  return ["money", "tasks", "fem", "admin"].includes(first) ? first : first ? first : "home";
+  return ["money", "tasks", "fem", "food", "admin"].includes(first) ? first : first ? first : "home";
 }
 
 export function logClientError(message: string | undefined, stack?: string) {

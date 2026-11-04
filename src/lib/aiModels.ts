@@ -12,6 +12,8 @@ export interface AiModel {
   free: boolean;
   /** Пишет черновик перед ответом — значит разбор придётся ждать дольше. */
   thinks?: boolean;
+  /** Понимает картинки — годится для фото еды. */
+  vision?: boolean;
 }
 
 export const AI_MODELS: AiModel[] = [

@@ -20,6 +20,9 @@ const OFFLINE_PAGES = [
   "/fem/together",
   "/fem/stats",
   "/fem/settings",
+  "/food",
+  "/food/stats",
+  "/food/settings",
 ];
 
 /**

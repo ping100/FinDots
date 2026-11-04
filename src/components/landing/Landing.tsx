@@ -37,13 +37,13 @@ export function Landing() {
         <div className="mt-6 md:mt-12 md:grid md:grid-cols-2 md:items-center md:gap-10">
           <div className="text-center md:text-left">
             <span className="glass inline-block rounded-full px-3 py-1.5 text-[0.8125rem] font-semibold" style={{ color: "var(--ink-2)" }}>
-              Деньги · Задачи · Цикл
+              Деньги · Задачи · Цикл · Еда
             </span>
             <h1 className="animate-lift mt-4 text-[2.125rem] font-bold leading-[1.08] tracking-tight md:text-[3.25rem]">
-              Деньги, дела и цикл в одном приложении
+              Деньги, дела, цикл и еда в одном приложении
             </h1>
             <p className="animate-lift mx-auto mt-3 max-w-md text-[1rem] leading-relaxed md:mx-0" style={{ color: "var(--ink-2)", animationDelay: "120ms" }}>
-              Записывайте траты, планируйте день и следите за циклом. Без таблиц и длинных форм: чтобы записать трату,
+              Записывайте траты, планируйте день, следите за циклом и калориями. Без таблиц и длинных форм: чтобы записать трату,
               достаточно перетащить кружок.
             </p>
             <div className="mt-6 hidden flex-col gap-2.5 md:flex md:max-w-sm">

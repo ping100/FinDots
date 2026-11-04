@@ -50,7 +50,7 @@ async function tx<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => I
   });
 }
 
-/** Снимок приложения для этого человека: app — "money" | "tasks" | "fem". */
+/** Снимок приложения для этого человека: app — "money" | "tasks" | "fem" | "food". */
 export async function readSnapshot<T>(app: string, userId: string): Promise<T | null> {
   return tx<T>("readonly", (s) => s.get(`${app}:${userId}`) as IDBRequest<T>);
 }

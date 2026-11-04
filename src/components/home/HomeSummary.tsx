@@ -12,6 +12,8 @@ import { today } from "@/lib/tasks/dates";
 import { cycleInfo, signalsFrom, type FemDay, type FemPeriod, type FemSettings } from "@/lib/fem/cycle";
 import type { Category, CurrencyCode, ExchangeRate, Transaction, Wallet } from "@/lib/types";
 import type { Task } from "@/lib/tasks/types";
+import { normFor, totals } from "@/lib/food/norms";
+import type { FoodEntry, FoodSettings } from "@/lib/food/types";
 import type { OrbitApp } from "./Orbit";
 
 /**
@@ -24,7 +26,7 @@ export function HomeSummary({ apps, delay }: { apps: OrbitApp[]; delay: number }
     <div className="space-y-2">
       {apps.map((app, i) => (
         <div key={app.id} className="animate-lift" style={{ animationDelay: `${delay + i * 90}ms` }}>
-          {app.id === "money" ? <MoneyRow app={app} /> : app.id === "tasks" ? <TasksRow app={app} /> : <FemRow app={app} />}
+          {app.id === "money" ? <MoneyRow app={app} /> : app.id === "tasks" ? <TasksRow app={app} /> : app.id === "food" ? <FoodRow app={app} /> : <FemRow app={app} />}
         </div>
       ))}
     </div>
@@ -267,6 +269,35 @@ function FemRow({ app }: { app: OrbitApp }) {
               ? "Месячные ожидаются сегодня"
               : `До месячных ~${days(info.daysToNext)}`,
       };
+  }
+  return <Row app={app} line={line} />;
+}
+
+// ───────────────────────────── еда ─────────────────────────────
+
+async function loadFood() {
+  const db = createClient();
+  const { data: session } = await db.auth.getSession();
+  const id = session.session?.user.id;
+  if (!id) throw new Error("нет входа");
+  const [s, e] = await Promise.all([
+    db.from("food_settings").select("*").eq("user_id", id).maybeSingle(),
+    db.from("food_entries").select("kcal, protein, fat, carbs").eq("day", today()),
+  ]);
+  const failed = [s, e].find((x) => x.error);
+  if (failed) throw failed.error;
+  return { eaten: totals((e.data ?? []) as FoodEntry[]).kcal, norm: normFor(s.data as FoodSettings | null) };
+}
+
+function FoodRow({ app }: { app: OrbitApp }) {
+  const info = useLoad(loadFood);
+  let line: Line | null | undefined = info === undefined ? undefined : null;
+  if (info) {
+    const n = (x: number) => Math.round(x).toLocaleString("ru-RU");
+    if (!info.norm) line = { label: "Еда сегодня", value: info.eaten ? `${n(info.eaten)} ккал` : "Пока ничего не записано" };
+    else if (info.eaten > info.norm.kcal)
+      line = { label: "Еда сегодня", value: `Сверх нормы ${n(info.eaten - info.norm.kcal)} ккал`, detail: `${n(info.eaten)} из ${n(info.norm.kcal)}`, tone: "danger" };
+    else line = { label: "Еда сегодня", value: `Осталось ${n(info.norm.kcal - info.eaten)} ккал`, detail: `Съедено ${n(info.eaten)} из ${n(info.norm.kcal)}` };
   }
   return <Row app={app} line={line} />;
 }

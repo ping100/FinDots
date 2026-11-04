@@ -29,7 +29,7 @@ function pageKey(url) {
   if (url.origin !== self.location.origin) return null;
   const path = url.pathname.replace(/\/$/, "") || "/";
   if (path.startsWith("/api") || path.startsWith("/admin") || path.startsWith("/auth") || path.startsWith("/_next")) return null;
-  if (!/^\/(money|tasks|fem)?(\/[a-z-]+)?$/.test(path)) return null;
+  if (!/^\/(money|tasks|fem|food)?(\/[a-z-]+)?$/.test(path)) return null;
   return path;
 }
 

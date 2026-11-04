@@ -1,12 +1,13 @@
 import { createClient } from "@/lib/supabase/client";
 
 /** Приложение Dots, о котором отзыв. */
-export type ReviewApp = "money" | "tasks" | "fem";
+export type ReviewApp = "money" | "tasks" | "fem" | "food";
 
 export const REVIEW_APPS: { id: ReviewApp; label: string; icon: string; color: string }[] = [
   { id: "money", label: "Findots", icon: "wallet", color: "#22c55e" },
   { id: "tasks", label: "Todots", icon: "list", color: "#60a5fa" },
   { id: "fem", label: "FemDots", icon: "flower", color: "#ec4899" },
+  { id: "food", label: "Yumdots", icon: "food", color: "#f97316" },
 ];
 
 /** Один отзыв: оценка 1–5 и необязательный текст. app = null — оставлен до разделения по приложениям. */

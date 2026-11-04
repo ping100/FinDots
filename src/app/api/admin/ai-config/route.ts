@@ -18,10 +18,13 @@ export async function GET() {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Нужна авторизация" }, { status: 401 });
 
-  const { data, error } = await supabase.rpc("admin_ai_config_status").maybeSingle();
+  const [{ data, error }, vision] = await Promise.all([
+    supabase.rpc("admin_ai_config_status").maybeSingle(),
+    supabase.rpc("admin_vision_model"),
+  ]);
   if (error) return NextResponse.json({ error: error.message }, { status: error.code === "42501" ? 403 : 500 });
 
-  return NextResponse.json(data);
+  return NextResponse.json({ ...(data as object), vision_model: (vision.data as string | null) ?? null });
 }
 
 export async function POST(request: Request) {
@@ -31,7 +34,7 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Нужна авторизация" }, { status: 401 });
 
-  const body = (await request.json().catch(() => ({}))) as { apiKey?: string; model?: string };
+  const body = (await request.json().catch(() => ({}))) as { apiKey?: string; model?: string; visionModel?: string };
   const model = body.model?.trim();
   if (!model) return NextResponse.json({ error: "Не указана модель" }, { status: 400 });
 
@@ -56,6 +59,13 @@ export async function POST(request: Request) {
     p_hint: hint,
   });
   if (error) return NextResponse.json({ error: error.message }, { status: error.code === "42501" ? 403 : 500 });
+
+  // Модель для фото еды (Yumdots) — своя: текстовая модель картинку не видит.
+  const visionModel = body.visionModel?.trim();
+  if (visionModel) {
+    const v = await supabase.rpc("admin_set_vision_model", { p_model: visionModel });
+    if (v.error) return NextResponse.json({ error: v.error.message }, { status: 500 });
+  }
 
   return NextResponse.json({ ok: true });
 }

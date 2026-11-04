@@ -36,4 +36,16 @@ export const APPS = [
     lo: "#be185d",
     summary: "День цикла и сколько до месячных",
   },
+  {
+    id: "food",
+    href: "/food",
+    name: "Yumdots",
+    what: "Еда",
+    hint: "Калории за день: сфотографируй тарелку, остальное посчитает ИИ",
+    icon: "food",
+    color: "#f97316",
+    hi: "#fed7aa",
+    lo: "#c2410c",
+    summary: "Сколько калорий осталось на сегодня",
+  },
 ] as const;

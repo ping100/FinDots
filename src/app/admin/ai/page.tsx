@@ -13,6 +13,7 @@ interface Status {
   hint: string | null;
   model: string;
   updated_at: string | null;
+  vision_model?: string | null;
 }
 
 /**
@@ -26,6 +27,7 @@ export default function AdminAiPage() {
   const [status, setStatus] = useState<Status | null | undefined>(undefined);
   const [keyDraft, setKeyDraft] = useState("");
   const [model, setModel] = useState("");
+  const [vision, setVision] = useState("");
   const [models, setModels] = useState<AiModel[]>(AI_MODELS);
   const [modelsNote, setModelsNote] = useState<string | null>(null);
   const [modelQuery, setModelQuery] = useState("");
@@ -39,6 +41,7 @@ export default function AdminAiPage() {
       .then((data: Status | null) => {
         setStatus(data);
         setModel(data?.model ?? AI_MODELS[0].id);
+        setVision(data?.vision_model ?? "google/gemma-4-31b-it:free");
       })
       .catch(() => setModel(AI_MODELS[0].id));
   }, []);
@@ -78,7 +81,7 @@ export default function AdminAiPage() {
       const res = await fetch("/api/admin/ai-config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ apiKey: keyDraft.trim() || undefined, model }),
+        body: JSON.stringify({ apiKey: keyDraft.trim() || undefined, model, visionModel: vision.trim() || undefined }),
       });
       const data = await res.json().catch(() => ({}) as { error?: string });
       if (!res.ok) throw new Error(data.error ?? "Не получилось сохранить");
@@ -207,6 +210,34 @@ export default function AdminAiPage() {
         hint="Список берётся у OpenRouter — если нужной модели в нём нет, впишите её сюда"
       >
         <input className={inputClass} style={inputStyle} value={model} onChange={(e) => setModel(e.target.value)} />
+      </Field>
+
+      <p className="mb-1 mt-5 px-1 text-[0.8125rem] font-medium">Модель для фото еды (Yumdots)</p>
+      <p className="mb-2 px-1 text-xs leading-snug" style={{ color: "var(--muted)" }}>
+        Нужна модель, которая видит картинки. Ниже только такие, бесплатные первыми
+      </p>
+      <div className="mb-2 max-h-[30vh] space-y-2 overflow-y-auto">
+        {models
+          .filter((m) => m.vision)
+          .slice(0, 30)
+          .map((m) => (
+            <button
+              key={m.id}
+              onClick={() => setVision(m.id)}
+              className="flex w-full items-center gap-2 rounded-2xl px-4 py-3 text-left text-sm"
+              style={{ background: vision === m.id ? "var(--accent)" : "var(--surface-2)", color: vision === m.id ? "#fff" : "inherit" }}
+            >
+              <span className="flex-1">{m.label}</span>
+              {m.free ? (
+                <span className="rounded-full px-2 py-0.5 text-[0.625rem] font-semibold" style={{ background: vision === m.id ? "rgba(255,255,255,0.25)" : "var(--ok)", color: "#fff" }}>
+                  free
+                </span>
+              ) : null}
+            </button>
+          ))}
+      </div>
+      <Field label="Идентификатор модели для фото" hint="Можно вписать вручную">
+        <input className={inputClass} style={inputStyle} value={vision} onChange={(e) => setVision(e.target.value)} />
       </Field>
 
       {problem ? (

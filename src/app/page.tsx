@@ -26,7 +26,7 @@ export default async function Home({
   if (!user) return <Landing />;
 
   const { denied } = await searchParams;
-  const deniedName = { money: "Деньги", tasks: "Задачи", fem: "Цикл" }[denied ?? ""] ?? null;
+  const deniedName = { money: "Деньги", tasks: "Задачи", fem: "Цикл", food: "Еда" }[denied ?? ""] ?? null;
 
   return (
     // Скрипт красит небо до первой отрисовки — иначе мелькнёт чужое время суток.

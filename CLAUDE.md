@@ -9,7 +9,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Dots** — three apps sharing one Supabase account: **Findots** (`/money`, finances
 tracked by dragging icon "bubbles" between blocks — no manual entry),
 **Todots** (`/tasks`, day-based task list with drag-to-reschedule) and
-**FemDots** (`/fem`, menstrual cycle tracker with a read-only partner mode).
+**FemDots** (`/fem`, menstrual cycle tracker with a read-only partner mode) and
+**Yumdots** (`/food`, calorie tracker: photo or text → AI recognizes dishes with
+grams/kcal/macros via `/api/food-analyze`, vision model in
+`app_ai_config.vision_model`; norm by Mifflin–St Jeor in `src/lib/food/norms.ts`;
+photos are never stored).
 `/` is the switcher between them; the gear there toggles which apps are shown
 (`profiles.apps_enabled`, default `{money,tasks}`). The Findots/Todots headers
 link to each other (or home, if the other app is switched off).

@@ -445,6 +445,48 @@ input[type="date"]::-webkit-date-and-time-value {
     var(--bg);
   background-attachment: fixed;
 }
+/* ─────────────────────────── Yumdots ───────────────────────────
+   Тёплая тема: персиковый фон, мандариновый акцент, зелень свежих овощей. */
+.food-theme {
+  --accent: #f97316;
+  --ok: #f97316;
+  --bg: #fff7f0;
+  --surface: #fffcf9;
+  --surface-2: #ffeedd;
+  --border: #fbe1c8;
+  --muted: #a1826b;
+  --text: #2d1f14;
+  color: var(--text);
+  background:
+    radial-gradient(36rem 28rem at 110% -6%, rgba(251, 146, 60, 0.22), transparent 62%),
+    radial-gradient(32rem 30rem at -18% 30%, rgba(132, 204, 22, 0.16), transparent 62%),
+    radial-gradient(30rem 26rem at 60% 108%, rgba(250, 204, 21, 0.14), transparent 62%),
+    var(--bg);
+  background-attachment: fixed;
+}
+.dark .food-theme {
+  --bg: #17110c;
+  --surface: #221912;
+  --surface-2: #2e2219;
+  --border: #3d2d21;
+  --muted: #bca38f;
+  --text: #f8ece2;
+  background:
+    radial-gradient(36rem 28rem at 110% -6%, rgba(249, 115, 22, 0.18), transparent 62%),
+    radial-gradient(32rem 30rem at -18% 30%, rgba(101, 163, 13, 0.14), transparent 62%),
+    radial-gradient(30rem 26rem at 60% 108%, rgba(234, 179, 8, 0.08), transparent 62%),
+    var(--bg);
+  background-attachment: fixed;
+}
+.food-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 10px 30px -14px rgba(249, 115, 22, 0.25);
+}
+.dark .food-card {
+  box-shadow: 0 10px 30px -14px rgba(0, 0, 0, 0.6);
+}
+
 /* Карточки FemDots: мягкая розоватая тень вместо плоского прямоугольника. */
 .fem-card {
   background: var(--surface);
@@ -1278,4 +1320,16 @@ input[type="date"]::-webkit-date-and-time-value {
     animation: none;
     opacity: 0;
   }
+}
+
+/* Yumdots: фото «сканируется», пока нейросеть думает. */
+@keyframes food-scan {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.45); }
+  50% { transform: scale(1.03); box-shadow: 0 0 0 14px rgba(249, 115, 22, 0); }
+}
+.food-scan {
+  animation: food-scan 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .food-scan { animation: none; }
 }

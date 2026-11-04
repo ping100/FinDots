@@ -10,6 +10,7 @@ type Phase = "scan" | "look" | "found" | "unknown" | "form" | "reading";
 /** Сканер на весь экран: камера, рамка, ручной ввод цифр. */
 function Scanner({ onCode, onClose }: { onCode: (code: string) => void; onClose: () => void }) {
   const video = useRef<HTMLVideoElement | null>(null);
+  const frame = useRef<HTMLDivElement | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [typed, setTyped] = useState("");
   const done = useRef(false);
@@ -29,36 +30,82 @@ function Scanner({ onCode, onClose }: { onCode: (code: string) => void; onClose:
     };
     void (async () => {
       try {
-        // Встроенный распознаватель (Android, Chrome) быстрее; на iPhone его нет — тогда zxing.
-        const Native = (window as unknown as { BarcodeDetector?: new (o: { formats: string[] }) => { detect: (v: HTMLVideoElement) => Promise<{ rawValue: string }[]> } }).BarcodeDetector;
-        if (Native) {
-          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-          if (!alive || !video.current) return stream.getTracks().forEach((t) => t.stop());
-          video.current.srcObject = stream;
-          await video.current.play();
-          const detector = new Native({ formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128"] });
-          let raf = 0;
-          const tick = async () => {
-            if (!alive || done.current || !video.current) return;
-            const found = await detector.detect(video.current).catch(() => []);
-            if (found[0]) hit(found[0].rawValue);
-            else raf = window.setTimeout(tick, 150);
-          };
-          void tick();
-          stop = () => {
-            clearTimeout(raf);
-            stream.getTracks().forEach((t) => t.stop());
-          };
-          return;
-        }
-        const [{ BrowserMultiFormatReader }, { BarcodeFormat, DecodeHintType }] = await Promise.all([import("@zxing/browser"), import("@zxing/library")]);
-        const hints = new Map([[DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.UPC_A, BarcodeFormat.UPC_E, BarcodeFormat.CODE_128]]]);
-        const reader = new BrowserMultiFormatReader(hints);
-        if (!alive || !video.current) return;
-        const controls = await reader.decodeFromConstraints({ video: { facingMode: "environment" } }, video.current, (result) => {
-          if (result) hit(result.getText());
+        // Высокое разрешение: мелкий штрихкод на маленькой упаковке иначе не прочитать.
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } },
         });
-        stop = () => controls.stop();
+        const v = video.current;
+        if (!alive || !v) return stream.getTracks().forEach((t) => t.stop());
+        v.srcObject = stream;
+        await v.play();
+        // Непрерывный автофокус, где телефон его даёт.
+        await stream
+          .getVideoTracks()[0]
+          ?.applyConstraints({ advanced: [{ focusMode: "continuous" } as MediaTrackConstraintSet] })
+          .catch(() => undefined);
+
+        // Встроенный распознаватель (Android, Chrome) быстрее; на iPhone его нет — тогда zxing.
+        const Native = (window as unknown as { BarcodeDetector?: new (o: { formats: string[] }) => { detect: (v: CanvasImageSource) => Promise<{ rawValue: string }[]> } }).BarcodeDetector;
+        let decode: (c: HTMLCanvasElement) => Promise<string | null>;
+        if (Native) {
+          const detector = new Native({ formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128"] });
+          decode = async (c) => (await detector.detect(c).catch(() => []))[0]?.rawValue ?? null;
+        } else {
+          const [{ BrowserMultiFormatReader }, { BarcodeFormat, DecodeHintType }] = await Promise.all([import("@zxing/browser"), import("@zxing/library")]);
+          const hints = new Map<number, unknown>([
+            [DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.UPC_A, BarcodeFormat.UPC_E, BarcodeFormat.CODE_128]],
+            [DecodeHintType.TRY_HARDER, true],
+          ]);
+          const reader = new BrowserMultiFormatReader(hints as Map<never, unknown>);
+          decode = async (c) => {
+            try {
+              return reader.decodeFromCanvas(c).getText();
+            } catch {
+              return null;
+            }
+          };
+        }
+
+        // Ищем в рамке (крупно), а через раз — по всему кадру: вдруг код не в рамке.
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
+        let n = 0;
+        let timer = 0;
+        const tick = async () => {
+          if (!alive || done.current || !v.videoWidth) {
+            if (alive && !done.current) timer = window.setTimeout(tick, 150);
+            return;
+          }
+          const vw = v.videoWidth;
+          const vh = v.videoHeight;
+          let sx = 0, sy = 0, sw = vw, sh = vh;
+          const box = frame.current?.getBoundingClientRect();
+          const el = v.getBoundingClientRect();
+          if (box && n % 3 !== 2) {
+            // Видео растянуто как object-cover: пересчитываем рамку в пиксели кадра.
+            const k = Math.max(el.width / vw, el.height / vh);
+            const ox = (el.width - vw * k) / 2;
+            const oy = (el.height - vh * k) / 2;
+            const pad = 0.15;
+            sx = Math.max(0, (box.left - el.left - ox) / k - (box.width / k) * pad);
+            sy = Math.max(0, (box.top - el.top - oy) / k - (box.height / k) * pad);
+            sw = Math.min(vw - sx, (box.width / k) * (1 + 2 * pad));
+            sh = Math.min(vh - sy, (box.height / k) * (1 + 2 * pad));
+          }
+          n++;
+          const scale = Math.min(1, 1280 / sw);
+          canvas.width = Math.round(sw * scale);
+          canvas.height = Math.round(sh * scale);
+          ctx.drawImage(v, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+          const code = await decode(canvas);
+          if (code) hit(code);
+          else timer = window.setTimeout(tick, 120);
+        };
+        void tick();
+        stop = () => {
+          clearTimeout(timer);
+          stream.getTracks().forEach((t) => t.stop());
+        };
         if (!alive) stop();
       } catch (e) {
         const name = e instanceof Error ? e.name : "";
@@ -86,7 +133,7 @@ function Scanner({ onCode, onClose }: { onCode: (code: string) => void; onClose:
       <div className="relative flex flex-1 items-center justify-center overflow-hidden">
         <video ref={video} playsInline muted className="absolute inset-0 h-full w-full object-cover" />
         {/* Рамка: тёмное вокруг, светлое окно и бегущая линия. */}
-        <div className="relative h-40 w-72 rounded-3xl" style={{ boxShadow: "0 0 0 100vmax rgba(0,0,0,.55)", border: "2px solid rgba(255,255,255,.85)" }}>
+        <div ref={frame} className="relative h-40 w-72 rounded-3xl" style={{ boxShadow: "0 0 0 100vmax rgba(0,0,0,.55)", border: "2px solid rgba(255,255,255,.85)" }}>
           <span className="barcode-line absolute inset-x-4 h-0.5 rounded-full" style={{ background: "#fb923c", boxShadow: "0 0 12px #fb923c" }} />
         </div>
         {problem ? (

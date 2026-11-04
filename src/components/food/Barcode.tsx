@@ -266,6 +266,11 @@ export function BarcodeFlow({ onItem, onBack }: { onItem: (item: DraftItem) => v
     return (
       <div className="pb-3">
         <div className="food-card mb-3 rounded-3xl p-3.5">
+          {product.status === "verified" ? (
+            <span className="mb-1.5 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[0.6875rem] font-semibold" style={{ background: "color-mix(in srgb, #22c55e 16%, transparent)", color: "#16a34a" }}>
+              <Icon name="check" size={12} /> Проверено Dots
+            </span>
+          ) : null}
           <p className="text-[1rem] font-semibold leading-snug">{product.name}</p>
           {product.brand ? (
             <p className="text-[0.75rem]" style={{ color: "var(--muted)" }}>

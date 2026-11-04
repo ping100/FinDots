@@ -27,7 +27,8 @@ export async function GET(request: NextRequest) {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Нужна авторизация" }, { status: 401 });
 
-  const own = await supabase.from("food_products").select("*").eq("barcode", code).maybeSingle();
+  // Отклонённый модерацией — как будто его нет: можно добавить заново.
+  const own = await supabase.from("food_products").select("*").eq("barcode", code).neq("status", "rejected").maybeSingle();
   if (own.data) return NextResponse.json({ product: own.data as Product });
 
   const res = await fetch(

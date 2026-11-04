@@ -136,8 +136,10 @@ export function LinkCard({
 export function ToolCards() {
   const [errors, setErrors] = useState<ErrorGroup[] | null>(null);
   const [jobs, setJobs] = useState<{ bad: number; total: number } | null>(null);
+  const [food, setFood] = useState<{ queue: number; verified: number } | null>(null);
   useEffect(() => {
     const supabase = createClient();
+    void supabase.rpc("admin_food_counts").then(({ data }) => setFood((data as { queue: number; verified: number } | null) ?? null));
     void supabase.rpc("admin_errors").then(({ data }) => setErrors((data as ErrorGroup[] | null) ?? []));
     void supabase.rpc("admin_cron_status").then(({ data }) => {
       const list = ((data as { jobs?: { fails_24h: number; active: boolean }[] } | null)?.jobs ?? []);
@@ -170,6 +172,15 @@ export function ToolCards() {
         caption={jobs === null ? "…" : jobs.bad ? `Проблемы: ${jobs.bad} из ${jobs.total}` : `Все ${jobs.total} работают`}
         badge={jobs?.bad || undefined}
         badgeColor="#ef4444"
+      />
+      <LinkCard
+        href="/admin/food"
+        icon="food"
+        color="#f97316"
+        title="Продукты Yumdots"
+        caption={food === null ? "…" : food.queue ? `На проверке: ${food.queue} · проверено ${food.verified}` : `Всё проверено · ${food.verified} в базе`}
+        badge={food?.queue || undefined}
+        badgeColor="#f97316"
       />
       <LinkCard href="/admin/health" icon="shield" color="#22c55e" title="Проверка сервисов" caption="База, курс, нейросеть, пуши — одной кнопкой" />
       <LinkCard href="/admin/log" icon="list" color="#64748b" title="Журнал действий" caption="Кто из админов что сделал" />

@@ -44,6 +44,8 @@ export interface Product {
   /** Вес упаковки, г — для «съел всю упаковку». */
   pack_grams: number | null;
   source: "off" | "user" | "label";
+  /** verified — «Проверено Dots» (одобрил админ). */
+  status?: "new" | "verified" | "rejected";
 }
 
 /** Блюдо, которое распознала нейросеть или ввёл человек, до сохранения. */

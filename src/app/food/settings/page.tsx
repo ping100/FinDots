@@ -18,6 +18,8 @@ import { HomeLink } from "@/components/HomeLink";
 import { AdminLink } from "@/components/AdminLink";
 import { DeleteAccount } from "@/components/DeleteAccount";
 import { Switch } from "@/components/ui";
+import { WaterSettings } from "@/components/food/Water";
+import { PushSettings } from "@/components/PushSettings";
 import { canCompute, normFor } from "@/lib/food/norms";
 import { ACTIVITIES, GOALS, type FoodSettings } from "@/lib/food/types";
 
@@ -160,6 +162,11 @@ export default function FoodSettingsPage() {
           Это ориентир по формуле Миффлина — Сан Жеора, а не назначение врача. При болезнях, беременности и для детей норму лучше обсудить со специалистом.
         </p>
       </div>
+
+      <WaterSettings />
+
+      <SettingsHeading>Уведомления</SettingsHeading>
+      <PushSettings />
 
       <SettingsHeading>Профиль</SettingsHeading>
       <Group>

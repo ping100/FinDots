@@ -193,7 +193,7 @@ function wellnessPush(row: { kind: "water" | "sleep_prep" | "sleep"; glasses: nu
         row.glasses > 0
           ? `${drops(row.glasses, row.goal)}  ${row.glasses} из ${row.goal} — осталось ${left} ${plural(left, "стакан", "стакана", "стаканов")}`
           : `Начните со стакана воды — цель на сегодня ${row.goal} ${plural(row.goal, "стакан", "стакана", "стаканов")}`,
-      url: "/tasks",
+      url: "/food",
       tag: "water",
     };
   }

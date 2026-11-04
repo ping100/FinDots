@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Icon } from "@/lib/icons";
 import { usePushState } from "@/components/PushSettings";
 import { SettingsHeading } from "@/components/SettingsHeading";
@@ -10,7 +11,7 @@ import { WEEKDAYS, daysLabel, everyLabel, useWellness } from "@/lib/tasks/wellne
 const WATER = "#0ea5e9";
 const SLEEP = "#6366f1";
 const SUMMARY = "#f59e0b";
-const EVERY = [60, 90, 120, 180];
+export const EVERY = [60, 90, 120, 180];
 const PREP = [
   { min: 0, label: "Не надо" },
   { min: 15, label: "15 мин" },
@@ -19,7 +20,7 @@ const PREP = [
 ];
 
 /**
- * «Здоровье» в настройках задач: вода и сон. Строка — переключатель и
+ * Сон и утренняя сводка в настройках задач. Вода переехала в Yumdots. Строка — переключатель и
  * короткая сводка; тап по строке открывает подробности.
  */
 export function WellnessSettings() {
@@ -28,7 +29,7 @@ export function WellnessSettings() {
   const [open, setOpen] = useState<"water" | "sleep" | "summary" | null>(null);
   if (!settings) return null;
 
-  const anyOn = settings.water_on || settings.sleep_on || settings.summary_on;
+  const anyOn = settings.sleep_on || settings.summary_on;
 
   return (
     <>
@@ -52,24 +53,8 @@ export function WellnessSettings() {
         />
       </div>
 
-      <SettingsHeading>Здоровье</SettingsHeading>
+      <SettingsHeading>Сон</SettingsHeading>
       <div className="mb-1 overflow-hidden rounded-2xl" style={{ background: "var(--surface)" }}>
-        <Row
-          icon="glass"
-          color={WATER}
-          title="Вода"
-          hint={
-            settings.water_on
-              ? `${settings.water_from}–${settings.water_to}, ${everyLabel(settings.water_every_min)} · цель ${settings.water_goal}`
-              : "Напоминать пить воду и считать стаканы"
-          }
-          on={settings.water_on}
-          onToggle={(on) => {
-            void save({ water_on: on });
-            if (on) setOpen("water");
-          }}
-          onOpen={() => setOpen("water")}
-        />
         <Row
           icon="moon"
           color={SLEEP}
@@ -87,7 +72,6 @@ export function WellnessSettings() {
             if (on) setOpen("sleep");
           }}
           onOpen={() => setOpen("sleep")}
-          divided
         />
       </div>
       <p className="mb-4 px-1 text-[0.6875rem] leading-snug" style={{ color: problem ? "var(--danger)" : "var(--muted)" }}>
@@ -96,6 +80,24 @@ export function WellnessSettings() {
             ? "Чтобы напоминания приходили, включите уведомления в разделе «Напоминания» выше."
             : "Напоминания приходят пушем, даже когда приложение закрыто.")}
       </p>
+
+      {/* Вода переехала в Yumdots — к еде. Стаканы и настройки те же. */}
+      <Link
+        href="/food/settings"
+        className="mb-4 flex items-center gap-3 rounded-2xl px-4 py-3 transition active:scale-[0.99]"
+        style={{ background: "var(--surface)" }}
+      >
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white" style={{ background: WATER }}>
+          <Icon name="glass" size={19} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[0.9375rem]">Вода теперь в Yumdots</span>
+          <span className="mt-0.5 block text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+            Рядом с едой: стаканы, цель и напоминания. Всё отмеченное сохранилось
+          </span>
+        </span>
+        <Icon name="chevron-right" size={16} className="opacity-30" />
+      </Link>
 
       <Sheet
         open={open === "summary"}
@@ -111,43 +113,6 @@ export function WellnessSettings() {
           <input type="time" className={inputClass} style={inputStyle} value={settings.summary_at}
             onChange={(e) => e.target.value && void save({ summary_at: e.target.value })} />
         </Field>
-      </Sheet>
-
-      <Sheet open={open === "water"} title="Вода" onClose={() => setOpen(null)} footer={<Button onClick={() => setOpen(null)}>Готово</Button>}>
-        <p className="mb-3 text-[0.8125rem] leading-snug" style={{ color: "var(--muted)" }}>
-          Напомню выпить воды в этот промежуток. Отметили стакан на экране «Сегодня» — следующее
-          напоминание сдвинется. Выполнили цель — до завтра не беспокою.
-        </p>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="С">
-            <input type="time" className={inputClass} style={inputStyle} value={settings.water_from}
-              onChange={(e) => e.target.value && void save({ water_from: e.target.value })} />
-          </Field>
-          <Field label="До">
-            <input type="time" className={inputClass} style={inputStyle} value={settings.water_to}
-              onChange={(e) => e.target.value && void save({ water_to: e.target.value })} />
-          </Field>
-        </div>
-        <FieldGroup label="Как часто">
-          <Chips
-            options={EVERY.map((m) => ({ value: m, label: everyLabel(m).replace("каждые ", "") }))}
-            value={settings.water_every_min}
-            color={WATER}
-            onChange={(m) => void save({ water_every_min: m })}
-          />
-        </FieldGroup>
-        <FieldGroup label="Цель на день">
-          <div className="flex items-center gap-3">
-            <Step onClick={() => void save({ water_goal: Math.max(1, settings.water_goal - 1) })}>−</Step>
-            <span className="min-w-[7rem] text-center text-base font-semibold tabular-nums">
-              {settings.water_goal} {plural(settings.water_goal, "стакан", "стакана", "стаканов")}
-            </span>
-            <Step onClick={() => void save({ water_goal: Math.min(30, settings.water_goal + 1) })}>+</Step>
-          </div>
-          <p className="mt-1.5 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-            Обычно советуют 6–8 стаканов по 250 мл
-          </p>
-        </FieldGroup>
       </Sheet>
 
       <Sheet open={open === "sleep"} title="Сон" onClose={() => setOpen(null)} footer={<Button onClick={() => setOpen(null)}>Готово</Button>}>
@@ -195,7 +160,7 @@ export function WellnessSettings() {
   );
 }
 
-function Row({
+export function Row({
   icon,
   color,
   title,
@@ -237,7 +202,7 @@ function Row({
   );
 }
 
-function Chips<T extends number>({
+export function Chips<T extends number>({
   options,
   value,
   color,
@@ -265,7 +230,7 @@ function Chips<T extends number>({
   );
 }
 
-function Step({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+export function Step({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
   return (
     <button
       onClick={onClick}
@@ -277,7 +242,7 @@ function Step({ onClick, children }: { onClick: () => void; children: React.Reac
   );
 }
 
-function plural(n: number, one: string, few: string, many: string) {
+export function plural(n: number, one: string, few: string, many: string) {
   const m10 = n % 10;
   const m100 = n % 100;
   if (m10 === 1 && m100 !== 11) return one;

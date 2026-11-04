@@ -270,7 +270,7 @@ export function SectionTiles({ data, items }: { data: AdminOverview; items: Atte
     { href: "/admin/care", icon: "chat", color: "#0ea5e9", title: "Поддержка", caption: "обращения, отзывы", badge: care },
     { href: "/admin/tech", icon: "wrench", color: "#64748b", title: "Техника", caption: "ошибки, задачи, сервисы", badge: tech },
     { href: "/admin/growth", icon: "trend", color: "#7c3aed", title: "Рост", caption: "удержание, функции", badge: 0 },
-    { href: "/admin/ai", icon: "bolt", color: "#6366f1", title: "Нейросеть", caption: "ключ и модель", badge: 0 },
+    { href: "/admin/ai", icon: "bolt", color: "#6366f1", title: "Нейросеть", caption: "ключ, модель, авто", badge: 0 },
     { href: "/admin/log", icon: "list", color: "#94a3b8", title: "Журнал", caption: "действия админов", badge: 0 },
   ];
   return (

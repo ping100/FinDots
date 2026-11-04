@@ -1371,8 +1371,33 @@ function BillBubble({
           }}
         />
       </span>
+      {category.due_day != null ? (
+        <span
+          className="mt-1 block text-center text-[0.625rem] leading-none tabular-nums"
+          style={{ color: late ? "var(--danger)" : "var(--muted)", opacity: done ? 0.6 : 1 }}
+        >
+          {dueLabel(category.due_day, done)}
+        </span>
+      ) : null}
     </button>
   );
+}
+
+const MONTHS_SHORT = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
+
+/**
+ * Когда списание: «сегодня», «завтра», «15 ноя», просрочено — «просрочен».
+ * Оплачен — дата в следующем месяце. 31-е в коротком месяце — его последний день.
+ */
+function dueLabel(dueDay: number, done: boolean): string {
+  const now = new Date();
+  const at = (y: number, m: number) => new Date(y, m, Math.min(dueDay, new Date(y, m + 1, 0).getDate()));
+  const date = done ? at(now.getFullYear(), now.getMonth() + 1) : at(now.getFullYear(), now.getMonth());
+  const days = Math.round((date.getTime() - new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()) / 86400000);
+  if (!done && days < 0) return "просрочен";
+  if (!done && days === 0) return "сегодня";
+  if (!done && days === 1) return "завтра";
+  return `${done ? "след. " : ""}${date.getDate()} ${MONTHS_SHORT[date.getMonth()]}`;
 }
 
 /** «Уже оплачено» в окне платежа: отметить без записи траты — или снять отметку. */

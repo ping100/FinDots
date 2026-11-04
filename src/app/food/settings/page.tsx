@@ -19,6 +19,7 @@ import { AdminLink } from "@/components/AdminLink";
 import { DeleteAccount } from "@/components/DeleteAccount";
 import { Switch } from "@/components/ui";
 import { WaterSettings } from "@/components/food/Water";
+import { SleepSettings } from "@/components/food/Sleep";
 import { PushSettings } from "@/components/PushSettings";
 import { canCompute, normFor } from "@/lib/food/norms";
 import { ACTIVITIES, GOALS, type FoodSettings } from "@/lib/food/types";
@@ -164,6 +165,7 @@ export default function FoodSettingsPage() {
       </div>
 
       <WaterSettings />
+      <SleepSettings />
 
       <SettingsHeading>Уведомления</SettingsHeading>
       <PushSettings />

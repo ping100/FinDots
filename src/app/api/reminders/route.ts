@@ -201,11 +201,11 @@ function wellnessPush(row: { kind: "water" | "sleep_prep" | "sleep"; glasses: nu
     return {
       title: "🌙 Скоро спать",
       body: `Через ${row.prep_min} мин — отбой. Самое время отложить телефон`,
-      url: "/tasks",
+      url: "/food",
       tag: "sleep",
     };
   }
-  return { title: "😴 Пора спать", body: "Спокойной ночи! Задачи подождут до утра", url: "/tasks", tag: "sleep" };
+  return { title: "😴 Пора спать", body: "Спокойной ночи! Всё остальное подождёт до утра", url: "/food", tag: "sleep" };
 }
 
 /** «💧💧💧○○○»: до 10 делений, дальше — пропорционально. */

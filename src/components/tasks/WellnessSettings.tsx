@@ -6,13 +6,12 @@ import { Icon } from "@/lib/icons";
 import { usePushState } from "@/components/PushSettings";
 import { SettingsHeading } from "@/components/SettingsHeading";
 import { Button, Field, FieldGroup, Sheet, Switch, inputClass, inputStyle } from "@/components/ui";
-import { WEEKDAYS, daysLabel, everyLabel, useWellness } from "@/lib/tasks/wellness";
+import { useWellness } from "@/lib/tasks/wellness";
 
 const WATER = "#0ea5e9";
-const SLEEP = "#6366f1";
 const SUMMARY = "#f59e0b";
 export const EVERY = [60, 90, 120, 180];
-const PREP = [
+export const PREP = [
   { min: 0, label: "Не надо" },
   { min: 15, label: "15 мин" },
   { min: 30, label: "30 мин" },
@@ -20,16 +19,16 @@ const PREP = [
 ];
 
 /**
- * Сон и утренняя сводка в настройках задач. Вода переехала в Yumdots. Строка — переключатель и
+ * Утренняя сводка в настройках задач. Вода и сон переехали в Yumdots. Строка — переключатель и
  * короткая сводка; тап по строке открывает подробности.
  */
 export function WellnessSettings() {
   const { settings, problem, save } = useWellness();
   const [push] = usePushState();
-  const [open, setOpen] = useState<"water" | "sleep" | "summary" | null>(null);
+  const [open, setOpen] = useState<"summary" | null>(null);
   if (!settings) return null;
 
-  const anyOn = settings.sleep_on || settings.summary_on;
+  const anyOn = settings.summary_on;
 
   return (
     <>
@@ -53,27 +52,6 @@ export function WellnessSettings() {
         />
       </div>
 
-      <SettingsHeading>Сон</SettingsHeading>
-      <div className="mb-1 overflow-hidden rounded-2xl" style={{ background: "var(--surface)" }}>
-        <Row
-          icon="moon"
-          color={SLEEP}
-          title="Сон"
-          hint={
-            settings.sleep_on
-              ? `Отбой в ${settings.sleep_at}, ${daysLabel(settings.sleep_days)}${
-                  settings.sleep_prep_min ? ` · за ${settings.sleep_prep_min} мин` : ""
-                }`
-              : "Напоминать вовремя ложиться спать"
-          }
-          on={settings.sleep_on}
-          onToggle={(on) => {
-            void save({ sleep_on: on });
-            if (on) setOpen("sleep");
-          }}
-          onOpen={() => setOpen("sleep")}
-        />
-      </div>
       <p className="mb-4 px-1 text-[0.6875rem] leading-snug" style={{ color: problem ? "var(--danger)" : "var(--muted)" }}>
         {problem ??
           (anyOn && push !== "on"
@@ -81,7 +59,7 @@ export function WellnessSettings() {
             : "Напоминания приходят пушем, даже когда приложение закрыто.")}
       </p>
 
-      {/* Вода переехала в Yumdots — к еде. Стаканы и настройки те же. */}
+      {/* Вода и сон переехали в Yumdots. Стаканы и настройки те же. */}
       <Link
         href="/food/settings"
         className="mb-4 flex items-center gap-3 rounded-2xl px-4 py-3 transition active:scale-[0.99]"
@@ -91,9 +69,9 @@ export function WellnessSettings() {
           <Icon name="glass" size={19} />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block text-[0.9375rem]">Вода теперь в Yumdots</span>
+          <span className="block text-[0.9375rem]">Вода и сон теперь в Yumdots</span>
           <span className="mt-0.5 block text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-            Рядом с едой: стаканы, цель и напоминания. Всё отмеченное сохранилось
+            Рядом с едой: стаканы, время отбоя и напоминания. Всё сохранилось
           </span>
         </span>
         <Icon name="chevron-right" size={16} className="opacity-30" />
@@ -115,47 +93,6 @@ export function WellnessSettings() {
         </Field>
       </Sheet>
 
-      <Sheet open={open === "sleep"} title="Сон" onClose={() => setOpen(null)} footer={<Button onClick={() => setOpen(null)}>Готово</Button>}>
-        <p className="mb-3 text-[0.8125rem] leading-snug" style={{ color: "var(--muted)" }}>
-          Заранее напомню отложить телефон, а в назначенное время — что пора спать.
-        </p>
-        <Field label="Время отбоя">
-          <input type="time" className={inputClass} style={inputStyle} value={settings.sleep_at}
-            onChange={(e) => e.target.value && void save({ sleep_at: e.target.value })} />
-        </Field>
-        <FieldGroup label="Дни">
-          <div className="grid grid-cols-7 gap-1.5">
-            {WEEKDAYS.map((d) => {
-              const on = settings.sleep_days.includes(d.iso);
-              return (
-                <button
-                  key={d.iso}
-                  onClick={() =>
-                    void save({
-                      sleep_days: on
-                        ? settings.sleep_days.filter((x) => x !== d.iso)
-                        : [...settings.sleep_days, d.iso].sort(),
-                    })
-                  }
-                  aria-pressed={on}
-                  className="rounded-xl py-2 text-[0.8125rem] font-medium transition active:scale-95"
-                  style={{ background: on ? SLEEP : "var(--surface-2)", color: on ? "#fff" : "var(--muted)" }}
-                >
-                  {d.short}
-                </button>
-              );
-            })}
-          </div>
-        </FieldGroup>
-        <FieldGroup label="Напомнить заранее">
-          <Chips
-            options={PREP.map((p) => ({ value: p.min, label: p.label }))}
-            value={settings.sleep_prep_min}
-            color={SLEEP}
-            onChange={(m) => void save({ sleep_prep_min: m })}
-          />
-        </FieldGroup>
-      </Sheet>
     </>
   );
 }

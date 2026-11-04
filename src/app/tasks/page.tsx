@@ -22,7 +22,6 @@ import { useAddAction } from "@/components/tasks/Shell";
 import { Calendar } from "@/components/tasks/Calendar";
 import { TaskList } from "@/components/tasks/TaskList";
 import { QuickAdd } from "@/components/tasks/QuickAdd";
-import { WellnessCard } from "@/components/tasks/WellnessCard";
 import { AppSwitchPill } from "@/components/AppSwitch";
 import { CategoryTiles, DayHero, EmptyDay, Timeline } from "@/components/tasks/DayParts";
 
@@ -211,7 +210,6 @@ export default function TodayPage() {
 
         <Calendar selected={selected} onSelect={setSelected} loadedDates={loadedDates} />
 
-        {selected === today() ? <WellnessCard /> : null}
 
         <div className="mt-3">
           <CategoryTiles

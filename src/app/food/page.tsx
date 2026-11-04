@@ -7,6 +7,7 @@ import { Button, Sheet } from "@/components/ui";
 import { useFood } from "@/components/food/DataProvider";
 import { FoodHeader, useFoodUI } from "@/components/food/Shell";
 import { WaterCard } from "@/components/food/Water";
+import { SleepRow } from "@/components/food/Sleep";
 import { normFor, scaleItem, totals } from "@/lib/food/norms";
 import { MEALS, type FoodEntry, type Meal } from "@/lib/food/types";
 import { WEEKDAY_HEADS, addDays, dayLabel, dayNumber, startOfWeek, today } from "@/lib/tasks/dates";
@@ -58,7 +59,12 @@ export default function FoodToday() {
       </div>
 
       {/* Вода — только за сегодня: стаканы считаются по дням. */}
-      {day === now ? <WaterCard /> : null}
+      {day === now ? (
+        <>
+          <WaterCard />
+          <SleepRow />
+        </>
+      ) : null}
 
       <div className="mt-3 space-y-3">
         {MEALS.map((m) => {

@@ -1333,3 +1333,12 @@ input[type="date"]::-webkit-date-and-time-value {
 @media (prefers-reduced-motion: reduce) {
   .food-scan { animation: none; }
 }
+
+/* Yumdots: линия сканера бегает по рамке штрихкода. */
+@keyframes barcode-line {
+  0%, 100% { top: 14%; }
+  50% { top: 84%; }
+}
+.barcode-line {
+  animation: barcode-line 1.8s ease-in-out infinite;
+}

@@ -3,7 +3,7 @@
 export type Meal = "breakfast" | "lunch" | "dinner" | "snack";
 export type Activity = "low" | "light" | "moderate" | "high" | "very_high";
 export type Goal = "lose" | "keep" | "gain";
-export type Source = "photo" | "text" | "manual" | "repeat";
+export type Source = "photo" | "text" | "manual" | "repeat" | "barcode";
 
 export interface FoodEntry {
   id: string;
@@ -30,6 +30,20 @@ export interface FoodSettings {
   goal: Goal;
   /** Своя норма; null — считаем по росту, весу и активности. */
   kcal_target: number | null;
+}
+
+/** Продукт по штрихкоду: КБЖУ на 100 г. */
+export interface Product {
+  barcode: string;
+  name: string;
+  brand: string | null;
+  kcal: number;
+  protein: number;
+  fat: number;
+  carbs: number;
+  /** Вес упаковки, г — для «съел всю упаковку». */
+  pack_grams: number | null;
+  source: "off" | "user" | "label";
 }
 
 /** Блюдо, которое распознала нейросеть или ввёл человек, до сохранения. */

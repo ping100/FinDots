@@ -25,6 +25,17 @@ const SYSTEM_PROMPT = [
   "иначе пустая строка. Если на фото нет еды — items пустой, comment объясняет.",
 ].join("\n");
 
+const LABEL_PROMPT = [
+  "Ты помощник в приложении учёта калорий. На фото — упаковка продукта или её",
+  "этикетка с пищевой ценностью. Прочитай значения НА 100 г (или 100 мл).",
+  "Ответ — только JSON без пояснений и без markdown:",
+  '{"name":"Йогурт клубничный 2,5%","brand":"Простоквашино","kcal":90,"protein":3,"fat":2.5,"carbs":13,"pack_grams":270}',
+  "name — по-русски, коротко, как на упаковке. brand — марка или пустая строка.",
+  "kcal — целое; если указаны только кДж, раздели на 4,184. pack_grams — вес или",
+  "объём упаковки, если виден, иначе null. Если указано на порцию, пересчитай на 100 г.",
+  "Если пищевую ценность прочитать нельзя — верни {\"error\":\"коротко почему\"}.",
+].join("\n");
+
 /** Вытащить JSON из ответа: модель может обернуть его в ```json или добавить текст. */
 function parseItems(text: string): { items: DraftItem[]; comment: string } | null {
   const closed = text.lastIndexOf("</think>");
@@ -63,6 +74,37 @@ function parseItems(text: string): { items: DraftItem[]; comment: string } | nul
   return { items, comment: typeof data.comment === "string" ? data.comment.trim().slice(0, 200) : "" };
 }
 
+/** Пищевая ценность с этикетки на 100 г. */
+function parseLabel(text: string): { name: string; brand: string | null; kcal: number; protein: number; fat: number; carbs: number; pack_grams: number | null } | { error: string } {
+  const closed = text.lastIndexOf("</think>");
+  if (closed >= 0) text = text.slice(closed + 8);
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  let d: Record<string, unknown>;
+  try {
+    d = JSON.parse(text.slice(start, end + 1));
+  } catch {
+    return { error: "Не получилось прочитать этикетку, попробуйте снять ближе и ровнее" };
+  }
+  if (typeof d.error === "string" && d.error) return { error: `Не получилось прочитать: ${d.error}` };
+  const num = (v: unknown, max: number) => {
+    const n = typeof v === "number" ? v : Number(String(v ?? "").replace(",", "."));
+    return Number.isFinite(n) && n >= 0 && n <= max ? n : null;
+  };
+  const kcal = num(d.kcal, 950);
+  if (kcal == null) return { error: "На этикетке не нашёл калорий, введите вручную" };
+  const r = (v: unknown) => Math.round((num(v, 100) ?? 0) * 10) / 10;
+  return {
+    name: String(d.name ?? "").trim().slice(0, 120) || "Продукт",
+    brand: String(d.brand ?? "").trim().slice(0, 80) || null,
+    kcal: Math.round(kcal),
+    protein: r(d.protein),
+    fat: r(d.fat),
+    carbs: r(d.carbs),
+    pack_grams: num(d.pack_grams, 20000) || null,
+  };
+}
+
 /**
  * Распознать еду: фото тарелки или описание словами → список блюд с весом,
  * калориями и БЖУ. Фото уходит только нейросети и нигде не сохраняется.
@@ -74,10 +116,13 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Нужна авторизация" }, { status: 401 });
 
-  const body = (await request.json().catch(() => null)) as { image?: string; text?: string } | null;
+  const body = (await request.json().catch(() => null)) as { image?: string; text?: string; label?: boolean } | null;
+  // Этикетка: читаем пищевую ценность на 100 г (для продукта по штрихкоду).
+  const label = body?.label === true;
   const image = typeof body?.image === "string" && body.image.startsWith("data:image/") ? body.image : null;
   const text = typeof body?.text === "string" ? body.text.trim().slice(0, 500) : "";
   if (!image && !text) return NextResponse.json({ error: "Пришлите фото или опишите, что съели" }, { status: 400 });
+  if (label && !image) return NextResponse.json({ error: "Пришлите фото этикетки" }, { status: 400 });
   if (image && image.length > MAX_IMAGE) return NextResponse.json({ error: "Фото слишком большое" }, { status: 413 });
 
   const { data: config, error: configError } = (await supabase.rpc("ai_config_for_food").maybeSingle()) as {
@@ -101,7 +146,7 @@ export async function POST(request: Request) {
 
   const content: ({ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } })[] = [];
   if (image) content.push({ type: "image_url", image_url: { url: image } });
-  content.push({ type: "text", text: text ? `Описание: ${text}` : "Что на фото? Посчитай калории." });
+  content.push({ type: "text", text: label ? "Прочитай пищевую ценность на 100 г." : text ? `Описание: ${text}` : "Что на фото? Посчитай калории." });
 
   const model = config.model || DEFAULT_MODEL;
   const controller = new AbortController();
@@ -122,7 +167,7 @@ export async function POST(request: Request) {
         temperature: 0.2,
         max_tokens: 1200,
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: label ? LABEL_PROMPT : SYSTEM_PROMPT },
           { role: "user", content },
         ],
       }),
@@ -147,6 +192,11 @@ export async function POST(request: Request) {
   await supabase.from("ai_usage").upsert({ user_id: user.id, day: today, calls: used + 1 }, { onConflict: "user_id,day" });
 
   const json = (await response.json().catch(() => null)) as { choices?: { message?: { content?: string } }[] } | null;
+  if (label) {
+    const product = parseLabel(json?.choices?.[0]?.message?.content ?? "");
+    if ("error" in product) return NextResponse.json({ error: product.error }, { status: 422 });
+    return NextResponse.json({ product, callsLeft: DAILY_LIMIT - used - 1 });
+  }
   const parsed = parseItems(json?.choices?.[0]?.message?.content ?? "");
   if (!parsed) return NextResponse.json({ error: "Не получилось разобрать ответ нейросети, попробуйте ещё раз" }, { status: 502 });
   return NextResponse.json({ ...parsed, callsLeft: DAILY_LIMIT - used - 1 });

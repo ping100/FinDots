@@ -6,8 +6,9 @@ import { Button, Sheet, inputClass, inputStyle } from "@/components/ui";
 import { scaleItem, totals } from "@/lib/food/norms";
 import { MEALS, type DraftItem, type Meal, type Source } from "@/lib/food/types";
 import { useFood } from "./DataProvider";
+import { BarcodeFlow } from "./Barcode";
 
-type Step = "pick" | "text" | "manual" | "busy" | "review";
+type Step = "pick" | "text" | "manual" | "busy" | "review" | "barcode";
 
 /** Сжать фото до ~1024 px по длинной стороне: нейросети хватает, трафика меньше. */
 async function shrink(file: File): Promise<string> {
@@ -124,7 +125,7 @@ export function AddFood({ open, day, meal: startMeal, onClose, onSaved }: { open
   };
 
   const sum = totals(items);
-  const title = step === "review" ? "Проверьте, что получилось" : step === "text" ? "Опишите словами" : step === "manual" ? "Вручную" : "Что вы съели?";
+  const title = step === "review" ? "Проверьте, что получилось" : step === "text" ? "Опишите словами" : step === "manual" ? "Вручную" : step === "barcode" ? "Штрихкод" : "Что вы съели?";
 
   return (
     <Sheet
@@ -183,9 +184,10 @@ export function AddFood({ open, day, meal: startMeal, onClose, onSaved }: { open
               <span className="block text-[0.75rem] opacity-90">Нейросеть посчитает калории и БЖУ</span>
             </span>
           </button>
-          <div className="grid grid-cols-2 gap-2.5">
-            <Tile emoji="💬" title="Словами" hint="«гречка 200 г и котлета»" onClick={() => setStep("text")} />
-            <Tile emoji="✏️" title="Вручную" hint="название и калории" onClick={() => setStep("manual")} />
+          <div className="grid grid-cols-3 gap-2">
+            <Tile emoji="🏷️" title="Штрихкод" hint="КБЖУ с упаковки" onClick={() => setStep("barcode")} />
+            <Tile emoji="💬" title="Словами" hint="«гречка и котлета»" onClick={() => setStep("text")} />
+            <Tile emoji="✏️" title="Вручную" hint="своё блюдо" onClick={() => setStep("manual")} />
           </div>
           {recent.length ? (
             <div className="pt-2">
@@ -251,6 +253,18 @@ export function AddFood({ open, day, meal: startMeal, onClose, onSaved }: { open
         />
       ) : null}
 
+      {step === "barcode" ? (
+        <BarcodeFlow
+          onBack={() => setStep(items.length ? "review" : "pick")}
+          onItem={(it) => {
+            setItems((prev) => [...prev, it]);
+            if (!items.length) setSource("barcode");
+            setComment("");
+            setStep("review");
+          }}
+        />
+      ) : null}
+
       {step === "busy" ? (
         <div className="flex flex-col items-center pb-6 pt-2 text-center">
           {photo ? (
@@ -308,7 +322,7 @@ export function AddFood({ open, day, meal: startMeal, onClose, onSaved }: { open
 
 function Tile({ emoji, title, hint, onClick }: { emoji: string; title: string; hint: string; onClick: () => void }) {
   return (
-    <button onClick={onClick} className="food-card rounded-3xl p-3.5 text-left transition active:scale-[0.98]">
+    <button onClick={onClick} className="food-card rounded-3xl p-3 text-left transition active:scale-[0.98]">
       <span className="text-2xl">{emoji}</span>
       <span className="mt-1 block text-[0.9375rem] font-semibold">{title}</span>
       <span className="block text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>

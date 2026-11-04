@@ -8,6 +8,8 @@ export const maxDuration = 60;
 
 const DAILY_LIMIT = Number(process.env.AI_DAILY_LIMIT ?? 20);
 const DEFAULT_MODEL = "google/gemma-4-31b-it:free";
+/** Запасные бесплатные модели, которые видят картинки: если основная занята. */
+const FALLBACK_MODELS = ["google/gemma-4-26b-a4b-it:free", "nvidia/nemotron-3.5-super-vl:free", "google/gemma-4-31b-it:free"];
 /** Фото уже сжато на телефоне (~1024 px); больше — что-то не так. */
 const MAX_IMAGE = 2_500_000;
 
@@ -148,45 +150,69 @@ export async function POST(request: Request) {
   if (image) content.push({ type: "image_url", image_url: { url: image } });
   content.push({ type: "text", text: label ? "Прочитай пищевую ценность на 100 г." : text ? `Описание: ${text}` : "Что на фото? Посчитай калории." });
 
-  const model = config.model || DEFAULT_MODEL;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 50_000);
-  let response: Response;
-  try {
-    response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      signal: controller.signal,
-      headers: {
-        Authorization: `Bearer ${decryptApiKey(config.api_key_enc)}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": process.env.NEXT_PUBLIC_SITE_URL ?? "https://localhost",
-        "X-Title": "Dots",
-      },
-      body: JSON.stringify({
-        model,
-        temperature: 0.2,
-        max_tokens: 1200,
-        messages: [
-          { role: "system", content: label ? LABEL_PROMPT : SYSTEM_PROMPT },
-          { role: "user", content },
-        ],
-      }),
-    });
-  } catch (error) {
-    const timedOut = error instanceof Error && error.name === "AbortError";
-    return NextResponse.json({ error: timedOut ? "Нейросеть не ответила вовремя, попробуйте ещё раз" : "Нейросеть недоступна" }, { status: 502 });
-  } finally {
-    clearTimeout(timer);
+  // Бесплатные модели часто заняты (429) или временно лежат — тогда по очереди
+  // пробуем другие бесплатные, которые видят картинки. Всё — в пределах минуты.
+  const models = [...new Set([config.model || DEFAULT_MODEL, ...FALLBACK_MODELS])];
+  const deadline = Date.now() + 52_000;
+  let response: Response | null = null;
+  let failure = "";
+  let lastStatus = 0;
+  for (const m of models) {
+    const left = deadline - Date.now();
+    if (left < 6_000) break;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), Math.min(left, 30_000));
+    try {
+      const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          Authorization: `Bearer ${decryptApiKey(config.api_key_enc)}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": process.env.NEXT_PUBLIC_SITE_URL ?? "https://localhost",
+          "X-Title": "Dots",
+        },
+        body: JSON.stringify({
+          model: m,
+          temperature: 0.2,
+          max_tokens: 1200,
+          messages: [
+            { role: "system", content: label ? LABEL_PROMPT : SYSTEM_PROMPT },
+            { role: "user", content },
+          ],
+        }),
+      });
+      if (res.ok) {
+        response = res;
+        break;
+      }
+      lastStatus = res.status;
+      failure = await res.text().catch(() => "");
+      // Ключ или деньги — другая модель не поможет.
+      if (res.status === 401 || res.status === 402) break;
+    } catch (error) {
+      lastStatus = error instanceof Error && error.name === "AbortError" ? 408 : 503;
+    } finally {
+      clearTimeout(timer);
+    }
   }
-  if (!response.ok) {
+  if (!response) {
+    // Дневной лимит бесплатных запросов — на весь ключ, у всех людей сразу.
+    if (/free-models-per-day|per-day/i.test(failure)) {
+      return NextResponse.json(
+        { error: "На сегодня закончились бесплатные распознавания на всё приложение. Добавьте еду вручную или словами, завтра заработает снова" },
+        { status: 503 },
+      );
+    }
     const map: Record<number, string> = {
       400: "Нейросеть не смогла прочитать фото, попробуйте другое или опишите словами",
       401: "Нейросеть не приняла ключ, сообщите администратору",
       402: "На счету нейросети не хватает средств",
       404: "Модели для фото больше нет, администратору нужно выбрать другую",
-      429: "Слишком часто, попробуйте через минуту",
+      408: "Нейросеть не ответила вовремя, попробуйте ещё раз",
+      429: "Все бесплатные нейросети сейчас заняты, попробуйте через минуту или добавьте вручную",
     };
-    return NextResponse.json({ error: map[response.status] ?? `Нейросеть ответила ${response.status}` }, { status: 502 });
+    return NextResponse.json({ error: map[lastStatus] ?? `Нейросеть недоступна (${lastStatus || "нет связи"})` }, { status: 502 });
   }
 
   await supabase.from("ai_usage").upsert({ user_id: user.id, day: today, calls: used + 1 }, { onConflict: "user_id,day" });

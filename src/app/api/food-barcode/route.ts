@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
     pack_grams: num(p.product_quantity) && num(p.product_quantity)! <= 20000 ? num(p.product_quantity) : null,
     source: "off",
   };
-  await supabase.rpc("food_product_save", {
+  await supabase.rpc("food_product_add", {
     p_barcode: product.barcode, p_name: product.name, p_brand: product.brand, p_kcal: product.kcal, p_protein: product.protein,
     p_fat: product.fat, p_carbs: product.carbs, p_pack_grams: product.pack_grams, p_source: "off",
   });
@@ -74,12 +74,17 @@ export async function POST(request: Request) {
   if (!/^[0-9]{6,14}$/.test(code) || !name || kcal == null || kcal > 950) {
     return NextResponse.json({ error: "Нужны название и калории на 100 г" }, { status: 400 });
   }
-  const { error } = await supabase.rpc("food_product_save", {
+  // Первый добавивший остаётся: тот же штрихкод не перезаписывается.
+  const { data: result, error } = await supabase.rpc("food_product_add", {
     p_barcode: code, p_name: name, p_brand: b?.brand ?? null, p_kcal: Math.round(kcal),
     p_protein: r1(Math.min(num(b?.protein) ?? 0, 100)), p_fat: r1(Math.min(num(b?.fat) ?? 0, 100)), p_carbs: r1(Math.min(num(b?.carbs) ?? 0, 100)),
     p_pack_grams: num(b?.pack_grams) && num(b?.pack_grams)! <= 20000 ? num(b?.pack_grams) : null,
     p_source: b?.source === "label" ? "label" : "user",
   });
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return NextResponse.json({ error: error.message }, { status: error.code === "P0001" ? 429 : 500 });
+  if (result === "exists") {
+    const { data } = await supabase.from("food_products").select("*").eq("barcode", code).maybeSingle();
+    return NextResponse.json({ ok: true, existed: true, product: data as Product | null });
+  }
   return NextResponse.json({ ok: true });
 }

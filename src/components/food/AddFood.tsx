@@ -109,9 +109,25 @@ export function AddFood({ open, day, meal: startMeal, onClose, onSaved }: { open
     }
   };
 
+  // Такое же блюдо в этот приём пищи меньше 5 минут назад — скорее всего, повтор.
+  const [dupOk, setDupOk] = useState(false);
+  useEffect(() => setDupOk(false), [items, meal]);
+  const dup = useMemo(() => {
+    const since = Date.now() - 5 * 60_000;
+    return items.find((it) =>
+      entries.some(
+        (e) => e.day === day && e.meal === meal && e.name.toLowerCase() === it.name.trim().toLowerCase() && Math.abs(Number(e.kcal) - it.kcal) < 1 && Date.parse(e.created_at) > since,
+      ),
+    );
+  }, [items, entries, day, meal]);
+
   const save = async () => {
     const list = items.filter((x) => x.name.trim());
     if (!list.length || saving) return;
+    if (dup && !dupOk) {
+      setDupOk(true);
+      return;
+    }
     setSaving(true);
     try {
       await addEntries(list, meal, day, source);
@@ -139,7 +155,7 @@ export function AddFood({ open, day, meal: startMeal, onClose, onSaved }: { open
               Назад
             </Button>
             <Button onClick={() => void save()} disabled={saving || !items.length}>
-              {saving ? "Сохраняю…" : `Сохранить · ${Math.round(sum.kcal)} ккал`}
+              {saving ? "Сохраняю…" : dup && dupOk ? "Да, записать ещё раз" : `Сохранить · ${Math.round(sum.kcal)} ккал`}
             </Button>
           </div>
         ) : null
@@ -284,6 +300,11 @@ export function AddFood({ open, day, meal: startMeal, onClose, onSaved }: { open
 
       {step === "review" ? (
         <div className="pb-2">
+          {dup && dupOk ? (
+            <p className="mb-2.5 rounded-2xl px-3.5 py-2.5 text-[0.8125rem] leading-snug" style={{ background: "color-mix(in srgb, #f59e0b 16%, transparent)" }}>
+              ⚠️ «{dup.name}» уже записано в этот приём пищи только что. Записать ещё раз? Если нет, просто закройте окно
+            </p>
+          ) : null}
           {comment ? (
             <p className="mb-2.5 rounded-2xl px-3.5 py-2 text-[0.75rem] leading-snug" style={{ background: "var(--surface-2)", color: "var(--muted)" }}>
               💡 {comment}

@@ -165,6 +165,7 @@ export function BarcodeFlow({ onItem, onBack }: { onItem: (item: DraftItem) => v
   const [form, setForm] = useState({ name: "", brand: "", kcal: "", protein: "", fat: "", carbs: "", pack: "" });
   const [fromLabel, setFromLabel] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [existed, setExisted] = useState(false);
   const file = useRef<HTMLInputElement | null>(null);
 
   const look = async (c: string) => {
@@ -222,10 +223,13 @@ export function BarcodeFlow({ onItem, onBack }: { onItem: (item: DraftItem) => v
     setProblem(null);
     try {
       const res = await fetch("/api/food-barcode", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(p) });
-      const data = (await res.json().catch(() => null)) as { error?: string } | null;
+      const data = (await res.json().catch(() => null)) as { error?: string; existed?: boolean; product?: Product | null } | null;
       if (!res.ok) throw new Error(data?.error ?? "Не получилось сохранить продукт");
-      setProduct(p);
-      setGrams(String(p.pack_grams && p.pack_grams <= 300 ? p.pack_grams : 100));
+      // Пока вводили, продукт успел добавить кто-то другой — показываем его данные.
+      const saved = data?.existed && data.product ? data.product : p;
+      setExisted(!!data?.existed);
+      setProduct(saved);
+      setGrams(String(saved.pack_grams && saved.pack_grams <= 300 ? saved.pack_grams : 100));
       setPhase("found");
     } catch (e) {
       setProblem(e instanceof Error ? e.message : String(e));
@@ -266,6 +270,11 @@ export function BarcodeFlow({ onItem, onBack }: { onItem: (item: DraftItem) => v
           {product.brand ? (
             <p className="text-[0.75rem]" style={{ color: "var(--muted)" }}>
               {product.brand}
+            </p>
+          ) : null}
+          {existed ? (
+            <p className="mt-1.5 text-[0.75rem] leading-snug" style={{ color: "var(--accent)" }}>
+              Этот продукт уже добавил кто-то другой, вот его данные. Если они не сходятся с упаковкой, поправьте блюдо на следующем шаге
             </p>
           ) : null}
           <p className="mt-1.5 text-[0.75rem] tabular-nums" style={{ color: "var(--muted)" }}>

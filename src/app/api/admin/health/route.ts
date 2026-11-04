@@ -73,8 +73,8 @@ async function rates(origin: string, cookie: string | null): Promise<HealthCheck
 }
 
 async function ai(supabase: Db): Promise<HealthCheck> {
-  const { data, error } = (await supabase.rpc("ai_config_for_analysis").maybeSingle()) as {
-    data: { api_key_enc: string | null; model: string } | null;
+  const { data, error } = (await supabase.rpc("ai_config_full")) as {
+    data: { api_key_enc: string | null; model: string; auto: boolean } | null;
     error: { message: string } | null;
   };
   if (error) return { key: "ai", name: "Нейросеть", state: "warn", detail: `Не удалось прочитать настройку: ${error.message}` };
@@ -86,7 +86,7 @@ async function ai(supabase: Db): Promise<HealthCheck> {
     });
     if (res.status === 401) return { key: "ai", name: "Нейросеть", state: "bad", detail: "Ключ OpenRouter не принят — замените его" };
     if (!res.ok) return { key: "ai", name: "Нейросеть", state: "warn", detail: `OpenRouter ответил ${res.status}` };
-    const info = ((await res.json()) as { data?: { usage?: number; limit?: number | null; limit_remaining?: number | null } }).data;
+    const info = ((await res.json()) as { data?: { usage?: number; limit?: number | null; limit_remaining?: number | null; is_free_tier?: boolean } }).data;
     const left = info?.limit_remaining;
     const money = (n: number) => `$${n.toFixed(2)}`;
     if (left != null && left < 1) {
@@ -96,7 +96,10 @@ async function ai(supabase: Db): Promise<HealthCheck> {
       key: "ai",
       name: "Нейросеть",
       state: left != null && left < 3 ? "warn" : "ok",
-      detail: `${data.model} · потрачено ${money(info?.usage ?? 0)}${left != null ? ` · осталось ${money(left)}` : ""}`,
+      detail: `${data.auto ? "Авто, бесплатные модели" : data.model} · потрачено ${money(info?.usage ?? 0)}${left != null ? ` · осталось ${money(left)}` : ""}${
+        // Без пополнения у бесплатных моделей ~50 запросов в день на весь ключ.
+        info?.is_free_tier ? " · счёт не пополнялся: бесплатных запросов ~50 в день на всех" : ""
+      }`,
     };
   } catch (e) {
     return { key: "ai", name: "Нейросеть", state: "bad", detail: e instanceof Error ? e.message : "Не отвечает" };

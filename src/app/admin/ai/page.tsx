@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { Icon } from "@/lib/icons";
 import { Loader } from "@/components/Loader";
 import { Denied, useOverview } from "@/components/admin/shared";
-import { Button, Field, inputClass, inputStyle } from "@/components/ui";
+import { Button, Field, Switch, inputClass, inputStyle } from "@/components/ui";
 import { AI_MODELS, type AiModel } from "@/lib/aiModels";
 
 interface Status {
@@ -14,6 +14,7 @@ interface Status {
   model: string;
   updated_at: string | null;
   vision_model?: string | null;
+  auto?: boolean;
 }
 
 /**
@@ -28,6 +29,8 @@ export default function AdminAiPage() {
   const [keyDraft, setKeyDraft] = useState("");
   const [model, setModel] = useState("");
   const [vision, setVision] = useState("");
+  const [auto, setAuto] = useState(false);
+  const [picks, setPicks] = useState<{ text: string[]; vision: string[] } | null>(null);
   const [models, setModels] = useState<AiModel[]>(AI_MODELS);
   const [modelsNote, setModelsNote] = useState<string | null>(null);
   const [modelQuery, setModelQuery] = useState("");
@@ -42,6 +45,7 @@ export default function AdminAiPage() {
         setStatus(data);
         setModel(data?.model ?? AI_MODELS[0].id);
         setVision(data?.vision_model ?? "google/gemma-4-31b-it:free");
+        setAuto(!!data?.auto);
       })
       .catch(() => setModel(AI_MODELS[0].id));
   }, []);
@@ -51,8 +55,9 @@ export default function AdminAiPage() {
     void (async () => {
       try {
         const res = await fetch("/api/models");
-        const data = (await res.json()) as { models?: AiModel[] };
+        const data = (await res.json()) as { models?: AiModel[]; auto?: { text: string[]; vision: string[] } };
         if (!alive) return;
+        if (data.auto) setPicks(data.auto);
         if (data.models?.length) setModels(data.models);
         else setModelsNote("Список не загрузился — показан запасной");
       } catch {
@@ -81,7 +86,7 @@ export default function AdminAiPage() {
       const res = await fetch("/api/admin/ai-config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ apiKey: keyDraft.trim() || undefined, model, visionModel: vision.trim() || undefined }),
+        body: JSON.stringify({ apiKey: keyDraft.trim() || undefined, model, visionModel: vision.trim() || undefined, auto }),
       });
       const data = await res.json().catch(() => ({}) as { error?: string });
       if (!res.ok) throw new Error(data.error ?? "Не получилось сохранить");
@@ -152,6 +157,32 @@ export default function AdminAiPage() {
         />
       </Field>
 
+      <div className="mb-3 mt-4 rounded-2xl p-3.5" style={{ background: "var(--surface)", outline: auto ? "2px solid var(--accent)" : "none" }}>
+        <div className="flex items-center gap-3">
+          <span className="min-w-0 flex-1">
+            <span className="block text-[0.9375rem] font-semibold">Авто, только бесплатные</span>
+            <span className="block text-[0.75rem] leading-snug" style={{ color: "var(--muted)" }}>
+              Само выбирает бесплатную модель под задачу: для разборов текстовую, для фото еды ту, что видит картинки. Занята или пропала — берёт следующую
+            </span>
+          </span>
+          <Switch checked={auto} onChange={setAuto} label="Авто" />
+        </div>
+        {auto && picks ? (
+          <div className="mt-2.5 space-y-1 border-t pt-2.5 text-[0.75rem]" style={{ borderColor: "var(--border)" }}>
+            <p>
+              <span style={{ color: "var(--muted)" }}>Разборы: </span>
+              {picks.text.join(" → ")}
+            </p>
+            <p>
+              <span style={{ color: "var(--muted)" }}>Фото еды: </span>
+              {picks.vision.join(" → ")}
+            </p>
+            <p style={{ color: "var(--muted)" }}>Порядок меняется сам: удачная модель становится первой. Не забудьте нажать «Сохранить»</p>
+          </div>
+        ) : null}
+      </div>
+
+      <div style={{ opacity: auto ? 0.45 : 1, pointerEvents: auto ? "none" : undefined }} aria-hidden={auto}>
       <p className="mb-2 mt-4 px-1 text-[0.8125rem] font-medium">Модель</p>
       {modelsNote ? (
         <p className="mb-2 text-xs" style={{ color: "var(--muted)" }}>
@@ -239,6 +270,8 @@ export default function AdminAiPage() {
       <Field label="Идентификатор модели для фото" hint="Можно вписать вручную">
         <input className={inputClass} style={inputStyle} value={vision} onChange={(e) => setVision(e.target.value)} />
       </Field>
+
+      </div>
 
       {problem ? (
         <p className="mb-2 mt-3 text-sm" style={{ color: "var(--danger)" }}>

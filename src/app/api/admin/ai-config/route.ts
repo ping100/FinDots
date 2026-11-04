@@ -18,13 +18,14 @@ export async function GET() {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Нужна авторизация" }, { status: 401 });
 
-  const [{ data, error }, vision] = await Promise.all([
+  const [{ data, error }, vision, auto] = await Promise.all([
     supabase.rpc("admin_ai_config_status").maybeSingle(),
     supabase.rpc("admin_vision_model"),
+    supabase.rpc("admin_ai_auto"),
   ]);
   if (error) return NextResponse.json({ error: error.message }, { status: error.code === "42501" ? 403 : 500 });
 
-  return NextResponse.json({ ...(data as object), vision_model: (vision.data as string | null) ?? null });
+  return NextResponse.json({ ...(data as object), vision_model: (vision.data as string | null) ?? null, auto: auto.data === true });
 }
 
 export async function POST(request: Request) {
@@ -34,7 +35,7 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Нужна авторизация" }, { status: 401 });
 
-  const body = (await request.json().catch(() => ({}))) as { apiKey?: string; model?: string; visionModel?: string };
+  const body = (await request.json().catch(() => ({}))) as { apiKey?: string; model?: string; visionModel?: string; auto?: boolean };
   const model = body.model?.trim();
   if (!model) return NextResponse.json({ error: "Не указана модель" }, { status: 400 });
 
@@ -59,6 +60,11 @@ export async function POST(request: Request) {
     p_hint: hint,
   });
   if (error) return NextResponse.json({ error: error.message }, { status: error.code === "42501" ? 403 : 500 });
+
+  if (typeof body.auto === "boolean") {
+    const a = await supabase.rpc("admin_set_ai_auto", { p_auto: body.auto });
+    if (a.error) return NextResponse.json({ error: a.error.message }, { status: 500 });
+  }
 
   // Модель для фото еды (Yumdots) — своя: текстовая модель картинку не видит.
   const visionModel = body.visionModel?.trim();

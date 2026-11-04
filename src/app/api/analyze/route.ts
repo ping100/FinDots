@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { decryptApiKey } from "@/lib/aiConfig";
+import { askOpenRouter, modelsFor, outOfFreeDaily, type AiConfig } from "@/lib/aiAuto";
 import {
   buildAnalysisSummary,
   type SummaryCategory,
@@ -17,7 +18,6 @@ export const maxDuration = 60;
 // Ключ теперь общий (админский) — лимит защищает его счёт от того, чтобы
 // один зациклившийся человек не сжёг весь дневной бюджет на всех.
 const DAILY_LIMIT = Number(process.env.AI_DAILY_LIMIT ?? 20);
-const DEFAULT_MODEL = "google/gemma-4-31b-it:free";
 
 const SYSTEM_PROMPT = [
   "Ты финансовый помощник. Твоя задача — объяснить человеку, что происходит с его",
@@ -92,9 +92,10 @@ export async function POST(request: Request) {
   // Ключ общий на всё приложение — задаёт его администратор. Доступ
   // конкретного человека проверяет сама функция (access_ai), а ключ
   // приходит зашифрованным: расшифровать может только этот сервер.
-  const { data: config, error: configError } = (await supabase
-    .rpc("ai_config_for_analysis")
-    .maybeSingle()) as { data: { api_key_enc: string | null; model: string } | null; error: { code?: string; message: string } | null };
+  const { data: config, error: configError } = (await supabase.rpc("ai_config_full")) as {
+    data: AiConfig | null;
+    error: { code?: string; message: string } | null;
+  };
   if (configError) {
     return NextResponse.json(
       {
@@ -113,7 +114,6 @@ export async function POST(request: Request) {
     );
   }
   const apiKey = decryptApiKey(config.api_key_enc);
-  const configuredModel = config.model;
 
   // Дневной лимит обращений, чтобы один пользователь не выжег общий ключ.
   const today = new Date().toISOString().slice(0, 10);
@@ -191,97 +191,59 @@ export async function POST(request: Request) {
     debtPayments: (debtPaymentsRes.data ?? []) as SummaryTx[],
   });
 
-  const model = configuredModel || DEFAULT_MODEL;
+  // Таймаут — только на ожидание первого байта: OpenRouter иногда долго
+  // молчит перед ответом. Сам поток потом может идти дольше (см. relay()).
+  // Модель занята или пропала — askOpenRouter пробует следующую.
+  const { response, model, status, failure } = await askOpenRouter({
+    task: "text",
+    apiKey,
+    models: await modelsFor("text", config),
+    perTryMs: 15_000,
+    totalMs: 45_000,
+    body: {
+      // Ответ идёт человеку по мере написания. Ждать полминуты, глядя на
+      // «Думает…», куда хуже, чем видеть, как строчки появляются.
+      stream: true,
+      // Рассуждающие модели отдельно «думают» перед ответом, и этот
+      // черновик на английском вылезал прямо в разбор. Просим OpenRouter
+      // не присылать его и думать покороче: задача несложная.
+      reasoning: { effort: "low", exclude: true },
+      // Свободы фантазии тут не нужно: разговор про конкретные суммы.
+      temperature: 0.2,
+      // Запаса хватает и на размышления, и на сам ответ: при 900 разбор
+      // обрывался на середине.
+      max_tokens: 2000,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: JSON.stringify(summary) },
+        // Требование языка идёт последним: небольшие модели тянутся к
+        // языку последнего сообщения, а не системного.
+        { role: "user", content: insist ? INSIST : ASK },
+      ],
+    },
+  });
 
-  // Таймаут только на ожидание первого байта ответа: OpenRouter иногда
-  // принимает запрос и потом долго молчит перед тем, как вообще начать
-  // отвечать. Как только заголовки пришли — снимаем, чтобы не оборвать
-  // сам поток, который может честно идти дольше (см. отдельную защиту
-  // от зависания в relay() ниже).
-  const connectController = new AbortController();
-  const connectTimeout = setTimeout(() => connectController.abort(), 15_000);
-
-  const ask = () =>
-    fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      signal: connectController.signal,
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": process.env.NEXT_PUBLIC_SITE_URL ?? "https://localhost",
-        "X-Title": "Dots",
-      },
-      body: JSON.stringify({
-        model,
-        // Ответ идёт человеку по мере написания. Ждать полминуты, глядя на
-        // «Думает…», куда хуже, чем видеть, как строчки появляются.
-        stream: true,
-        // Рассуждающие модели отдельно «думают» перед ответом, и этот
-        // черновик на английском вылезал прямо в разбор. Просим OpenRouter
-        // не присылать его — модель думает, человек видит только вывод.
-        // Размышления при этом всё равно съедают лимит токенов, поэтому и
-        // просим думать покороче: задача несложная.
-        reasoning: { effort: "low", exclude: true },
-        // Свободы фантазии тут не нужно: разговор про конкретные суммы.
-        temperature: 0.2,
-        // Запаса хватает и на размышления, и на сам ответ: при 900 разбор
-        // обрывался на середине.
-        max_tokens: 2000,
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: JSON.stringify(summary) },
-          // Требование языка идёт последним: небольшие модели тянутся к
-          // языку последнего сообщения, а не системного.
-          { role: "user", content: insist ? INSIST : ASK },
-        ],
-      }),
-    });
-
-  let response: Response;
-  try {
-    response = await ask();
-  } catch (error) {
-    const timedOut = error instanceof Error && error.name === "AbortError";
-    return NextResponse.json(
-      { error: timedOut ? "OpenRouter не ответил вовремя — попробуйте другую модель" : "OpenRouter недоступен" },
-      { status: 502 },
-    );
-  } finally {
-    clearTimeout(connectTimeout);
-  }
-
-  if (!response.ok) {
-    if (response.status === 401 || response.status === 403) {
-      return NextResponse.json(
-        { error: "OpenRouter не принял ключ — сообщите администратору" },
-        { status: 400 },
-      );
+  if (!response) {
+    if (status === 401 || status === 403) {
+      return NextResponse.json({ error: "OpenRouter не принял ключ — сообщите администратору" }, { status: 400 });
     }
-    if (response.status === 402) {
-      return NextResponse.json(
-        { error: "На счету OpenRouter не хватает средств для этой модели" },
-        { status: 400 },
-      );
+    if (status === 402) {
+      return NextResponse.json({ error: "На счету OpenRouter не хватает средств для этой модели" }, { status: 400 });
     }
-    // 404 у OpenRouter означает не «сервис пропал», а «нет такой модели»:
-    // идентификаторы меняются, и выбранная когда-то модель может исчезнуть.
-    if (response.status === 404) {
-      return NextResponse.json(
-        { error: `Модели «${model}» больше нет у OpenRouter — администратору нужно выбрать другую` },
-        { status: 400 },
-      );
+    if (outOfFreeDaily(failure)) {
+      return NextResponse.json({ error: "На сегодня закончились бесплатные разборы на всё приложение — завтра заработает снова" }, { status: 400 });
     }
-    if (response.status === 429) {
-      return NextResponse.json(
-        { error: "Слишком часто — бесплатные модели ограничены. Попробуйте через минуту" },
-        { status: 400 },
-      );
+    // 404 у OpenRouter означает «нет такой модели»: идентификаторы меняются.
+    if (status === 404) {
+      return NextResponse.json({ error: `Модели «${model}» больше нет у OpenRouter — администратору нужно выбрать другую или включить «Авто»` }, { status: 400 });
     }
-    const detail = await response.text();
-    return NextResponse.json(
-      { error: `OpenRouter ответил ${response.status}`, detail: detail.slice(0, 300) },
-      { status: 502 },
-    );
+    if (status === 429) {
+      return NextResponse.json({ error: "Бесплатные модели сейчас заняты. Попробуйте через минуту" }, { status: 400 });
+    }
+    if (status === 408) {
+      return NextResponse.json({ error: "OpenRouter не ответил вовремя — попробуйте ещё раз" }, { status: 502 });
+    }
+    return NextResponse.json({ error: `OpenRouter ответил ${status || "без связи"}`, detail: failure.slice(0, 300) }, { status: 502 });
   }
 
   // Считаем обращение сразу: ответ уже пошёл, и если человек закроет

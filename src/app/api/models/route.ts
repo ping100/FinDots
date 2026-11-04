@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { autoModels } from "@/lib/aiAuto";
 
 /**
  * Список моделей OpenRouter.
@@ -51,5 +52,7 @@ export async function GET() {
     .filter((m) => m.context >= 16000)
     .sort((a, b) => Number(b.free) - Number(a.free) || b.context - a.context);
 
-  return NextResponse.json({ models });
+  // Что выбрал бы авторежим прямо сейчас — показываем в админке.
+  const [text, vision] = await Promise.all([autoModels("text"), autoModels("vision")]);
+  return NextResponse.json({ models, auto: { text, vision } });
 }

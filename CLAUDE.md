@@ -160,11 +160,12 @@ currency.
 
 - `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` — from
   Supabase Project Settings → API.
-- OpenRouter: no shared app key — each user supplies their own in Settings,
-  stored server-side in the `ai_keys` table (RLS-protected, full value never
-  sent to the browser — only `ai_key_status` with the last 4 chars). Only
-  the `/api/analyze` route reads the full key. `AI_DAILY_LIMIT` caps calls
-  per user per day.
+- OpenRouter: one shared key set by an admin (`app_ai_config`, encrypted with
+  `AI_CONFIG_SECRET`, read by AI routes via `ai_config_full()`). Model choice
+  and fallbacks live in `src/lib/aiAuto.ts`: with `app_ai_config.auto` on,
+  free models are picked live from OpenRouter per task (`text` / `vision`)
+  and tried in turn on 429/404/timeouts. `AI_DAILY_LIMIT` caps calls per
+  user per day.
 - `NEXT_PUBLIC_TURNSTILE_SITE_KEY` — optional Cloudflare Turnstile captcha
   on signup; blank means captcha is off.
 - Build identity: `next.config.ts` stamps `NEXT_PUBLIC_BUILD` from

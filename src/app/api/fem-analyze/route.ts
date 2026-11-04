@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { decryptApiKey } from "@/lib/aiConfig";
+import { askOpenRouter, modelsFor, outOfFreeDaily, type AiConfig } from "@/lib/aiAuto";
 import { reviewLastCycle } from "@/lib/fem/review";
 import type { FemDay, FemPeriod, FemSettings } from "@/lib/fem/cycle";
 
@@ -8,7 +9,6 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const DAILY_LIMIT = Number(process.env.AI_DAILY_LIMIT ?? 20);
-const DEFAULT_MODEL = "google/gemma-4-31b-it:free";
 
 const SYSTEM_PROMPT = [
   "Ты бережный помощник в приложении-календаре цикла. Объясни женщине, как прошёл",
@@ -68,8 +68,8 @@ export async function POST() {
     return NextResponse.json({ error: "Пока нечего разбирать — нужен хотя бы один завершённый цикл" }, { status: 400 });
   }
 
-  const { data: config, error: configError } = (await supabase.rpc("ai_config_for_analysis").maybeSingle()) as {
-    data: { api_key_enc: string | null; model: string } | null;
+  const { data: config, error: configError } = (await supabase.rpc("ai_config_full")) as {
+    data: AiConfig | null;
     error: { code?: string; message: string } | null;
   };
   if (configError) {
@@ -89,46 +89,33 @@ export async function POST() {
     return NextResponse.json({ error: `На сегодня лимит разборов исчерпан (${DAILY_LIMIT})` }, { status: 429 });
   }
 
-  const model = config.model || DEFAULT_MODEL;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 50_000);
-  let response: Response;
-  try {
-    response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      signal: controller.signal,
-      headers: {
-        Authorization: `Bearer ${decryptApiKey(config.api_key_enc)}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": process.env.NEXT_PUBLIC_SITE_URL ?? "https://localhost",
-        "X-Title": "Dots",
-      },
-      body: JSON.stringify({
-        model,
-        reasoning: { effort: "low", exclude: true },
-        temperature: 0.3,
-        max_tokens: 1500,
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: JSON.stringify(review.summary) },
-          { role: "user", content: "Разбери этот цикл. Ответ — на русском, начни сразу со строки «Итог: »." },
-        ],
-      }),
-    });
-  } catch (error) {
-    const timedOut = error instanceof Error && error.name === "AbortError";
-    return NextResponse.json({ error: timedOut ? "Нейросеть не ответила вовремя — попробуйте ещё раз" : "Нейросеть недоступна" }, { status: 502 });
-  } finally {
-    clearTimeout(timer);
-  }
-  if (!response.ok) {
+  const { response, model, status, failure } = await askOpenRouter({
+    task: "text",
+    apiKey: decryptApiKey(config.api_key_enc),
+    models: await modelsFor("text", config),
+    body: {
+      reasoning: { effort: "low", exclude: true },
+      temperature: 0.3,
+      max_tokens: 1500,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: JSON.stringify(review.summary) },
+        { role: "user", content: "Разбери этот цикл. Ответ — на русском, начни сразу со строки «Итог: »." },
+      ],
+    },
+  });
+  if (!response) {
+    if (outOfFreeDaily(failure)) {
+      return NextResponse.json({ error: "На сегодня закончились бесплатные разборы нейросетью на всё приложение, завтра заработает снова" }, { status: 503 });
+    }
     const map: Record<number, string> = {
       401: "Нейросеть не приняла ключ — сообщите администратору",
       402: "На счету нейросети не хватает средств",
       404: "Выбранной модели больше нет — администратору нужно выбрать другую",
-      429: "Слишком часто — попробуйте через минуту",
+      408: "Нейросеть не ответила вовремя — попробуйте ещё раз",
+      429: "Бесплатные нейросети сейчас заняты — попробуйте через минуту",
     };
-    return NextResponse.json({ error: map[response.status] ?? `Нейросеть ответила ${response.status}` }, { status: 502 });
+    return NextResponse.json({ error: map[status] ?? `Нейросеть недоступна (${status || "нет связи"})` }, { status: 502 });
   }
 
   await supabase.from("ai_usage").upsert({ user_id: user.id, day: today, calls: used + 1 }, { onConflict: "user_id,day" });

@@ -388,7 +388,7 @@ function ProductCard({ row, onAct, onPicture }: { row: Row; onAct: (barcode: str
           <PerBasePicker base={base} onChange={setBase} pack={f.pack} unit={unit} />
           {gBase && gBase !== 100 ? (
             <p className="mb-2 text-[0.75rem] tabular-nums" style={{ color: "var(--accent)" }}>
-              Сохранится на 100 {ul(unit)}: {Math.round(per100(n(f.kcal), gBase))} ккал · Б {per100(n(f.protein), gBase)} · Ж {per100(n(f.fat), gBase)} · У {per100(n(f.carbs), gBase)}
+              Сохранится на 100 {ul(unit)}: {per100(n(f.kcal), gBase)} ккал · Б {per100(n(f.protein), gBase)} · Ж {per100(n(f.fat), gBase)} · У {per100(n(f.carbs), gBase)}
             </p>
           ) : null}
         </div>
@@ -427,7 +427,7 @@ function ProductCard({ row, onAct, onPicture }: { row: Row; onAct: (barcode: str
                 void run("verified", {
                   name: f.name.trim(),
                   brand: f.brand.trim() || null,
-                  kcal: Math.round(per100(n(f.kcal), gBase)),
+                  kcal: per100(n(f.kcal), gBase),
                   protein: per100(n(f.protein), gBase),
                   fat: per100(n(f.fat), gBase),
                   carbs: per100(n(f.carbs), gBase),
@@ -698,7 +698,7 @@ function NewProduct({ open, onClose, onCreated }: { open: boolean; onClose: () =
     return Number.isFinite(v) && v >= 0 ? v : 0;
   };
   const g = baseGrams(base, f.pack);
-  const kcal = g ? Math.round(per100(n(f.kcal), g)) : 0;
+  const kcal = g ? per100(n(f.kcal), g) : 0;
   const ok = f.name.trim() && n(f.kcal) > 0 && g && kcal <= 950 && (!f.code || /^[0-9]{6,14}$/.test(f.code));
   const field = (key: keyof typeof f, label: string, wide = false, numeric = true) => (
     <label className={`block ${wide ? "col-span-2" : ""}`}>

@@ -10,7 +10,7 @@ export function per100Of(e: Pick<FoodEntry, "grams" | "kcal" | "protein" | "fat"
   if (!(g > 0)) return null;
   const k = 100 / g;
   const r = (x: number) => Math.round(Number(x) * k * 10) / 10;
-  const kcal = Math.round(Number(e.kcal) * k);
+  const kcal = Math.round(Number(e.kcal) * k * 10) / 10;
   // Больше 950 ккал на 100 г не бывает — значит, вес записан неверно.
   if (kcal > 950) return null;
   return { kcal, protein: Math.min(r(e.protein), 100), fat: Math.min(r(e.fat), 100), carbs: Math.min(r(e.carbs), 100) };

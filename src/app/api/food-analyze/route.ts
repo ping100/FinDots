@@ -100,7 +100,7 @@ function parseLabel(text: string): { name: string; brand: string | null; kcal: n
   return {
     name: String(d.name ?? "").trim().slice(0, 120) || "Продукт",
     brand: String(d.brand ?? "").trim().slice(0, 80) || null,
-    kcal: Math.round(kcal),
+    kcal: Math.round(kcal * 10) / 10,
     protein: r(d.protein),
     fat: r(d.fat),
     carbs: r(d.carbs),

@@ -272,7 +272,7 @@ export function BarcodeFlow({ onItem, onBack, start }: { onItem: (item: DraftIte
       barcode: code,
       name: form.name.trim(),
       brand: form.brand.trim() || null,
-      kcal: Math.round(per100(num(form.kcal), g)),
+      kcal: per100(num(form.kcal), g),
       protein: per100(num(form.protein), g),
       fat: per100(num(form.fat), g),
       carbs: per100(num(form.carbs), g),
@@ -347,7 +347,7 @@ export function BarcodeFlow({ onItem, onBack, start }: { onItem: (item: DraftIte
             </p>
           ) : null}
           <p className="mt-1.5 text-[0.75rem] tabular-nums" style={{ color: "var(--muted)" }}>
-            На 100 {u}: {product.kcal} ккал · Б {fmt(product.protein)} · Ж {fmt(product.fat)} · У {fmt(product.carbs)}
+            На 100 {u}: {fmt(product.kcal)} ккал · Б {fmt(product.protein)} · Ж {fmt(product.fat)} · У {fmt(product.carbs)}
           </p>
           </div>
         </div>
@@ -468,7 +468,7 @@ export function BarcodeFlow({ onItem, onBack, start }: { onItem: (item: DraftIte
       </div>
       {g && g !== 100 && num(form.kcal) > 0 ? (
         <p className="-mt-1 mb-3 rounded-2xl px-3 py-2 text-[0.75rem] tabular-nums" style={{ background: "var(--surface-2)" }}>
-          На 100 {ul(formUnit)} получится: <b>{Math.round(per100(num(form.kcal), g))} ккал</b> · Б {fmt(per100(num(form.protein), g))} · Ж {fmt(per100(num(form.fat), g))} · У {fmt(per100(num(form.carbs), g))}
+          На 100 {ul(formUnit)} получится: <b>{per100(num(form.kcal), g)} ккал</b> · Б {fmt(per100(num(form.protein), g))} · Ж {fmt(per100(num(form.fat), g))} · У {fmt(per100(num(form.carbs), g))}
         </p>
       ) : null}
       <div className="flex gap-2">

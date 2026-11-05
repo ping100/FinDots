@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
     barcode: code,
     name,
     brand: String(p.brands ?? "").split(",")[0].trim().slice(0, 80) || null,
-    kcal: Math.round(Math.min(kcal, 950)),
+    kcal: r1(Math.min(kcal, 950)),
     protein: r1(Math.min(num(n.proteins_100g) ?? 0, 100)),
     fat: r1(Math.min(num(n.fat_100g) ?? 0, 100)),
     carbs: r1(Math.min(num(n.carbohydrates_100g) ?? 0, 100)),
@@ -90,7 +90,7 @@ export async function POST(request: Request) {
   }
   // Первый добавивший остаётся: тот же штрихкод не перезаписывается.
   const { data: result, error } = await supabase.rpc("food_product_add", {
-    p_barcode: code, p_name: name, p_brand: b?.brand ?? null, p_kcal: Math.round(kcal),
+    p_barcode: code, p_name: name, p_brand: b?.brand ?? null, p_kcal: r1(kcal),
     p_protein: r1(Math.min(num(b?.protein) ?? 0, 100)), p_fat: r1(Math.min(num(b?.fat) ?? 0, 100)), p_carbs: r1(Math.min(num(b?.carbs) ?? 0, 100)),
     p_pack_grams: num(b?.pack_grams) && num(b?.pack_grams)! <= 20000 ? num(b?.pack_grams) : null,
     p_source: b?.source === "label" ? "label" : "user",

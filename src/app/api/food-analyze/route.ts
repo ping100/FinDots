@@ -185,7 +185,6 @@ export async function POST(request: Request) {
         temperature: 0.2,
         // С запасом: модели, которые сначала «думают», тратят на это часть токенов.
         max_tokens: 2500,
-        reasoning: { effort: "low", exclude: true },
         messages: [
           { role: "system", content: label ? LABEL_PROMPT : SYSTEM_PROMPT },
           { role: "user", content },
@@ -218,10 +217,13 @@ export async function POST(request: Request) {
       await supabase.from("ai_usage").upsert({ user_id: user.id, day: today, calls: used + 1 }, { onConflict: "user_id,day" });
     }
 
-    const json = (await response.json().catch(() => null)) as { choices?: { message?: { content?: string | null; reasoning?: string | null } }[] } | null;
+    const json = (await response.json().catch(() => null)) as {
+      choices?: { finish_reason?: string; message?: { content?: string | { type?: string; text?: string }[] | null; reasoning?: string | null } }[];
+    } | null;
     const msg = json?.choices?.[0]?.message;
-    // Пустой ответ бывает, когда модель всё «продумала» и не успела ответить.
-    const reply = msg?.content?.trim() ? msg.content : (msg?.reasoning ?? "");
+    // Текст бывает строкой или списком кусочков; пустой — когда модель всё «продумала» и не успела ответить.
+    const text = Array.isArray(msg?.content) ? msg.content.map((c) => c?.text ?? "").join("") : (msg?.content ?? "");
+    const reply = text.trim() ? text : (msg?.reasoning ?? "");
     if (label) {
       const product = parseLabel(reply);
       if (!("error" in product)) return NextResponse.json({ product, callsLeft: DAILY_LIMIT - used - 1 });
@@ -231,6 +233,20 @@ export async function POST(request: Request) {
       if (parsed) return NextResponse.json({ ...parsed, callsLeft: DAILY_LIMIT - used - 1 });
     }
     console.warn("food-analyze: ответ не по формату", model, JSON.stringify(reply.slice(0, 300)));
+    // В журнал ошибок админки: какая модель и что ответила — чтобы понять, что чинить.
+    await supabase
+      .rpc("log_client_error", {
+        p_app: "food",
+        p_path: "/api/food-analyze",
+        p_message: `Распознавание: ответ не по формату (${model})`,
+        p_stack: `finish: ${json?.choices?.[0]?.finish_reason ?? "?"}\nreply: ${reply.slice(0, 1500) || "(пусто)"}`,
+        p_build: process.env.NEXT_PUBLIC_BUILD ?? null,
+        p_ua: null,
+      })
+      .then(
+        () => undefined,
+        () => undefined,
+      );
   }
   return NextResponse.json({ error: "Нейросеть ответила непонятно. Попробуйте ещё раз или опишите словами" }, { status: 502 });
 }

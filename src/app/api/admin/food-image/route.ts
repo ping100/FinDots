@@ -39,7 +39,9 @@ async function english(supabase: Awaited<ReturnType<typeof createClient>>, name:
     totalMs: 14_000,
     body: {
       temperature: 0,
-      max_tokens: 30,
+      // Модели, которые сначала «думают», тратят токены на размышления: даём запас.
+      max_tokens: 400,
+      reasoning: { effort: "low", exclude: true },
       messages: [
         { role: "system", content: "Translate the food name to English for a stock photo search. 1-3 words, no brand, lowercase, answer with the words only." },
         { role: "user", content: name },
@@ -52,6 +54,30 @@ async function english(supabase: Awaited<ReturnType<typeof createClient>>, name:
   if (closed >= 0) text = text.slice(closed + 8);
   text = text.replace(/[^a-zA-Z\s-]/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
   return text && text.length <= 40 ? text : null;
+}
+
+/**
+ * Запросы от точного к общему. По-английски: целиком и два последних слова
+ * («chicken croissant»). По-русски главное слово первое: целиком, первые два,
+ * первое («круассан»). Короткие слова («с», «на») и цифры не в счёт.
+ */
+function ladder(q: string, alt: string | null): string[] {
+  const words = (src: string) =>
+    src
+      .toLowerCase()
+      .replace(/[«»"(),.%]/g, " ")
+      .split(/\s+/)
+      .filter((w) => w.length > 2 && !/\d/.test(w));
+  const steps = (src: string) => {
+    const ws = words(src);
+    if (!ws.length) return [];
+    if (/^[a-z\s-]+$/.test(ws.join(" "))) return [ws.join(" "), ws.slice(-2).join(" ")];
+    return [ws.join(" "), ws.slice(0, 2).join(" "), ws[0]];
+  };
+  const main = steps(q);
+  // Есть перевод: английский, потом русское главное слово, потом остальное.
+  const out = alt ? [...main, ...steps(alt).reverse()] : main;
+  return [...new Set(out)];
 }
 
 async function fromOff(code: string): Promise<Candidate[]> {
@@ -126,14 +152,19 @@ export async function GET(request: NextRequest) {
   const custom = sp.get("custom") === "1";
   const [off, en] = await Promise.all([fromOff(code), custom ? Promise.resolve(null) : english(supabase, name)]);
   const q = en ?? name;
-  const [ov, wm] = await Promise.all([fromOpenverse(q), fromWikimedia(q)]);
-  // Чередуем источники, фото упаковки — первым.
+  // По длинному названию фотобанки часто ничего не знают («Круассан с
+  // куриной грудкой» — пусто, «круассан» — есть). Пробуем короче, пока не найдём.
   const rest: Candidate[] = [];
-  for (let i = 0; i < Math.max(ov.length, wm.length); i++) {
-    if (ov[i]) rest.push(ov[i]);
-    if (wm[i]) rest.push(wm[i]);
+  const seen = new Set<string>();
+  for (const attempt of ladder(q, en ? name : null).slice(0, 4)) {
+    const [ov, wm] = await Promise.all([fromOpenverse(attempt), fromWikimedia(attempt)]);
+    // Чередуем источники.
+    for (let i = 0; i < Math.max(ov.length, wm.length); i++) {
+      for (const c of [ov[i], wm[i]]) if (c && !seen.has(c.url)) (seen.add(c.url), rest.push(c));
+    }
+    if (rest.length >= 6) break;
   }
-  return NextResponse.json({ query: q, candidates: [...off, ...rest].slice(0, 16) });
+  return NextResponse.json({ query: q, candidates: [...off, ...rest].slice(0, 18) });
 }
 
 /**
@@ -157,7 +188,8 @@ export async function POST(request: Request) {
     totalMs: 25_000,
     body: {
       temperature: 0,
-      max_tokens: 40 * names.length + 50,
+      max_tokens: 40 * names.length + 600,
+      reasoning: { effort: "low", exclude: true },
       messages: [
         {
           role: "system",

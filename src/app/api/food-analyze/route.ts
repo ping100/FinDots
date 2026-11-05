@@ -38,18 +38,41 @@ const LABEL_PROMPT = [
   "Если пищевую ценность прочитать нельзя — верни {\"error\":\"коротко почему\"}.",
 ].join("\n");
 
-/** Вытащить JSON из ответа: модель может обернуть его в ```json или добавить текст. */
-function parseItems(text: string): { items: DraftItem[]; comment: string } | null {
+/**
+ * Вытащить JSON из ответа. Модели бывают небрежны: оборачивают в ```json,
+ * добавляют текст, ставят лишнюю запятую в конце списка или «умные» кавычки.
+ */
+function jsonFrom(text: string): Record<string, unknown> | null {
   const closed = text.lastIndexOf("</think>");
   if (closed >= 0) text = text.slice(closed + 8);
+  text = text.replace(/```(?:json)?/gi, "");
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
+  // Ответ — просто список блюд без обёртки: «[` идёт раньше первой «{».
+  const a = text.indexOf("[");
+  const b = text.lastIndexOf("]");
+  if (a >= 0 && b > a && (start < 0 || a < start)) return jsonFrom(`{"items":${text.slice(a, b + 1)}}`);
   if (start < 0 || end <= start) return null;
-  let data: { items?: unknown; comment?: unknown };
-  try {
-    data = JSON.parse(text.slice(start, end + 1));
-  } catch {
-    return null;
+  const raw = text.slice(start, end + 1);
+  for (const variant of [raw, raw.replace(/,\s*([}\]])/g, "$1").replace(/[“”]/g, '"')]) {
+    try {
+      const d = JSON.parse(variant);
+      if (d && typeof d === "object") return d as Record<string, unknown>;
+    } catch {
+      // пробуем исправленный вариант
+    }
+  }
+  return null;
+}
+
+function parseItems(text: string): { items: DraftItem[]; comment: string } | null {
+  const data = jsonFrom(text) as { items?: unknown; comment?: unknown } | null;
+  if (!data) return null;
+  // Иногда кладут список под другим именем.
+  if (!Array.isArray(data.items)) {
+    const alt = Object.values(data).find((v) => Array.isArray(v));
+    if (!alt) return null;
+    data.items = alt;
   }
   if (!Array.isArray(data.items)) return null;
   const num = (v: unknown, max: number) => {
@@ -79,16 +102,8 @@ function parseItems(text: string): { items: DraftItem[]; comment: string } | nul
 
 /** Пищевая ценность с этикетки на 100 г. */
 function parseLabel(text: string): { name: string; brand: string | null; kcal: number; protein: number; fat: number; carbs: number; pack_grams: number | null; unit: "g" | "ml" | null } | { error: string } {
-  const closed = text.lastIndexOf("</think>");
-  if (closed >= 0) text = text.slice(closed + 8);
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  let d: Record<string, unknown>;
-  try {
-    d = JSON.parse(text.slice(start, end + 1));
-  } catch {
-    return { error: "Не получилось прочитать этикетку, попробуйте снять ближе и ровнее" };
-  }
+  const d = jsonFrom(text);
+  if (!d) return { error: "Не получилось прочитать этикетку, попробуйте снять ближе и ровнее" };
   if (typeof d.error === "string" && d.error) return { error: `Не получилось прочитать: ${d.error}` };
   const num = (v: unknown, max: number) => {
     const n = typeof v === "number" ? v : Number(String(v ?? "").replace(",", "."));
@@ -153,47 +168,69 @@ export async function POST(request: Request) {
   content.push({ type: "text", text: label ? "Прочитай пищевую ценность на 100 г." : text ? `Описание: ${text}` : "Что на фото? Посчитай калории." });
 
   // Модель занята (429) или лежит — askOpenRouter пробует следующую подходящую.
-  const { response, status: lastStatus, failure } = await askOpenRouter({
-    task: "vision",
-    apiKey: decryptApiKey(config.api_key_enc),
-    models: await modelsFor("vision", config),
-    body: {
-      temperature: 0.2,
-      max_tokens: 1200,
-      messages: [
-        { role: "system", content: label ? LABEL_PROMPT : SYSTEM_PROMPT },
-        { role: "user", content },
-      ],
-    },
-  });
-  if (!response) {
-    // Дневной лимит бесплатных запросов — на весь ключ, у всех людей сразу.
-    if (outOfFreeDaily(failure)) {
-      return NextResponse.json(
-        { error: "На сегодня закончились бесплатные распознавания на всё приложение. Добавьте еду вручную или словами, завтра заработает снова" },
-        { status: 503 },
-      );
+  // Ответила, но не по формату — один раз спрашиваем другую модель.
+  const all = await modelsFor("vision", config);
+  const tried = new Set<string>();
+  const apiKey = decryptApiKey(config.api_key_enc);
+  let counted = false;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const models = all.filter((m) => !tried.has(m));
+    if (!models.length) break;
+    const { response, model, status: lastStatus, failure } = await askOpenRouter({
+      task: "vision",
+      apiKey,
+      models,
+      totalMs: attempt ? 22_000 : 34_000,
+      body: {
+        temperature: 0.2,
+        // С запасом: модели, которые сначала «думают», тратят на это часть токенов.
+        max_tokens: 2500,
+        reasoning: { effort: "low", exclude: true },
+        messages: [
+          { role: "system", content: label ? LABEL_PROMPT : SYSTEM_PROMPT },
+          { role: "user", content },
+        ],
+      },
+    });
+    if (!response) {
+      if (attempt) break;
+      // Дневной лимит бесплатных запросов — на весь ключ, у всех людей сразу.
+      if (outOfFreeDaily(failure)) {
+        return NextResponse.json(
+          { error: "На сегодня закончились бесплатные распознавания на всё приложение. Добавьте еду вручную или словами, завтра заработает снова" },
+          { status: 503 },
+        );
+      }
+      const map: Record<number, string> = {
+        400: "Нейросеть не смогла прочитать фото, попробуйте другое или опишите словами",
+        401: "Нейросеть не приняла ключ, сообщите администратору",
+        402: "На счету нейросети не хватает средств",
+        404: "Модели для фото больше нет, администратору нужно выбрать другую",
+        408: "Нейросеть не ответила вовремя, попробуйте ещё раз",
+        429: "Все бесплатные нейросети сейчас заняты, попробуйте через минуту или добавьте вручную",
+      };
+      return NextResponse.json({ error: map[lastStatus] ?? `Нейросеть недоступна (${lastStatus || "нет связи"})` }, { status: 502 });
     }
-    const map: Record<number, string> = {
-      400: "Нейросеть не смогла прочитать фото, попробуйте другое или опишите словами",
-      401: "Нейросеть не приняла ключ, сообщите администратору",
-      402: "На счету нейросети не хватает средств",
-      404: "Модели для фото больше нет, администратору нужно выбрать другую",
-      408: "Нейросеть не ответила вовремя, попробуйте ещё раз",
-      429: "Все бесплатные нейросети сейчас заняты, попробуйте через минуту или добавьте вручную",
-    };
-    return NextResponse.json({ error: map[lastStatus] ?? `Нейросеть недоступна (${lastStatus || "нет связи"})` }, { status: 502 });
-  }
+    tried.add(model);
 
-  await supabase.from("ai_usage").upsert({ user_id: user.id, day: today, calls: used + 1 }, { onConflict: "user_id,day" });
+    if (!counted) {
+      counted = true;
+      await supabase.from("ai_usage").upsert({ user_id: user.id, day: today, calls: used + 1 }, { onConflict: "user_id,day" });
+    }
 
-  const json = (await response.json().catch(() => null)) as { choices?: { message?: { content?: string } }[] } | null;
-  if (label) {
-    const product = parseLabel(json?.choices?.[0]?.message?.content ?? "");
-    if ("error" in product) return NextResponse.json({ error: product.error }, { status: 422 });
-    return NextResponse.json({ product, callsLeft: DAILY_LIMIT - used - 1 });
+    const json = (await response.json().catch(() => null)) as { choices?: { message?: { content?: string | null; reasoning?: string | null } }[] } | null;
+    const msg = json?.choices?.[0]?.message;
+    // Пустой ответ бывает, когда модель всё «продумала» и не успела ответить.
+    const reply = msg?.content?.trim() ? msg.content : (msg?.reasoning ?? "");
+    if (label) {
+      const product = parseLabel(reply);
+      if (!("error" in product)) return NextResponse.json({ product, callsLeft: DAILY_LIMIT - used - 1 });
+      if (attempt || jsonFrom(reply)) return NextResponse.json({ error: product.error }, { status: 422 });
+    } else {
+      const parsed = parseItems(reply);
+      if (parsed) return NextResponse.json({ ...parsed, callsLeft: DAILY_LIMIT - used - 1 });
+    }
+    console.warn("food-analyze: ответ не по формату", model, JSON.stringify(reply.slice(0, 300)));
   }
-  const parsed = parseItems(json?.choices?.[0]?.message?.content ?? "");
-  if (!parsed) return NextResponse.json({ error: "Не получилось разобрать ответ нейросети, попробуйте ещё раз" }, { status: 502 });
-  return NextResponse.json({ ...parsed, callsLeft: DAILY_LIMIT - used - 1 });
+  return NextResponse.json({ error: "Нейросеть ответила непонятно. Попробуйте ещё раз или опишите словами" }, { status: 502 });
 }

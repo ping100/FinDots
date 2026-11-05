@@ -9,6 +9,7 @@ export const maxDuration = 45;
 
 const PROMPT = [
   "Ты нутрициолог. По названию блюда или продукта оцени пищевую ценность НА 100 г",
+  "(не на одну штуку и не на порцию: печенье, конфета, пирожок — всё равно на 100 г)",
   "(для напитков и жидкого — на 100 мл). Учитывай кухню Казахстана и СНГ и обычный",
   "рецепт. Если указана марка — бери значения этого продукта, если знаешь.",
   "Ответ — только JSON без пояснений:",
@@ -40,7 +41,10 @@ export async function POST(request: Request) {
   const { data: config } = (await supabase.rpc("ai_config_full")) as { data: AiConfig | null };
   if (!config?.api_key_enc) return NextResponse.json({ error: "Нейросеть не подключена" }, { status: 400 });
 
-  const ask = [`Блюдо: ${name}`, brand ? `Марка: ${brand}` : "", grams ? `Порция: ${grams} ${b?.unit === "ml" ? "мл" : "г"}` : ""].filter(Boolean).join("\n");
+  // Вес порции нейросети не передаём: с ним она норовит ответить «на порцию»,
+  // а нам нужно строго на 100 г. На порцию пересчитываем сами.
+  void grams;
+  const ask = [`Блюдо: ${name}`, brand ? `Марка: ${brand}` : "", "Значения — строго на 100 г (или 100 мл), не на штуку и не на порцию."].filter(Boolean).join("\n");
   const { response, status } = await askOpenRouter({
     task: "text",
     apiKey: decryptApiKey(config.api_key_enc),

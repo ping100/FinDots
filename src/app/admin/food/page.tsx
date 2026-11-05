@@ -277,7 +277,8 @@ function ProductCard({ row, onAct, onPicture }: { row: Row; onAct: (barcode: str
   // Белки, жиры и углеводы больше 100 г на 100 г или калории сильно не сходятся с БЖУ — подозрительно.
   const est = row.protein * 4 + row.fat * 9 + row.carbs * 4;
   const gBase = baseGrams(base, f.pack);
-  const odd = row.protein + row.fat + row.carbs > 100 || (est > 0 && Math.abs(est - row.kcal) > Math.max(60, row.kcal * 0.3));
+  const low = tooLow(row);
+  const odd = row.protein + row.fat + row.carbs > 100 || (est > 0 && Math.abs(est - row.kcal) > Math.max(60, row.kcal * 0.3)) || !!low;
   // Готовое исправление, если цифры сходятся при пересчёте с упаковки.
   const quickFix = odd ? fixFor(row) : null;
   const [autoEstimate, setAutoEstimate] = useState(false);
@@ -364,6 +365,8 @@ function ProductCard({ row, onAct, onPicture }: { row: Row; onAct: (barcode: str
             ⚠️{" "}
             {row.protein + row.fat + row.carbs > 100
               ? `Б + Ж + У = ${Math.round(row.protein + row.fat + row.carbs)} г на 100 ${ul(unitOf(row))} — больше 100 так не бывает`
+              : low
+                ? low
               : `Калории не сходятся с БЖУ: по БЖУ ≈ ${Math.round(est)} ккал на 100 ${ul(unitOf(row))}`}
           </p>
           {!editing ? (
@@ -1313,6 +1316,13 @@ function fixFor(row: Row): { label: string; fix: Partial<Product> } | null {
   const base = { name: row.name, brand: row.brand, pack_grams: row.pack_grams };
   const u = ul(unitOf(row));
   const pack = Number(row.pack_grams) || 0;
+  // Слишком мало калорий для такого продукта — скорее всего, всё вписано на одну порцию.
+  if (tooLow(row) && pack > 0 && pack < 100) {
+    const k = 100 / pack;
+    const kc = Math.round(row.kcal * k);
+    const [p, f, c] = [r1(row.protein * k), r1(row.fat * k), r1(row.carbs * k)];
+    if (kc <= 950 && sum(p, f, c) <= 100) return { label: `всё было на порцию ${pack} ${u} → ${kc} ккал · Б ${p} · Ж ${f} · У ${c} на 100 ${u}`, fix: { ...base, kcal: kc, protein: p, fat: f, carbs: c } };
+  }
   if (pack > 0 && pack !== 100) {
     const k = 100 / pack;
     const [p, f, c] = [r1(row.protein * k), r1(row.fat * k), r1(row.carbs * k)];
@@ -1325,6 +1335,19 @@ function fixFor(row: Row): { label: string; fix: Partial<Product> } | null {
   if (sum(row.protein, row.fat, row.carbs) <= 100 && sum(row.protein, row.fat, row.carbs) > 0) {
     const kc = Math.round(kcalOf(row.protein, row.fat, row.carbs));
     if (kc <= 950) return { label: `калории по БЖУ → ${kc} ккал на 100 ${u}`, fix: { ...base, kcal: kc, protein: row.protein, fat: row.fat, carbs: row.carbs } };
+  }
+  return null;
+}
+
+// Сухое, сладкое и жирное: на 100 г у такого почти всегда больше 300 ккал.
+const DENSE = /печень|крекер|вафл|шоколад|конфет|батончик|пряник|сухар|чипс|орех|арахис|семечк|мюсли|гранол|халв|зефир|мармелад|сушк|галет|кекс|маффин|сырок|сало|масло(?! в)|майонез/i;
+
+/** Подозрительно мало калорий: например, печенье 180 ккал «на 100 г» — скорее всего, это одна штука. */
+function tooLow(row: Row): string | null {
+  if (unitOf(row) === "ml") return null;
+  const name = row.name.toLowerCase().replace(/ё/g, "е");
+  if (DENSE.test(name) && row.kcal < 300) {
+    return `${row.kcal} ккал на 100 г — мало для «${row.name}», обычно 350–550. Похоже, цифры вписаны на одну штуку или порцию`;
   }
   return null;
 }

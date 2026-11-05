@@ -44,6 +44,8 @@ export interface Product {
   /** Вес упаковки, г — для «съел всю упаковку». */
   pack_grams: number | null;
   source: "off" | "user" | "label";
+  /** Картинка для списка (своя в food-images или фото упаковки из Open Food Facts). */
+  image_url?: string | null;
   /** verified — «Проверено Dots» (одобрил админ). */
   status?: "new" | "verified" | "rejected";
 }

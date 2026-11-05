@@ -6,8 +6,15 @@ import { Button, Sheet, inputClass, inputStyle } from "@/components/ui";
 import { scaleItem, totals } from "@/lib/food/norms";
 import { MEALS, type DraftItem, type Meal, type Product, type Source } from "@/lib/food/types";
 import { useFood } from "./DataProvider";
-import { BarcodeFlow } from "./Barcode";
-import { FoodSearch } from "./Search";
+import { BarcodeFlow, itemFrom } from "./Barcode";
+import { DishRow, FoodSearch, ProductRow, norm, ownDishes, portion, usePics, useProducts } from "./Search";
+
+type ListTab = "often" | "recent" | "products";
+const LIST_TABS: { id: ListTab; label: string }[] = [
+  { id: "often", label: "Часто" },
+  { id: "recent", label: "Недавнее" },
+  { id: "products", label: "Продукты" },
+];
 
 type Step = "pick" | "text" | "manual" | "busy" | "review" | "barcode" | "product";
 
@@ -69,21 +76,30 @@ export function AddFood({ open, day, meal: startMeal, onClose, onSaved }: { open
     setProblem(null);
     setQuery("");
     setChosen(null);
+    setShown(40);
+    setTab(entries.length ? "often" : "products");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, startMeal]);
 
-  // Недавнее: последние разные блюда, свежие первыми.
-  const recent = useMemo(() => {
-    const seen = new Set<string>();
-    const out: DraftItem[] = [];
-    for (let i = entries.length - 1; i >= 0 && out.length < 10; i--) {
-      const e = entries[i];
-      const key = e.name.toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
-      out.push({ name: e.name, grams: e.grams, kcal: Number(e.kcal), protein: Number(e.protein), fat: Number(e.fat), carbs: Number(e.carbs) });
-    }
-    return out;
-  }, [entries]);
+  const [tab, setTab] = useState<ListTab>("often");
+  const [shown, setShown] = useState(40);
+  const { products, offline } = useProducts(open);
+  const pics = usePics(products);
+  // Часто — что чаще ели именно в этот приём пищи; Недавнее — свежие первыми.
+  const dishes = useMemo(() => {
+    const all = ownDishes(entries, meal);
+    if (tab === "recent") return all.sort((a, b) => b.last.localeCompare(a.last)).slice(0, 40);
+    return all.sort((a, b) => b.inMeal - a.inMeal || b.times - a.times || b.last.localeCompare(a.last)).slice(0, 40);
+  }, [entries, meal, tab]);
+
+  /** Добавить в список, не уходя из выбора; источник — по первому блюду. */
+  const addItem = (it: DraftItem, src: Source) => {
+    setItems((prev) => {
+      if (!prev.length) setSource(src);
+      return [...prev, it];
+    });
+    setComment("");
+  };
 
   const recognize = async (payload: { image?: string; text?: string }, src: Source) => {
     setProblem(null);
@@ -171,20 +187,26 @@ export function AddFood({ open, day, meal: startMeal, onClose, onSaved }: { open
               {saving ? "Сохраняю…" : dup && dupOk ? "Да, записать ещё раз" : `Сохранить · ${Math.round(sum.kcal)} ккал`}
             </Button>
           </div>
+        ) : step === "pick" && items.length ? (
+          <div className="pb-2">
+            <Button onClick={() => setStep("review")}>
+              Готово · {items.length} · {Math.round(sum.kcal)} ккал
+            </Button>
+          </div>
         ) : null
       }
     >
       {/* Приём пищи — всегда виден: сразу понятно, куда запишется. */}
-      <div className="mb-3 grid grid-cols-4 gap-1.5">
+      <div className="mb-2.5 grid grid-cols-4 gap-1.5">
         {MEALS.map((m) => (
           <button
             key={m.id}
             onClick={() => setMeal(m.id)}
             aria-pressed={meal === m.id}
-            className="flex flex-col items-center rounded-2xl py-1.5 text-[0.75rem] font-medium transition active:scale-95"
+            className="flex items-center justify-center gap-1 rounded-full py-2 text-[0.75rem] font-medium transition active:scale-95"
             style={meal === m.id ? { background: "var(--accent)", color: "#fff" } : { background: "var(--surface-2)" }}
           >
-            <span className="text-base">{m.emoji}</span>
+            <span className="text-[0.875rem] leading-none">{m.emoji}</span>
             {m.label}
           </button>
         ))}
@@ -198,19 +220,8 @@ export function AddFood({ open, day, meal: startMeal, onClose, onSaved }: { open
 
       <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => void onPhoto(e.target.files?.[0])} />
 
-      {step === "pick" && items.length ? (
-        <button
-          onClick={() => setStep("review")}
-          className="mb-2.5 flex w-full items-center gap-2 rounded-2xl px-3.5 py-2.5 text-left text-[0.8125rem] font-medium transition active:scale-[0.98]"
-          style={{ background: "color-mix(in srgb, var(--accent) 12%, transparent)", color: "var(--accent)" }}
-        >
-          <Icon name="chevron-left" size={15} />
-          <span className="flex-1">К списку: {items.length} · {Math.round(sum.kcal)} ккал</span>
-        </button>
-      ) : null}
-
       {step === "pick" ? (
-        <label className="mb-3 flex items-center gap-2 rounded-2xl px-3.5" style={{ background: "var(--surface-2)" }}>
+        <label className="mb-2.5 flex items-center gap-2 rounded-2xl px-3.5" style={{ background: "var(--surface-2)" }}>
           <Icon name="search" size={17} style={{ color: "var(--muted)" }} />
           <input
             enterKeyHint="search"
@@ -218,7 +229,7 @@ export function AddFood({ open, day, meal: startMeal, onClose, onSaved }: { open
             value={query}
             maxLength={80}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Найти: гречка, круассан…"
+            placeholder="Найти продукт или блюдо"
             aria-label="Найти блюдо или продукт"
           />
           {query ? (
@@ -233,16 +244,17 @@ export function AddFood({ open, day, meal: startMeal, onClose, onSaved }: { open
         <FoodSearch
           query={query}
           entries={entries}
+          pics={pics}
           onDish={(it) => {
-            setItems((prev) => [...prev, it]);
-            if (!items.length) setSource("repeat");
-            setComment("");
+            addItem(it, "repeat");
             setStep("review");
           }}
+          onAddDish={(it) => addItem(it, "repeat")}
           onProduct={(p) => {
             setChosen(p);
             setStep("product");
           }}
+          onAddProduct={(p) => addItem(itemFrom(p, portion(p)), "barcode")}
           onText={() => {
             setText(query.trim());
             void recognize({ text: query.trim() }, "text");
@@ -251,49 +263,77 @@ export function AddFood({ open, day, meal: startMeal, onClose, onSaved }: { open
       ) : null}
 
       {step === "pick" && !query.trim() ? (
-        <div className="space-y-2.5 pb-3">
-          <button
-            onClick={() => fileRef.current?.click()}
-            className="flex w-full items-center gap-3.5 rounded-3xl p-4 text-left text-white transition active:scale-[0.98]"
-            style={{ background: "linear-gradient(135deg, #fb923c, #f97316 45%, #ef4444)", boxShadow: "0 12px 28px -12px rgba(249,115,22,.7)" }}
-          >
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl" style={{ background: "rgba(255,255,255,.22)" }}>
-              <Icon name="camera" size={24} />
-            </span>
-            <span>
-              <span className="block text-[1rem] font-semibold">Сфотографировать еду</span>
-              <span className="block text-[0.75rem] opacity-90">Нейросеть посчитает калории и БЖУ</span>
-            </span>
-          </button>
-          <div className="grid grid-cols-3 gap-2">
-            <Tile emoji="🏷️" title="Штрихкод" hint="КБЖУ с упаковки" onClick={() => setStep("barcode")} />
-            <Tile emoji="💬" title="Словами" hint="«гречка и котлета»" onClick={() => setStep("text")} />
-            <Tile emoji="✏️" title="Вручную" hint="своё блюдо" onClick={() => setStep("manual")} />
+        <div className="pb-3">
+          {/* Способы добавить — одним рядом, чтобы список ниже было видно. */}
+          <div className="grid grid-cols-4 gap-2">
+            <Action emoji="📷" label="Фото" hot onClick={() => fileRef.current?.click()} />
+            <Action emoji="🏷️" label="Штрихкод" onClick={() => setStep("barcode")} />
+            <Action emoji="💬" label="Словами" onClick={() => setStep("text")} />
+            <Action emoji="✏️" label="Вручную" onClick={() => setStep("manual")} />
           </div>
-          {recent.length ? (
-            <div className="pt-2">
-              <p className="mb-1.5 text-[0.8125rem]" style={{ color: "var(--muted)" }}>
-                Недавнее
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {recent.map((r) => (
-                  <button
-                    key={r.name}
-                    onClick={() => {
-                      setItems((prev) => [...prev, r]);
-                      if (!items.length) setSource("repeat");
-                      setComment("");
-                      setStep("review");
-                    }}
-                    className="rounded-full px-3 py-1.5 text-[0.8125rem] transition active:scale-95"
-                    style={{ background: "var(--surface-2)" }}
-                  >
-                    {r.name} <span style={{ color: "var(--muted)" }}>· {Math.round(r.kcal)}</span>
+
+          <div className="mt-3.5 flex gap-1 rounded-2xl p-1" style={{ background: "var(--surface-2)" }} role="tablist">
+            {LIST_TABS.map((t) => (
+              <button
+                key={t.id}
+                role="tab"
+                aria-selected={tab === t.id}
+                onClick={() => setTab(t.id)}
+                className="flex-1 rounded-xl py-1.5 text-[0.8125rem] font-medium transition"
+                style={tab === t.id ? { background: "var(--surface)", boxShadow: "0 1px 4px rgba(0,0,0,.08)" } : { color: "var(--muted)" }}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-1 min-h-[40vh]">
+            {tab !== "products" ? (
+              dishes.length ? (
+                <ul>
+                  {dishes.map((d) => (
+                    <DishRow
+                      key={d.item.name}
+                      d={d}
+                      pic={pics.get(norm(d.item.name))}
+                      onOpen={() => {
+                        addItem(d.item, "repeat");
+                        setStep("review");
+                      }}
+                      onAdd={() => addItem(d.item, "repeat")}
+                    />
+                  ))}
+                </ul>
+              ) : (
+                <Empty text="Здесь появится то, что вы записываете. Начните с фото или найдите продукт" />
+              )
+            ) : products === null ? (
+              <Empty text={offline ? "Без интернета список продуктов недоступен" : "Загружаю продукты…"} />
+            ) : products.length ? (
+              <>
+                <ul>
+                  {products.slice(0, shown).map((p) => (
+                    <ProductRow
+                      key={p.barcode}
+                      p={p}
+                      onOpen={() => {
+                        setChosen(p);
+                        setStep("product");
+                      }}
+                      onAdd={() => addItem(itemFrom(p, portion(p)), "barcode")}
+                    />
+                  ))}
+                </ul>
+                {products.length > shown ? (
+                  <button onClick={() => setShown((n) => n + 40)} className="mt-1 w-full rounded-2xl py-2.5 text-[0.8125rem] font-medium" style={{ background: "var(--surface-2)" }}>
+                    Показать ещё
                   </button>
-                ))}
-              </div>
-            </div>
-          ) : null}
+                ) : null}
+              </>
+            ) : (
+              <Empty text="В общей базе пока пусто. Отсканируйте штрихкод, и продукт появится здесь у всех" />
+            )}
+          </div>
         </div>
       ) : null}
 
@@ -423,15 +463,28 @@ export function AddFood({ open, day, meal: startMeal, onClose, onSaved }: { open
   );
 }
 
-function Tile({ emoji, title, hint, onClick }: { emoji: string; title: string; hint: string; onClick: () => void }) {
+function Action({ emoji, label, hot, onClick }: { emoji: string; label: string; hot?: boolean; onClick: () => void }) {
   return (
-    <button onClick={onClick} className="food-card rounded-3xl p-3 text-left transition active:scale-[0.98]">
-      <span className="text-2xl">{emoji}</span>
-      <span className="mt-1 block text-[0.9375rem] font-semibold">{title}</span>
-      <span className="block text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
-        {hint}
-      </span>
+    <button
+      onClick={onClick}
+      className="flex flex-col items-center gap-0.5 rounded-2xl py-2.5 text-[0.75rem] font-medium transition active:scale-95"
+      style={
+        hot
+          ? { background: "linear-gradient(135deg, #fb923c, #f97316 45%, #ef4444)", color: "#fff", boxShadow: "0 8px 20px -10px rgba(249,115,22,.8)" }
+          : { background: "var(--surface-2)" }
+      }
+    >
+      <span className="text-[1.375rem] leading-none">{emoji}</span>
+      {label}
     </button>
+  );
+}
+
+function Empty({ text }: { text: string }) {
+  return (
+    <p className="px-4 py-8 text-center text-[0.8125rem] leading-snug" style={{ color: "var(--muted)" }}>
+      {text}
+    </p>
   );
 }
 

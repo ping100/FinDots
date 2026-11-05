@@ -9,6 +9,10 @@ const num = (v: unknown) => {
   return Number.isFinite(n) && n >= 0 ? n : null;
 };
 const r1 = (n: number) => Math.round(n * 10) / 10;
+const offImage = (p: Record<string, unknown>) => {
+  const u = String(p.image_front_small_url || p.image_front_url || "");
+  return /^https:\/\/images\.openfoodfacts\.org\//.test(u) && u.length <= 500 ? u : null;
+};
 
 /**
  * Продукт по штрихкоду: КБЖУ на 100 г и вес упаковки.
@@ -32,7 +36,7 @@ export async function GET(request: NextRequest) {
   if (own.data) return NextResponse.json({ product: own.data as Product });
 
   const res = await fetch(
-    `https://world.openfoodfacts.org/api/v2/product/${code}.json?fields=product_name,product_name_ru,brands,nutriments,product_quantity`,
+    `https://world.openfoodfacts.org/api/v2/product/${code}.json?fields=product_name,product_name_ru,brands,nutriments,product_quantity,image_front_small_url,image_front_url`,
     { headers: { "User-Agent": "Dots/1.0 (dotsapp.vercel.app)" }, next: { revalidate: 86400 }, signal: AbortSignal.timeout(8000) },
   ).catch(() => null);
   const data = res?.ok ? ((await res.json().catch(() => null)) as { status?: number; product?: Record<string, unknown> } | null) : null;
@@ -53,11 +57,14 @@ export async function GET(request: NextRequest) {
     carbs: r1(Math.min(num(n.carbohydrates_100g) ?? 0, 100)),
     pack_grams: num(p.product_quantity) && num(p.product_quantity)! <= 20000 ? num(p.product_quantity) : null,
     source: "off",
+    image_url: offImage(p),
   };
   await supabase.rpc("food_product_add", {
     p_barcode: product.barcode, p_name: product.name, p_brand: product.brand, p_kcal: product.kcal, p_protein: product.protein,
     p_fat: product.fat, p_carbs: product.carbs, p_pack_grams: product.pack_grams, p_source: "off",
   });
+  // Фото упаковки из Open Food Facts — сразу картинкой продукта.
+  if (product.image_url) await supabase.rpc("food_product_off_image", { p_barcode: code, p_url: product.image_url });
   return NextResponse.json({ product });
 }
 

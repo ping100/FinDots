@@ -5,6 +5,7 @@ import { Icon } from "@/lib/icons";
 import { Button, inputClass, inputStyle } from "@/components/ui";
 import type { DraftItem, Product } from "@/lib/food/types";
 import { BASE_100, PerBasePicker, baseGrams, per100, type Base } from "./PerBase";
+import { FoodPic } from "./FoodPic";
 
 type Phase = "scan" | "look" | "found" | "unknown" | "form" | "reading";
 
@@ -318,7 +319,9 @@ export function BarcodeFlow({ onItem, onBack, start }: { onItem: (item: DraftIte
     const chips = [50, 100, 150, 200].filter((x) => x !== product.pack_grams);
     return (
       <div className="pb-3">
-        <div className="food-card mb-3 rounded-3xl p-3.5">
+        <div className="food-card mb-3 flex gap-3 rounded-3xl p-3.5">
+          <FoodPic src={product.image_url} name={product.name} size={64} />
+          <div className="min-w-0 flex-1">
           {product.status === "verified" ? (
             <span className="mb-1.5 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[0.6875rem] font-semibold" style={{ background: "color-mix(in srgb, #22c55e 16%, transparent)", color: "#16a34a" }}>
               <Icon name="check" size={12} /> Проверено Dots
@@ -338,6 +341,7 @@ export function BarcodeFlow({ onItem, onBack, start }: { onItem: (item: DraftIte
           <p className="mt-1.5 text-[0.75rem] tabular-nums" style={{ color: "var(--muted)" }}>
             На 100 г: {product.kcal} ккал · Б {fmt(product.protein)} · Ж {fmt(product.fat)} · У {fmt(product.carbs)}
           </p>
+          </div>
         </div>
         <p className="mb-1.5 text-[0.8125rem]" style={{ color: "var(--muted)" }}>
           Сколько съели

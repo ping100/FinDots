@@ -13,7 +13,7 @@ tracked by dragging icon "bubbles" between blocks — no manual entry),
 **Yumdots** (`/food`, calorie tracker: photo or text → AI recognizes dishes with
 grams/kcal/macros via `/api/food-analyze`, vision model in
 `app_ai_config.vision_model`; norm by Mifflin–St Jeor in `src/lib/food/norms.ts`;
-photos are never stored).
+photos are never stored; product pictures live in the public `food-images` bucket, picked by admins via `/api/admin/food-image`).
 `/` is the switcher between them; the gear there toggles which apps are shown
 (`profiles.apps_enabled`, default `{money,tasks}`). The Findots/Todots headers
 link to each other (or home, if the other app is switched off).

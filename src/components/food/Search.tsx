@@ -3,23 +3,36 @@
 import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@/lib/icons";
 import { createClient } from "@/lib/supabase/client";
-import type { DraftItem, FoodEntry, Product } from "@/lib/food/types";
+import type { DraftItem, FoodEntry, Meal, Product } from "@/lib/food/types";
+import { itemFrom } from "./Barcode";
+import { FoodPic } from "./FoodPic";
 
 /** Для поиска: регистр и «ё» не важны. */
-const norm = (s: string) => s.toLowerCase().replace(/ё/g, "е").trim();
+export const norm = (s: string) => s.toLowerCase().replace(/ё/g, "е").trim();
 const words = (q: string) => norm(q).split(/\s+/).filter(Boolean);
 const fmt = (n: number) => (Math.round(n * 10) / 10).toString().replace(".", ",");
+const times = (n: number) => `${n} ${n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? "раза" : "раз"}`;
 
-/** Свои блюда: каждое название один раз, в последнем варианте, и сколько раз ели. */
-export function ownDishes(entries: FoodEntry[]) {
-  const map = new Map<string, { item: DraftItem; times: number; last: string }>();
+export interface Dish {
+  item: DraftItem;
+  times: number;
+  /** Сколько раз ели в этот приём пищи — для «Часто». */
+  inMeal: number;
+  last: string;
+}
+
+/** Свои блюда: каждое название один раз, в последнем варианте. */
+export function ownDishes(entries: FoodEntry[], meal?: Meal): Dish[] {
+  const map = new Map<string, Dish>();
   for (const e of entries) {
     const key = norm(e.name);
     const prev = map.get(key);
     const item: DraftItem = { name: e.name, grams: e.grams, kcal: Number(e.kcal), protein: Number(e.protein), fat: Number(e.fat), carbs: Number(e.carbs) };
-    if (!prev) map.set(key, { item, times: 1, last: e.created_at });
+    const here = meal && e.meal === meal ? 1 : 0;
+    if (!prev) map.set(key, { item, times: 1, inMeal: here, last: e.created_at });
     else {
       prev.times++;
+      prev.inMeal += here;
       if (e.created_at >= prev.last) {
         prev.item = item;
         prev.last = e.created_at;
@@ -27,6 +40,155 @@ export function ownDishes(entries: FoodEntry[]) {
     }
   }
   return [...map.values()];
+}
+
+/** Порция продукта по умолчанию: упаковка, если она не больше 300 г, иначе 100 г. */
+export const portion = (p: Product) => (p.pack_grams && p.pack_grams <= 300 ? p.pack_grams : 100);
+
+// Общая база продуктов: грузим один раз за сессию, проверенные первыми.
+let cache: Product[] | null = null;
+export function useProducts(enabled: boolean) {
+  const [list, setList] = useState<Product[] | null>(cache);
+  const [offline, setOffline] = useState(false);
+  useEffect(() => {
+    if (!enabled || cache) return;
+    if (!navigator.onLine) {
+      setOffline(true);
+      return;
+    }
+    let alive = true;
+    void (async () => {
+      const { data } = await createClient()
+        .from("food_products")
+        .select("*")
+        .neq("status", "rejected")
+        .order("status", { ascending: false })
+        .order("name")
+        .limit(400);
+      if (!alive) return;
+      if (data) cache = data as Product[];
+      setList((data as Product[] | null) ?? []);
+      setOffline(!data && !navigator.onLine);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [enabled]);
+  return { products: list, offline };
+}
+
+/** Картинки к своим блюдам: если блюдо записано из продукта — берём его картинку. */
+export function usePics(products: Product[] | null) {
+  return useMemo(() => {
+    const m = new Map<string, string>();
+    for (const p of products ?? []) {
+      if (!p.image_url) continue;
+      m.set(norm(itemFrom(p, 100).name), p.image_url);
+      if (!m.has(norm(p.name))) m.set(norm(p.name), p.image_url);
+    }
+    return m;
+  }, [products]);
+}
+
+/** Строка списка: картинка, название, подробности, калории и плюсик «добавить». */
+export function FoodRow({
+  pic,
+  name,
+  badge,
+  sub,
+  kcal,
+  kcalHint,
+  onOpen,
+  onAdd,
+}: {
+  pic?: string | null;
+  name: string;
+  badge?: boolean;
+  sub: string;
+  kcal: number;
+  kcalHint?: string;
+  onOpen: () => void;
+  onAdd: () => void;
+}) {
+  const [added, setAdded] = useState(false);
+  useEffect(() => {
+    if (!added) return;
+    const t = setTimeout(() => setAdded(false), 1200);
+    return () => clearTimeout(t);
+  }, [added]);
+  return (
+    <li className="flex items-center gap-1">
+      <button onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-3 py-2 text-left transition active:opacity-70">
+        <FoodPic src={pic} name={name} />
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-1">
+            <span className="truncate text-[0.9375rem] font-medium">{name}</span>
+            {badge ? (
+              <span className="shrink-0" style={{ color: "#16a34a" }} aria-label="Проверено Dots">
+                <Icon name="check" size={13} />
+              </span>
+            ) : null}
+          </span>
+          <span className="block truncate text-[0.6875rem] tabular-nums" style={{ color: "var(--muted)" }}>
+            <b className="font-semibold" style={{ color: "var(--accent)" }}>
+              {Math.round(kcal)} ккал
+            </b>
+            {kcalHint ? ` ${kcalHint}` : ""} · {sub}
+          </span>
+        </span>
+      </button>
+      <button
+        onClick={() => {
+          onAdd();
+          setAdded(true);
+          navigator.vibrate?.(15);
+        }}
+        aria-label={`Добавить «${name}»`}
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition active:scale-90"
+        style={added ? { background: "#22c55e", color: "#fff" } : { background: "color-mix(in srgb, var(--accent) 14%, transparent)", color: "var(--accent)" }}
+      >
+        <Icon name={added ? "check" : "plus"} size={17} />
+      </button>
+    </li>
+  );
+}
+
+export function DishRow({ d, pic, onOpen, onAdd }: { d: Dish; pic?: string; onOpen: () => void; onAdd: () => void }) {
+  const it = d.item;
+  return (
+    <FoodRow
+      pic={pic}
+      name={it.name}
+      kcal={it.kcal}
+      kcalHint={it.grams ? `за ${it.grams} г` : undefined}
+      sub={`Б ${fmt(it.protein)} · Ж ${fmt(it.fat)} · У ${fmt(it.carbs)}${d.times > 1 ? ` · ели ${times(d.times)}` : ""}`}
+      onOpen={onOpen}
+      onAdd={onAdd}
+    />
+  );
+}
+
+export function ProductRow({ p, onOpen, onAdd }: { p: Product; onOpen: () => void; onAdd: () => void }) {
+  return (
+    <FoodRow
+      pic={p.image_url}
+      name={p.name}
+      badge={p.status === "verified"}
+      kcal={p.kcal}
+      kcalHint="на 100 г"
+      sub={`${p.brand ? `${p.brand} · ` : ""}Б ${fmt(p.protein)} · Ж ${fmt(p.fat)} · У ${fmt(p.carbs)}`}
+      onOpen={onOpen}
+      onAdd={onAdd}
+    />
+  );
+}
+
+export function Heading({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="mb-0.5 mt-2 text-[0.75rem] font-semibold uppercase tracking-wide" style={{ color: "var(--muted)" }}>
+      {children}
+    </p>
+  );
 }
 
 /**
@@ -37,14 +199,20 @@ export function ownDishes(entries: FoodEntry[]) {
 export function FoodSearch({
   query,
   entries,
+  pics,
   onDish,
+  onAddDish,
   onProduct,
+  onAddProduct,
   onText,
 }: {
   query: string;
   entries: FoodEntry[];
+  pics: Map<string, string>;
   onDish: (it: DraftItem) => void;
+  onAddDish: (it: DraftItem) => void;
   onProduct: (p: Product) => void;
+  onAddProduct: (p: Product) => void;
   onText: () => void;
 }) {
   const ws = useMemo(() => words(query), [query]);
@@ -97,22 +265,9 @@ export function FoodSearch({
       {own.length ? (
         <>
           <Heading>Вы уже ели</Heading>
-          <ul className="mb-3 overflow-hidden rounded-2xl" style={{ background: "var(--surface-2)" }}>
-            {own.map(({ item, times }, i) => (
-              <li key={item.name} style={i ? { borderTop: "1px solid var(--border)" } : undefined}>
-                <button onClick={() => onDish(item)} className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left transition active:opacity-70">
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[0.9375rem] font-medium">{item.name}</span>
-                    <span className="block text-[0.6875rem] tabular-nums" style={{ color: "var(--muted)" }}>
-                      {item.grams ? `${item.grams} г · ` : ""}Б {fmt(item.protein)} · Ж {fmt(item.fat)} · У {fmt(item.carbs)}
-                      {times > 1 ? ` · ели ${times} ${times % 10 >= 2 && times % 10 <= 4 && (times % 100 < 12 || times % 100 > 14) ? "раза" : "раз"}` : ""}
-                    </span>
-                  </span>
-                  <span className="shrink-0 text-[0.875rem] font-semibold tabular-nums" style={{ color: "var(--accent)" }}>
-                    {Math.round(item.kcal)} ккал
-                  </span>
-                </button>
-              </li>
+          <ul>
+            {own.map((d) => (
+              <DishRow key={d.item.name} d={d} pic={pics.get(norm(d.item.name))} onOpen={() => onDish(d.item)} onAdd={() => onAddDish(d.item)} />
             ))}
           </ul>
         </>
@@ -121,33 +276,9 @@ export function FoodSearch({
       {products?.length ? (
         <>
           <Heading>Продукты</Heading>
-          <ul className="mb-3 overflow-hidden rounded-2xl" style={{ background: "var(--surface-2)" }}>
-            {products.map((p, i) => (
-              <li key={p.barcode} style={i ? { borderTop: "1px solid var(--border)" } : undefined}>
-                <button onClick={() => onProduct(p)} className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left transition active:opacity-70">
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-center gap-1.5">
-                      <span className="truncate text-[0.9375rem] font-medium">{p.name}</span>
-                      {p.status === "verified" ? (
-                        <span className="shrink-0" style={{ color: "#16a34a" }} title="Проверено Dots" aria-label="Проверено Dots">
-                          <Icon name="check" size={13} />
-                        </span>
-                      ) : null}
-                    </span>
-                    <span className="block truncate text-[0.6875rem] tabular-nums" style={{ color: "var(--muted)" }}>
-                      {p.brand ? `${p.brand} · ` : ""}на 100 г · Б {fmt(p.protein)} · Ж {fmt(p.fat)} · У {fmt(p.carbs)}
-                    </span>
-                  </span>
-                  <span className="shrink-0 text-right">
-                    <span className="block text-[0.875rem] font-semibold tabular-nums" style={{ color: "var(--accent)" }}>
-                      {Math.round(p.kcal)}
-                    </span>
-                    <span className="block text-[0.625rem]" style={{ color: "var(--muted)" }}>
-                      ккал/100 г
-                    </span>
-                  </span>
-                </button>
-              </li>
+          <ul>
+            {products.map((p) => (
+              <ProductRow key={p.barcode} p={p} onOpen={() => onProduct(p)} onAdd={() => onAddProduct(p)} />
             ))}
           </ul>
         </>
@@ -172,7 +303,7 @@ export function FoodSearch({
       {/* Не нашли — можно сразу посчитать словами то, что ввели. */}
       <button
         onClick={onText}
-        className="mt-1 flex w-full items-center gap-3 rounded-2xl px-3.5 py-3 text-left transition active:scale-[0.98]"
+        className="mt-2 flex w-full items-center gap-3 rounded-2xl px-3.5 py-3 text-left transition active:scale-[0.98]"
         style={{ border: "1.5px dashed var(--border)" }}
       >
         <span className="text-xl">💬</span>
@@ -184,13 +315,5 @@ export function FoodSearch({
         </span>
       </button>
     </div>
-  );
-}
-
-function Heading({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="mb-1.5 px-1 text-[0.75rem] font-semibold uppercase tracking-wide" style={{ color: "var(--muted)" }}>
-      {children}
-    </p>
   );
 }

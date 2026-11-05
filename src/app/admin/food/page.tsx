@@ -8,6 +8,7 @@ import { Denied, Problem } from "@/components/admin/shared";
 import { AdminHeader } from "@/components/admin/Tools";
 import { inputClass, inputStyle } from "@/components/ui";
 import type { Product } from "@/lib/food/types";
+import { BASE_100, PerBasePicker, baseGrams, per100, type Base } from "@/components/food/PerBase";
 
 type Row = Product & { status: "new" | "verified" | "rejected"; updated_at: string; checked_at: string | null };
 type Tab = "queue" | "off" | "verified" | "rejected";
@@ -122,6 +123,8 @@ export default function AdminFoodPage() {
 
 function ProductCard({ row, onAct }: { row: Row; onAct: (barcode: string, status: Row["status"], fix?: Partial<Product>) => Promise<void> }) {
   const [editing, setEditing] = useState(false);
+  // Человек мог вписать цифры не на 100 г, а на упаковку — тут это поправить.
+  const [base, setBase] = useState<Base>(BASE_100);
   const [busy, setBusy] = useState(false);
   const [f, setF] = useState({
     name: row.name,
@@ -138,6 +141,7 @@ function ProductCard({ row, onAct }: { row: Row; onAct: (barcode: string, status
   };
   // Белки, жиры и углеводы больше 100 г на 100 г или калории сильно не сходятся с БЖУ — подозрительно.
   const est = row.protein * 4 + row.fat * 9 + row.carbs * 4;
+  const gBase = baseGrams(base, f.pack);
   const odd = row.protein + row.fat + row.carbs > 100 || (est > 0 && Math.abs(est - row.kcal) > Math.max(60, row.kcal * 0.3));
   const run = async (status: Row["status"], fix?: Partial<Product>) => {
     setBusy(true);
@@ -182,7 +186,17 @@ function ProductCard({ row, onAct }: { row: Row; onAct: (barcode: string, status
       ) : null}
 
       {editing ? (
-        <div className="mt-3 grid grid-cols-2 gap-2">
+        <div className="mt-3">
+          <PerBasePicker base={base} onChange={setBase} pack={f.pack} />
+          {gBase && gBase !== 100 ? (
+            <p className="mb-2 text-[0.75rem] tabular-nums" style={{ color: "var(--accent)" }}>
+              Сохранится на 100 г: {Math.round(per100(n(f.kcal), gBase))} ккал · Б {per100(n(f.protein), gBase)} · Ж {per100(n(f.fat), gBase)} · У {per100(n(f.carbs), gBase)}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+      {editing ? (
+        <div className="mt-1 grid grid-cols-2 gap-2">
           {field("name", "Название", true)}
           {field("brand", "Марка")}
           {field("pack", "Упаковка, г")}
@@ -200,9 +214,17 @@ function ProductCard({ row, onAct }: { row: Row; onAct: (barcode: string, status
               Отмена
             </button>
             <button
-              disabled={busy || !f.name.trim()}
+              disabled={busy || !f.name.trim() || !gBase || per100(n(f.kcal), gBase) > 950}
               onClick={() =>
-                void run("verified", { name: f.name.trim(), brand: f.brand.trim() || null, kcal: Math.round(n(f.kcal)), protein: n(f.protein), fat: n(f.fat), carbs: n(f.carbs), pack_grams: n(f.pack) || null })
+                void run("verified", {
+                  name: f.name.trim(),
+                  brand: f.brand.trim() || null,
+                  kcal: Math.round(per100(n(f.kcal), gBase)),
+                  protein: per100(n(f.protein), gBase),
+                  fat: per100(n(f.fat), gBase),
+                  carbs: per100(n(f.carbs), gBase),
+                  pack_grams: n(f.pack) || null,
+                })
               }
               className="flex-1 rounded-xl py-2 text-[0.8125rem] font-semibold text-white disabled:opacity-50"
               style={{ background: "#22c55e" }}

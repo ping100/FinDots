@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Icon } from "@/lib/icons";
 import { Button, inputClass, inputStyle } from "@/components/ui";
 import type { DraftItem, Product } from "@/lib/food/types";
+import { BASE_100, PerBasePicker, baseGrams, per100, type Base } from "./PerBase";
 
 type Phase = "scan" | "look" | "found" | "unknown" | "form" | "reading";
 
@@ -210,6 +211,9 @@ export function BarcodeFlow({ onItem, onBack }: { onItem: (item: DraftItem) => v
   const [grams, setGrams] = useState("100");
   const [problem, setProblem] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", brand: "", kcal: "", protein: "", fat: "", carbs: "", pack: "" });
+  // На сколько грамм вписаны цифры (с этикетки нейросеть уже пересчитала на 100 г).
+  const [base, setBase] = useState<Base>(BASE_100);
+  const g = baseGrams(base, form.pack);
   const [fromLabel, setFromLabel] = useState(false);
   const [saving, setSaving] = useState(false);
   const [existed, setExisted] = useState(false);
@@ -246,6 +250,7 @@ export function BarcodeFlow({ onItem, onBack }: { onItem: (item: DraftItem) => v
       const p = data.product;
       setForm({ name: p.name, brand: p.brand ?? "", kcal: String(p.kcal), protein: String(p.protein), fat: String(p.fat), carbs: String(p.carbs), pack: p.pack_grams ? String(p.pack_grams) : "" });
       setFromLabel(true);
+      setBase(BASE_100);
       setPhase("form");
     } catch (e) {
       setProblem(e instanceof Error ? e.message : String(e));
@@ -259,10 +264,10 @@ export function BarcodeFlow({ onItem, onBack }: { onItem: (item: DraftItem) => v
       barcode: code,
       name: form.name.trim(),
       brand: form.brand.trim() || null,
-      kcal: num(form.kcal),
-      protein: num(form.protein),
-      fat: num(form.fat),
-      carbs: num(form.carbs),
+      kcal: Math.round(per100(num(form.kcal), g)),
+      protein: per100(num(form.protein), g),
+      fat: per100(num(form.fat), g),
+      carbs: per100(num(form.carbs), g),
       pack_grams: num(form.pack) || null,
       source: fromLabel ? "label" : "user",
     };
@@ -397,6 +402,7 @@ export function BarcodeFlow({ onItem, onBack }: { onItem: (item: DraftItem) => v
             variant="ghost"
             onClick={() => {
               setFromLabel(false);
+              setBase(BASE_100);
               setPhase("form");
             }}
           >
@@ -428,8 +434,9 @@ export function BarcodeFlow({ onItem, onBack }: { onItem: (item: DraftItem) => v
     <div className="pb-3">
       {Problem}
       <p className="mb-2 text-[0.8125rem] leading-snug" style={{ color: "var(--muted)" }}>
-        {fromLabel ? "Проверьте, всё ли прочиталось верно. Значения на 100 г" : "Перепишите с упаковки. Значения на 100 г"}
+        {fromLabel ? "Проверьте, всё ли прочиталось верно. Нейросеть уже пересчитала на 100 г" : "Перепишите цифры с упаковки как есть"}
       </p>
+      <PerBasePicker base={base} onChange={setBase} pack={form.pack} />
       <div className="mb-3 grid grid-cols-2 gap-2">
         {field("name", "Название", true)}
         {field("brand", "Марка")}
@@ -439,11 +446,16 @@ export function BarcodeFlow({ onItem, onBack }: { onItem: (item: DraftItem) => v
         {field("fat", "Жиры, г")}
         {field("carbs", "Углеводы, г")}
       </div>
+      {g && g !== 100 && num(form.kcal) > 0 ? (
+        <p className="-mt-1 mb-3 rounded-2xl px-3 py-2 text-[0.75rem] tabular-nums" style={{ background: "var(--surface-2)" }}>
+          На 100 г получится: <b>{Math.round(per100(num(form.kcal), g))} ккал</b> · Б {fmt(per100(num(form.protein), g))} · Ж {fmt(per100(num(form.fat), g))} · У {fmt(per100(num(form.carbs), g))}
+        </p>
+      ) : null}
       <div className="flex gap-2">
         <Button variant="ghost" className="!w-auto shrink-0 px-5" onClick={() => setPhase("unknown")}>
           Назад
         </Button>
-        <Button disabled={!form.name.trim() || !(num(form.kcal) > 0) || saving} onClick={() => void saveProduct()}>
+        <Button disabled={!form.name.trim() || !(num(form.kcal) > 0) || !g || per100(num(form.kcal), g) > 950 || saving} onClick={() => void saveProduct()}>
           {saving ? "Сохраняю…" : "Сохранить продукт"}
         </Button>
       </div>

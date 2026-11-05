@@ -1,5 +1,6 @@
 "use client";
 
+import { today } from "@/lib/tasks/dates";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Icon } from "@/lib/icons";
 import { formatMoney, parseAmount, symbolOf } from "@/lib/money";
@@ -71,7 +72,9 @@ export function AmountSheet({
   const [raw, setRaw] = useState("");
   const [note, setNote] = useState("");
   const [fee, setFee] = useState("");
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  // Местная дата, не UTC: иначе с полуночи до утра (у нас UTC+5) трата
+  // записывалась бы во вчерашний день.
+  const [date, setDate] = useState(() => today());
   const [optionId, setOptionId] = useState<string | undefined>(undefined);
   const [subcategoryId, setSubcategoryId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -95,7 +98,7 @@ export function AmountSheet({
     setRaw(from != null && from > 0 ? trimZeros(from) : "");
     setNote("");
     setFee("");
-    setDate(new Date().toISOString().slice(0, 10));
+    setDate(today());
     setOptionId(firstOption);
     setSubcategoryId(null);
     setAdding(false);

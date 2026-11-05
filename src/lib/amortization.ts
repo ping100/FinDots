@@ -1,3 +1,4 @@
+import { toISODate } from "@/lib/tasks/dates";
 import type { Wallet } from "./types";
 
 export interface AmortizationRow {
@@ -56,7 +57,8 @@ export function buildSchedule(wallet: Wallet, remaining: number): AmortizationRo
     balance = Math.max(0, balance - principal);
 
     const date = new Date(today.getFullYear(), today.getMonth() + i, day);
-    rows.push({ n: i, date: date.toISOString().slice(0, 10), payment: paid, interest, principal, balance });
+    // Местная дата: toISOString() в UTC+5 давал бы предыдущий день.
+    rows.push({ n: i, date: toISODate(date), payment: paid, interest, principal, balance });
   }
 
   return rows;

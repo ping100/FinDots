@@ -8,6 +8,7 @@ import { formatMoney, monthLabel, monthRange, parseAmount } from "@/lib/money";
 import type { Category, Transaction, TxType, Wallet } from "@/lib/types";
 import { useStore } from "@/components/DataProvider";
 import { Button, Field, Sheet, inputClass, inputStyle } from "@/components/ui";
+import { toISODate } from "@/lib/tasks/dates";
 
 const TYPE_LABEL: Record<TxType, string> = {
   income: "Доход",
@@ -82,7 +83,8 @@ export default function OperationsPage() {
 
     const byDay = new Map<string, Transaction[]>();
     for (const t of visible) {
-      const day = t.occurred_at.slice(0, 10);
+      // День — местный, не UTC: трата в 01:55 по Алматы — это уже сегодня.
+      const day = toISODate(new Date(t.occurred_at));
       byDay.set(day, [...(byDay.get(day) ?? []), t]);
     }
     return {
@@ -157,7 +159,7 @@ export default function OperationsPage() {
       {groups.map(([day, items]) => (
         <section key={day} className="mb-4">
           <h2 className="mb-1.5 px-1 text-xs" style={{ color: "var(--muted)" }}>
-            {new Date(day).toLocaleDateString("ru-RU", {
+            {new Date(`${day}T12:00:00`).toLocaleDateString("ru-RU", {
               day: "numeric",
               month: "long",
               weekday: "short",
@@ -202,8 +204,10 @@ export default function OperationsPage() {
       <Link
         href="/money"
         aria-label="Добавить операцию"
-        className="fixed bottom-24 right-5 flex h-14 w-14 items-center justify-center rounded-full text-white"
-        style={{ background: "var(--accent)", boxShadow: "0 6px 20px rgba(0,0,0,0.22)" }}
+        className="fixed right-5 z-30 flex h-14 w-14 items-center justify-center rounded-full text-white"
+        // Над нижней панелью с учётом домашней полоски iPhone: раньше bottom-24
+        // без безопасной зоны, и кнопка налезала на панель.
+        style={{ bottom: "calc(env(safe-area-inset-bottom) + 92px)", background: "var(--accent)", boxShadow: "0 6px 20px rgba(0,0,0,0.22)" }}
       >
         <Icon name="plus" size={26} />
       </Link>
@@ -277,7 +281,7 @@ function EditSheet({
     setLoadedId(transaction.id);
     setAmount(String(transaction.amount));
     setNote(transaction.note ?? "");
-    setDate(transaction.occurred_at.slice(0, 10));
+    setDate(toISODate(new Date(transaction.occurred_at)));
     setCategoryId(transaction.category_id);
     setSubcategoryId(transaction.subcategory_id);
     setWalletId(transaction.wallet_id);
@@ -305,7 +309,12 @@ function EditSheet({
       await onSave(transaction.id, {
         amount: value,
         note: note || null,
-        occurred_at: new Date(date + "T12:00:00").toISOString(),
+        // Дату не меняли — время операции остаётся прежним; поменяли — переносим
+        // на новый день с тем же временем.
+        occurred_at:
+          date === toISODate(new Date(transaction.occurred_at))
+            ? transaction.occurred_at
+            : new Date(`${date}T${new Date(transaction.occurred_at).toTimeString().slice(0, 8)}`).toISOString(),
         ...(moveable
           ? {
               category_id: categoryId,

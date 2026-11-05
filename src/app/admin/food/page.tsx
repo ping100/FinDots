@@ -10,6 +10,8 @@ import { Sheet, inputClass, inputStyle } from "@/components/ui";
 import { FoodPic } from "@/components/food/FoodPic";
 import { UnitToggle } from "@/components/food/UnitToggle";
 import { guessUnit, ul, unitOf, type Unit } from "@/lib/food/units";
+import { per100Of } from "@/lib/food/suggest";
+import type { FoodEntry } from "@/lib/food/types";
 import { SOURCE_LABEL, findImages, imageLink, removeImage, saveImage, translate, type Candidate } from "@/lib/food/images";
 import type { Product } from "@/lib/food/types";
 import { BASE_100, PerBasePicker, baseGrams, per100, type Base } from "@/components/food/PerBase";
@@ -48,6 +50,7 @@ export default function AdminFoodPage() {
   const [busy, setBusy] = useState(false);
   const [q, setQ] = useState("");
   const [adding, setAdding] = useState(false);
+  const [mine, setMine] = useState(false);
   const [picking, setPicking] = useState<Row | null>(null);
   const [stocksOpen, setStocksOpen] = useState(false);
   const stocks = useStocks();
@@ -168,13 +171,16 @@ export default function AdminFoodPage() {
         ))}
       </div>
 
-      <div className="mb-3 flex gap-2">
-        <label className="flex min-w-0 flex-1 items-center gap-2 rounded-xl px-3" style={{ background: "var(--surface)" }}>
-          <Icon name="search" size={15} style={{ color: "var(--muted)" }} />
-          <input className="min-w-0 flex-1 bg-transparent py-2 text-[0.875rem] outline-none" placeholder="Поиск: название, марка, код" value={q} onChange={(e) => setQ(e.target.value)} />
-        </label>
-        <button onClick={() => setAdding(true)} className="flex shrink-0 items-center gap-1 rounded-xl px-3 text-[0.8125rem] font-semibold text-white" style={{ background: "var(--accent)" }}>
-          <Icon name="plus" size={14} /> Продукт
+      <label className="mb-2 flex items-center gap-2 rounded-xl px-3" style={{ background: "var(--surface)" }}>
+        <Icon name="search" size={15} style={{ color: "var(--muted)" }} />
+        <input className="min-w-0 flex-1 bg-transparent py-2 text-[0.875rem] outline-none" placeholder="Поиск: название, марка, код" value={q} onChange={(e) => setQ(e.target.value)} />
+      </label>
+      <div className="mb-3 grid grid-cols-2 gap-2">
+        <button onClick={() => setAdding(true)} className="flex items-center justify-center gap-1 rounded-xl py-2 text-[0.8125rem] font-semibold text-white" style={{ background: "var(--accent)" }}>
+          <Icon name="plus" size={14} /> Новый продукт
+        </button>
+        <button onClick={() => setMine(true)} className="flex items-center justify-center gap-1 rounded-xl py-2 text-[0.8125rem] font-semibold" style={{ background: "var(--surface)", color: "var(--accent)" }}>
+          🍽️ Из моих блюд
         </button>
       </div>
 
@@ -234,6 +240,7 @@ export default function AdminFoodPage() {
           if (tab === "noimage") void load();
         }}
       />
+      <MyDishes open={mine} onClose={() => setMine(false)} onAdded={() => void load()} />
       <NewProduct
         open={adding}
         onClose={() => setAdding(false)}
@@ -871,6 +878,118 @@ function StocksSheet({ open, onClose, keys, onChanged }: { open: boolean; onClos
             );
           })}
         </div>
+      </div>
+    </Sheet>
+  );
+}
+
+/**
+ * Свои блюда (записанные словами, фото или вручную) → в общую базу,
+ * сразу проверенными. Значения пересчитываются на 100 г по записанному весу.
+ */
+function MyDishes({ open, onClose, onAdded }: { open: boolean; onClose: () => void; onAdded: () => void }) {
+  type Dish = { e: FoodEntry; inBase: boolean };
+  const [list, setList] = useState<Dish[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [done, setDone] = useState<Set<string>>(new Set());
+  const [problem, setProblem] = useState<string | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    setList(null);
+    setDone(new Set());
+    setProblem(null);
+    void (async () => {
+      const db = createClient();
+      const [mineRes, base] = await Promise.all([
+        db.from("food_entries").select("*").order("created_at", { ascending: false }).limit(1500),
+        db.from("food_products").select("name, brand").neq("status", "rejected").limit(5000),
+      ]);
+      if (mineRes.error) return setProblem(mineRes.error.message);
+      // И «Название», и «Название, Марка» — так записываются блюда из продуктов по штрихкоду.
+      const names = new Set(((base.data ?? []) as { name: string; brand: string | null }[]).flatMap((x) => [nrm(x.name), nrm(`${x.name}, ${x.brand ?? ""}`)]));
+      const seen = new Set<string>();
+      const out: Dish[] = [];
+      for (const e of (mineRes.data ?? []) as FoodEntry[]) {
+        const key = nrm(e.name.trim());
+        if (seen.has(key) || !per100Of(e)) continue;
+        seen.add(key);
+        out.push({ e, inBase: names.has(key) });
+      }
+      // Чего ещё нет в базе — сверху.
+      setList(out.sort((a, b) => Number(a.inBase) - Number(b.inBase)));
+    })();
+  }, [open]);
+
+  const add = async (e: FoodEntry) => {
+    const p = per100Of(e)!;
+    setBusy(e.id);
+    setProblem(null);
+    const db = createClient();
+    const { data, error } = await db.rpc("admin_food_product_create", {
+      p_barcode: null,
+      p_name: e.name.trim(),
+      p_brand: null,
+      p_kcal: p.kcal,
+      p_protein: p.protein,
+      p_fat: p.fat,
+      p_carbs: p.carbs,
+      p_pack_grams: Math.round(Number(e.grams)),
+    });
+    if (!error) await db.rpc("admin_food_product_unit", { p_barcode: data as string, p_unit: unitOf(e) });
+    setBusy(null);
+    if (error) return setProblem(error.message);
+    setDone((s) => new Set(s).add(e.id));
+    onAdded();
+  };
+
+  return (
+    <Sheet open={open} title="Из моих блюд" onClose={onClose}>
+      <div className="pb-4">
+        <p className="mb-3 text-[0.8125rem] leading-snug" style={{ color: "var(--muted)" }}>
+          То, что вы записывали словами, по фото или вручную. Нажмите плюсик, и блюдо попадёт в общую базу сразу проверенным. Калории пересчитаются на 100 г по записанному весу, а сам вес станет порцией.
+        </p>
+        {problem ? <Problem text={problem} /> : null}
+        {list === null ? (
+          <Loader />
+        ) : !list.length ? (
+          <p className="py-8 text-center text-[0.8125rem]" style={{ color: "var(--muted)" }}>
+            Пока нет блюд с указанным весом
+          </p>
+        ) : (
+          <ul className="space-y-1">
+            {list.map(({ e, inBase }) => {
+              const p = per100Of(e)!;
+              const u = ul(unitOf(e));
+              const added = done.has(e.id);
+              return (
+                <li key={e.id} className="flex items-center gap-3 py-1.5">
+                  <FoodPic name={e.name} size={40} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[0.875rem] font-medium">{e.name}</p>
+                    <p className="text-[0.6875rem] tabular-nums" style={{ color: "var(--muted)" }}>
+                      {p.kcal} ккал на 100 {u} · порция {Math.round(Number(e.grams))} {u}
+                    </p>
+                  </div>
+                  {inBase || added ? (
+                    <span className="shrink-0 rounded-full px-2.5 py-1 text-[0.6875rem] font-semibold" style={{ background: "color-mix(in srgb, #22c55e 14%, transparent)", color: "#16a34a" }}>
+                      {added ? "Добавлено" : "Уже в базе"}
+                    </span>
+                  ) : (
+                    <button
+                      disabled={!!busy}
+                      onClick={() => void add(e)}
+                      aria-label={`В базу «${e.name}»`}
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white disabled:opacity-50"
+                      style={{ background: "var(--accent)" }}
+                    >
+                      {busy === e.id ? "…" : <Icon name="plus" size={16} />}
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
     </Sheet>
   );

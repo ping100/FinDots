@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { UnitToggle } from "@/components/food/UnitToggle";
 import { ul, unitOf, type Unit } from "@/lib/food/units";
+import { per100Of, suggestEntry } from "@/lib/food/suggest";
 import Link from "next/link";
 import { Icon } from "@/lib/icons";
 import { Button, Sheet } from "@/components/ui";
@@ -272,6 +273,17 @@ function EntrySheet({ entry, onClose }: { entry: FoodEntry | null; onClose: () =
     onClose();
     await updateEntry(entry.id, patch);
   };
+  // В общую базу. Если продукт с таким названием там уже есть, дубль не создастся.
+  const canShare = !!per100Of(entry);
+  const share = async () => {
+    onClose();
+    try {
+      const r = await suggestEntry(entry);
+      toast(r === "exists" ? "Такой продукт уже есть в общей базе" : "Спасибо! Отправили на проверку, скоро появится у всех");
+    } catch (e) {
+      toast(navigator.onLine ? (e instanceof Error ? e.message : String(e)) : "Без интернета не получится, попробуйте позже");
+    }
+  };
   const remove = async () => {
     onClose();
     await deleteEntry(entry.id);
@@ -311,6 +323,11 @@ function EntrySheet({ entry, onClose }: { entry: FoodEntry | null; onClose: () =
       </div>
       <div className="space-y-2 pb-3">
         <Button onClick={() => void save()}>Сохранить</Button>
+        {canShare ? (
+          <Button variant="ghost" onClick={() => void share()}>
+            Предложить в общую базу
+          </Button>
+        ) : null}
         <Button variant="ghost" onClick={() => void remove()}>
           <span style={{ color: "var(--danger)" }}>Удалить</span>
         </Button>

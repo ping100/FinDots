@@ -60,6 +60,8 @@ export interface DraftItem {
   name: string;
   grams: number | null;
   unit?: Unit | null;
+  /** Кубики сахара, добавленные к напитку (уже учтены в kcal и carbs). */
+  sugar?: number;
   kcal: number;
   protein: number;
   fat: number;

@@ -8,6 +8,7 @@ import { MEALS, type DraftItem, type Meal, type Product, type Source } from "@/l
 import { useFood } from "./DataProvider";
 import { BarcodeFlow, itemFrom } from "./Barcode";
 import { UnitToggle } from "./UnitToggle";
+import { CUBE, canSweeten, sugarName, withSugar } from "@/lib/food/sugar";
 import { guessUnit, ul, unitOf, type Unit } from "@/lib/food/units";
 import { DishRow, FoodSearch, ProductRow, norm, ownDishes, portion, usePics, useProducts } from "./Search";
 
@@ -146,7 +147,8 @@ export function AddFood({ open, day, meal: startMeal, onClose, onSaved }: { open
   }, [items, entries, day, meal]);
 
   const save = async () => {
-    const list = items.filter((x) => x.name.trim());
+    // Сахар к напитку — в название: «Чай черный с сахаром (2 куб.)».
+    const list = items.filter((x) => x.name.trim()).map((x) => ({ ...x, name: sugarName(x) }));
     if (!list.length || saving) return;
     if (dup && !dupOk) {
       setDupOk(true);
@@ -518,7 +520,8 @@ function ItemRow({ item, onChange, onRemove }: { item: DraftItem; onChange: (it:
             onChange={(e) => setGrams(e.target.value)}
             onBlur={() => {
               const g = num(grams);
-              if (g > 0 && g !== item.grams) onChange(scaleItem(item, g));
+              // Сахар не зависит от объёма: пересчитываем напиток без него и добавляем обратно.
+              if (g > 0 && g !== item.grams) onChange(withSugar(scaleItem(withSugar(item, 0), g), item.sugar ?? 0));
             }}
             aria-label={unitOf(item) === "ml" ? "Объём, мл" : "Вес, г"}
           />
@@ -539,6 +542,34 @@ function ItemRow({ item, onChange, onRemove }: { item: DraftItem; onChange: (it:
           Б {fmt(item.protein)} · Ж {fmt(item.fat)} · У {fmt(item.carbs)}
         </span>
       </div>
+      {canSweeten(item.name) ? (
+        <div className="mt-2 flex items-center gap-2 text-[0.8125rem]">
+          <span>🧊 Сахар</span>
+          <span className="text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+            {item.sugar ? `+${item.sugar * CUBE.kcal} ккал` : "кубик или ложка ≈ 5 г"}
+          </span>
+          <span className="ml-auto flex items-center gap-1.5">
+            <button
+              onClick={() => onChange(withSugar(item, Math.max(0, (item.sugar ?? 0) - 1)))}
+              disabled={!item.sugar}
+              aria-label="Меньше сахара"
+              className="flex h-7 w-7 items-center justify-center rounded-full text-base leading-none disabled:opacity-40"
+              style={{ background: "var(--surface)" }}
+            >
+              −
+            </button>
+            <span className="w-5 text-center font-semibold tabular-nums">{item.sugar ?? 0}</span>
+            <button
+              onClick={() => onChange(withSugar(item, Math.min(20, (item.sugar ?? 0) + 1)))}
+              aria-label="Больше сахара"
+              className="flex h-7 w-7 items-center justify-center rounded-full text-base leading-none"
+              style={{ background: "var(--surface)", color: "var(--accent)" }}
+            >
+              +
+            </button>
+          </span>
+        </div>
+      ) : null}
     </li>
   );
 }

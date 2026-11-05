@@ -46,15 +46,17 @@ export function ownDishes(entries: FoodEntry[], meal?: Meal): Dish[] {
 /** Порция продукта по умолчанию: упаковка, если она не больше 300 г, иначе 100 г. */
 export const portion = (p: Product) => defaultPortion(p);
 
-// Общая база продуктов: грузим один раз за сессию, проверенные первыми.
+// Общая база продуктов. Прошлый список показываем сразу, а свежий подгружаем
+// при каждом открытии окна: приложение на телефоне может жить днями, и новые
+// продукты (одобренные, добавленные) иначе не появлялись бы.
 let cache: Product[] | null = null;
 export function useProducts(enabled: boolean) {
   const [list, setList] = useState<Product[] | null>(cache);
   const [offline, setOffline] = useState(false);
   useEffect(() => {
-    if (!enabled || cache) return;
+    if (!enabled) return;
     if (!navigator.onLine) {
-      setOffline(true);
+      setOffline(!cache);
       return;
     }
     let alive = true;
@@ -65,11 +67,11 @@ export function useProducts(enabled: boolean) {
         .neq("status", "rejected")
         .order("status", { ascending: false })
         .order("name")
-        .limit(400);
+        .limit(500);
       if (!alive) return;
       if (data) cache = data as Product[];
-      setList((data as Product[] | null) ?? []);
-      setOffline(!data && !navigator.onLine);
+      setList((data as Product[] | null) ?? cache ?? []);
+      setOffline(!data && !cache && !navigator.onLine);
     })();
     return () => {
       alive = false;

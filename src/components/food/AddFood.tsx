@@ -315,6 +315,10 @@ export function AddFood({ open, day, meal: startMeal, onClose, onSaved }: { open
               <Empty text={offline ? "Без интернета список продуктов недоступен" : "Загружаю продукты…"} />
             ) : products.length ? (
               <>
+                <p className="mt-1.5 px-1 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+                  Общая база Dots · {products.length} {products.length % 10 === 1 && products.length % 100 !== 11 ? "продукт" : products.length % 10 >= 2 && products.length % 10 <= 4 && (products.length % 100 < 12 || products.length % 100 > 14) ? "продукта" : "продуктов"}
+                  <span style={{ color: "#16a34a" }}> · ✓ проверено</span>
+                </p>
                 <ul>
                   {products.slice(0, shown).map((p) => (
                     <ProductRow

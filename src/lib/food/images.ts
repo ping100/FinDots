@@ -55,11 +55,30 @@ async function square(blob: Blob): Promise<Blob> {
   }
 }
 
-/** Сохранить картинку продукта: с найденной ссылки или своё фото. Возвращает адрес. */
-export async function saveImage(barcode: string, from: string | File): Promise<string> {
+/**
+ * Ссылка, скопированная из поиска картинок, часто ведёт не на саму картинку,
+ * а на страницу Google или Яндекса с адресом картинки внутри — достаём его.
+ */
+export function imageLink(text: string): string | null {
+  const t = text.trim();
+  if (t.startsWith("data:image/")) return t;
+  let u: URL;
+  try {
+    u = new URL(t);
+  } catch {
+    return null;
+  }
+  const inner = u.searchParams.get("imgurl") ?? u.searchParams.get("img_url") ?? u.searchParams.get("mediaurl");
+  if (inner) return imageLink(inner) ?? null;
+  return u.protocol === "https:" || u.protocol === "http:" ? u.href.replace(/^http:/, "https:") : null;
+}
+
+/** Сохранить картинку продукта: с найденной ссылки, вставленной ссылки или своё фото. Возвращает адрес. */
+export async function saveImage(barcode: string, from: string | Blob, any = false): Promise<string> {
   let blob: Blob;
-  if (typeof from === "string") {
-    const res = await fetch(`/api/admin/food-image?img=${encodeURIComponent(from)}`);
+  if (typeof from === "string" && from.startsWith("data:image/")) blob = await (await fetch(from)).blob();
+  else if (typeof from === "string") {
+    const res = await fetch(`/api/admin/food-image?img=${encodeURIComponent(from)}${any ? "&any=1" : ""}`);
     if (!res.ok) throw new Error(((await res.json().catch(() => null)) as { error?: string } | null)?.error ?? "Картинка не загрузилась");
     blob = await res.blob();
   } else blob = from;

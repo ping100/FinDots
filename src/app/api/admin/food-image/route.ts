@@ -20,6 +20,19 @@ const HOSTS = [
   "images.pexels.com",
 ];
 
+/** Только https и только публичные адреса: сервер не должен ходить во внутреннюю сеть. */
+function safeHost(u: URL) {
+  if (u.protocol !== "https:") return false;
+  const h = u.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".internal") || h.endsWith(".local")) return false;
+  if (/^[0-9.]+$/.test(h)) {
+    const [a, b] = h.split(".").map(Number);
+    if (a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127)) return false;
+  }
+  if (h.includes(":")) return false; // IPv6-адреса напрямую не принимаем
+  return true;
+}
+
 export interface Candidate {
   url: string;
   source: "pixabay" | "pexels" | "off" | "openverse" | "wikimedia";
@@ -199,8 +212,27 @@ export async function GET(request: NextRequest) {
     } catch {
       return NextResponse.json({ error: "Плохая ссылка" }, { status: 400 });
     }
-    if (u.protocol !== "https:" || !HOSTS.includes(u.hostname)) return NextResponse.json({ error: "Сайт не разрешён" }, { status: 400 });
-    const res = await fetch(u, { headers: UA, redirect: "follow", signal: AbortSignal.timeout(12000) }).catch(() => null);
+    // Найденное нами — с известных сайтов; ссылку, вставленную админом, — с любого
+    // открытого сайта, но не с внутренних адресов (localhost, 10.x, 192.168.x…).
+    const any = sp.get("any") === "1";
+    if (!safeHost(u) || (!any && !HOSTS.includes(u.hostname))) return NextResponse.json({ error: "Сайт не разрешён" }, { status: 400 });
+    let res: Response | null = null;
+    for (let hop = 0; hop < 4; hop++) {
+      res = await fetch(u, {
+        headers: { ...UA, Accept: "image/avif,image/webp,image/*,*/*;q=0.8", Referer: `${u.protocol}//${u.hostname}/` },
+        redirect: "manual",
+        signal: AbortSignal.timeout(12000),
+      }).catch(() => null);
+      const next = res && res.status >= 300 && res.status < 400 ? res.headers.get("location") : null;
+      if (!next) break;
+      try {
+        u = new URL(next, u);
+      } catch {
+        res = null;
+        break;
+      }
+      if (!safeHost(u)) return NextResponse.json({ error: "Сайт не разрешён" }, { status: 400 });
+    }
     const type = res?.headers.get("content-type") ?? "";
     if (!res?.ok || !type.startsWith("image/")) return NextResponse.json({ error: "Картинка не загрузилась" }, { status: 502 });
     const buf = await res.arrayBuffer();

@@ -8,7 +8,7 @@ import { Denied, Problem } from "@/components/admin/shared";
 import { AdminHeader } from "@/components/admin/Tools";
 import { Sheet, inputClass, inputStyle } from "@/components/ui";
 import { FoodPic } from "@/components/food/FoodPic";
-import { SOURCE_LABEL, findImages, removeImage, saveImage, translate, type Candidate } from "@/lib/food/images";
+import { SOURCE_LABEL, findImages, imageLink, removeImage, saveImage, translate, type Candidate } from "@/lib/food/images";
 import type { Product } from "@/lib/food/types";
 import { BASE_100, PerBasePicker, baseGrams, per100, type Base } from "@/components/food/PerBase";
 
@@ -388,6 +388,34 @@ function ProductCard({ row, onAct, onPicture }: { row: Row; onAct: (barcode: str
 function ImagePicker({ row, onClose, onSaved, onStocks }: { row: Row | null; onClose: () => void; onSaved: (url: string | null) => void; onStocks: () => void }) {
   const [query, setQuery] = useState("");
   const [stock, setStock] = useState(true);
+  const [link, setLink] = useState("");
+
+  // «Вставить»: ссылка из поля, иначе то, что скопировали — картинка или ссылка.
+  const paste = async () => {
+    setProblem(null);
+    if (link.trim()) {
+      const u = imageLink(link);
+      if (!u) return setProblem("Это не похоже на ссылку на картинку");
+      return void pick(u, true, "web");
+    }
+    try {
+      const items = (await navigator.clipboard?.read?.()) ?? [];
+      for (const it of items) {
+        const type = it.types.find((t) => t.startsWith("image/"));
+        if (type) return void pick(await it.getType(type), true, "web");
+      }
+    } catch {
+      // Браузер не дал прочитать картинку — попробуем текст.
+    }
+    try {
+      const text = (await navigator.clipboard?.readText?.()) ?? "";
+      const u = imageLink(text);
+      if (u) return void pick(u, true, "web");
+    } catch {
+      // Нет доступа к буферу.
+    }
+    setProblem("Не нашёл скопированную картинку. Нажмите на фото и удерживайте, выберите «Скопировать» или «Скопировать ссылку», либо вставьте ссылку в поле");
+  };
   const [list, setList] = useState<Candidate[] | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
@@ -414,15 +442,16 @@ function ImagePicker({ row, onClose, onSaved, onStocks }: { row: Row | null; onC
   useEffect(() => {
     if (!row) return;
     setSaving(null);
+    setLink("");
     void search(row.name, false);
   }, [row, search]);
 
-  const pick = async (from: string | File) => {
+  const pick = async (from: string | Blob, any = false, mark?: string) => {
     if (!row || saving) return;
-    setSaving(typeof from === "string" ? from : "file");
+    setSaving(mark ?? (typeof from === "string" ? from : "file"));
     setProblem(null);
     try {
-      onSaved(await saveImage(row.barcode, from));
+      onSaved(await saveImage(row.barcode, from, any));
     } catch (e) {
       setProblem(e instanceof Error ? e.message : String(e));
     } finally {
@@ -492,6 +521,44 @@ function ImagePicker({ row, onClose, onSaved, onStocks }: { row: Row | null; onC
               Ничего не нашлось. Попробуйте другой запрос, лучше по-английски, или загрузите своё фото
             </p>
           )}
+          <div className="mt-4 rounded-2xl p-3.5" style={{ background: "var(--surface-2)" }}>
+            <p className="text-[0.875rem] font-semibold">🌐 Найти в интернете самому</p>
+            <p className="mb-2.5 mt-0.5 text-[0.75rem] leading-snug" style={{ color: "var(--muted)" }}>
+              Откройте поиск и выберите фото. Откройте его покрупнее, нажмите и удерживайте, выберите «Скопировать». Вернитесь сюда и нажмите «Вставить».
+            </p>
+            <div className="mb-2 grid grid-cols-2 gap-2">
+              {[
+                { name: "Яндекс Картинки", url: `https://yandex.ru/images/search?text=${encodeURIComponent(`${row.name} ${row.brand ?? ""}`.trim())}` },
+                { name: "Google Картинки", url: `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(`${row.name} ${row.brand ?? ""}`.trim())}` },
+              ].map((x) => (
+                <a key={x.name} href={x.url} target="_blank" rel="noreferrer" className="rounded-xl py-2 text-center text-[0.8125rem] font-medium" style={{ background: "var(--surface)", color: "var(--accent)" }}>
+                  {x.name} ↗
+                </a>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <input
+                className={`${inputClass} !py-2 text-sm`}
+                style={inputStyle}
+                value={link}
+                onChange={(e) => setLink(e.target.value)}
+                placeholder="или вставьте ссылку на фото"
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <button
+                disabled={!!saving}
+                onClick={() => void paste()}
+                className="shrink-0 rounded-xl px-3.5 text-[0.8125rem] font-semibold text-white disabled:opacity-60"
+                style={{ background: "var(--accent)" }}
+              >
+                {saving === "web" ? "Сохраняю…" : "Вставить"}
+              </button>
+            </div>
+            <p className="mt-2 text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
+              У фото из обычного поиска обычно есть автор. Для своих это нормально, но если приложение станет публичным, надёжнее фото с Pixabay и Pexels.
+            </p>
+          </div>
           <input ref={file} type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && void pick(e.target.files[0])} />
           <div className="mt-3 flex gap-2">
             <button onClick={() => file.current?.click()} disabled={!!saving} className="flex-1 rounded-xl py-2.5 text-[0.8125rem] font-medium disabled:opacity-60" style={{ background: "var(--surface-2)" }}>

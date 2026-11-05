@@ -47,6 +47,8 @@ export default function AdminFoodPage() {
   const [q, setQ] = useState("");
   const [adding, setAdding] = useState(false);
   const [picking, setPicking] = useState<Row | null>(null);
+  const [stocksOpen, setStocksOpen] = useState(false);
+  const stocks = useStocks();
   const [auto, setAuto] = useState<{ done: number; total: number; found: number } | null>(null);
   const stopAuto = useRef(false);
 
@@ -140,6 +142,8 @@ export default function AdminFoodPage() {
         Общая база: что люди добавили по штрихкоду и что вы добавили сами. Одобренные у всех помечаются «Проверено Dots», отклонённые пропадают из поиска. Нажмите на картинку, чтобы её поменять. Кто добавил, не хранится.
       </p>
 
+      <StocksLine keys={stocks.keys} onOpen={() => setStocksOpen(true)} />
+
       <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1">
         {TABS.map((t) => (
           <button
@@ -210,7 +214,12 @@ export default function AdminFoodPage() {
         </ul>
       )}
 
+      <StocksSheet open={stocksOpen} onClose={() => setStocksOpen(false)} keys={stocks.keys} onChanged={stocks.reload} />
       <ImagePicker
+        onStocks={() => {
+          setPicking(null);
+          setStocksOpen(true);
+        }}
         row={picking}
         onClose={() => setPicking(null)}
         onSaved={(url) => {
@@ -376,8 +385,9 @@ function ProductCard({ row, onAct, onPicture }: { row: Row; onAct: (barcode: str
 }
 
 /** Выбор картинки: найденные варианты, свой запрос или своё фото. */
-function ImagePicker({ row, onClose, onSaved }: { row: Row | null; onClose: () => void; onSaved: (url: string | null) => void }) {
+function ImagePicker({ row, onClose, onSaved, onStocks }: { row: Row | null; onClose: () => void; onSaved: (url: string | null) => void; onStocks: () => void }) {
   const [query, setQuery] = useState("");
+  const [stock, setStock] = useState(true);
   const [list, setList] = useState<Candidate[] | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
@@ -391,6 +401,7 @@ function ImagePicker({ row, onClose, onSaved }: { row: Row | null; onClose: () =
       try {
         const r = await findImages(q, row.barcode, custom);
         setQuery(r.query);
+        setStock(r.stock);
         setList(r.candidates);
       } catch (e) {
         setProblem(e instanceof Error ? e.message : String(e));
@@ -445,6 +456,11 @@ function ImagePicker({ row, onClose, onSaved }: { row: Row | null; onClose: () =
             </button>
           </form>
           {problem ? <Problem text={problem} /> : null}
+          {!stock ? (
+            <button onClick={onStocks} className="mb-3 w-full rounded-2xl px-3.5 py-2.5 text-left text-[0.75rem] leading-snug" style={{ background: "color-mix(in srgb, var(--accent) 10%, transparent)" }}>
+              ✨ <b>Красивые фото еды</b> появятся после подключения Pixabay или Pexels. Это бесплатно, займёт пару минут. <span style={{ color: "var(--accent)" }}>Подключить →</span>
+            </button>
+          ) : null}
           {list === null ? (
             <Loader />
           ) : list.length ? (
@@ -500,7 +516,7 @@ function ImagePicker({ row, onClose, onSaved }: { row: Row | null; onClose: () =
             ) : null}
           </div>
           <p className="mt-2 text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
-            Картинка сожмётся до 240×240 и сохранится у нас. Свободные фото из Openverse и Wikimedia можно использовать открыто.
+            Картинка сожмётся до 240×240 и сохранится у нас. Фото с Pixabay, Pexels, Openverse и Wikimedia разрешено использовать бесплатно.
           </p>
         </div>
       ) : null}
@@ -609,6 +625,163 @@ function NewProduct({ open, onClose, onCreated }: { open: boolean; onClose: () =
             Сохранится на 100 г: {kcal} ккал · Б {per100(n(f.protein), g)} · Ж {per100(n(f.fat), g)} · У {per100(n(f.carbs), g)}
           </p>
         ) : null}
+      </div>
+    </Sheet>
+  );
+}
+
+type StockKey = { provider: "pixabay" | "pexels"; configured: boolean; hint: string | null };
+
+function useStocks() {
+  const [keys, setKeys] = useState<StockKey[] | null>(null);
+  const reload = useCallback(async () => {
+    const res = await fetch("/api/admin/photo-keys").catch(() => null);
+    const d = res?.ok ? ((await res.json().catch(() => null)) as { keys?: StockKey[] } | null) : null;
+    setKeys(d?.keys ?? []);
+  }, []);
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+  return { keys, reload };
+}
+
+const STOCKS: { id: StockKey["provider"]; name: string; url: string; steps: string[] }[] = [
+  {
+    id: "pixabay",
+    name: "Pixabay",
+    url: "https://pixabay.com/api/docs/",
+    steps: [
+      "Откройте страницу по кнопке ниже и войдите (можно через Google)",
+      "На той же странице найдите раздел «Parameters»: в строке key зелёным написан ваш ключ",
+      "Скопируйте его и вставьте сюда",
+    ],
+  },
+  {
+    id: "pexels",
+    name: "Pexels",
+    url: "https://www.pexels.com/api/",
+    steps: [
+      "Откройте страницу по кнопке ниже, нажмите «Get Started» и войдите (можно через Google)",
+      "Заполните коротко: название Dots, описание «картинки продуктов в приложении учёта калорий»",
+      "Ключ появится сразу, скопируйте его и вставьте сюда",
+    ],
+  },
+];
+
+function StocksLine({ keys, onOpen }: { keys: StockKey[] | null; onOpen: () => void }) {
+  if (!keys) return null;
+  const on = STOCKS.filter((s) => keys.some((k) => k.provider === s.id && k.configured));
+  return on.length ? (
+    <button onClick={onOpen} className="mb-3 flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[0.75rem]" style={{ background: "var(--surface)" }}>
+      <span>✨ Фото для продуктов: {on.map((s) => s.name).join(" и ")}</span>
+      <span className="ml-auto" style={{ color: "var(--accent)" }}>
+        Настроить
+      </span>
+    </button>
+  ) : (
+    <button onClick={onOpen} className="money-card mb-3 w-full rounded-2xl p-3 text-left">
+      <p className="text-[0.875rem] font-semibold">✨ Подключите красивые фото еды</p>
+      <p className="mt-0.5 text-[0.75rem] leading-snug" style={{ color: "var(--muted)" }}>
+        Pixabay и Pexels: бесплатные фотостоки с профессиональными фото продуктов. Нужен бесплатный ключ, это пара минут.
+      </p>
+      <p className="mt-1.5 text-[0.75rem] font-semibold" style={{ color: "var(--accent)" }}>
+        Подключить →
+      </p>
+    </button>
+  );
+}
+
+function StocksSheet({ open, onClose, keys, onChanged }: { open: boolean; onClose: () => void; keys: StockKey[] | null; onChanged: () => Promise<void> }) {
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    setDraft({});
+    setProblem(null);
+    setDone(null);
+  }, [open]);
+  const save = async (provider: string, key: string | null) => {
+    setBusy(provider);
+    setProblem(null);
+    setDone(null);
+    const res = await fetch("/api/admin/photo-keys", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider, key }) }).catch(() => null);
+    const d = (await res?.json().catch(() => null)) as { error?: string } | null;
+    setBusy(null);
+    if (!res?.ok) {
+      setProblem(d?.error ?? "Не получилось сохранить");
+      return;
+    }
+    setDraft((x) => ({ ...x, [provider]: "" }));
+    setDone(key ? "Подключено, теперь в поиске картинок будут фото оттуда" : "Отключено");
+    await onChanged();
+  };
+  return (
+    <Sheet open={open} title="Фото для продуктов" onClose={onClose}>
+      <div className="pb-4">
+        <p className="mb-3 text-[0.8125rem] leading-snug" style={{ color: "var(--muted)" }}>
+          Подключите один или оба. Фото оттуда можно использовать бесплатно и без подписи автора. Ключ хранится зашифрованным, его видит только сервер.
+        </p>
+        {problem ? <Problem text={problem} /> : null}
+        {done ? (
+          <p className="mb-3 rounded-2xl px-3.5 py-2.5 text-[0.8125rem]" style={{ background: "color-mix(in srgb, #22c55e 14%, transparent)", color: "#16a34a" }}>
+            ✓ {done}
+          </p>
+        ) : null}
+        <div className="space-y-3">
+          {STOCKS.map((st) => {
+            const k = keys?.find((x) => x.provider === st.id && x.configured);
+            return (
+              <div key={st.id} className="rounded-2xl p-3.5" style={{ background: "var(--surface-2)" }}>
+                <div className="mb-1.5 flex items-center gap-2">
+                  <p className="text-[0.9375rem] font-semibold">{st.name}</p>
+                  {k ? (
+                    <span className="rounded-full px-2 py-0.5 text-[0.625rem] font-semibold" style={{ background: "color-mix(in srgb, #22c55e 16%, transparent)", color: "#16a34a" }}>
+                      подключён {k.hint}
+                    </span>
+                  ) : null}
+                </div>
+                {!k ? (
+                  <ol className="mb-2.5 list-decimal space-y-0.5 pl-4 text-[0.75rem] leading-snug" style={{ color: "var(--muted)" }}>
+                    {st.steps.map((x) => (
+                      <li key={x}>{x}</li>
+                    ))}
+                  </ol>
+                ) : null}
+                <div className="flex gap-2">
+                  <input
+                    className={`${inputClass} !py-2 text-sm`}
+                    style={inputStyle}
+                    value={draft[st.id] ?? ""}
+                    onChange={(e) => setDraft((x) => ({ ...x, [st.id]: e.target.value }))}
+                    placeholder={k ? "Новый ключ, если нужно заменить" : "Вставьте ключ"}
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                  <button
+                    disabled={!draft[st.id]?.trim() || !!busy}
+                    onClick={() => void save(st.id, draft[st.id].trim())}
+                    className="shrink-0 rounded-xl px-3 text-[0.8125rem] font-semibold text-white disabled:opacity-50"
+                    style={{ background: "var(--accent)" }}
+                  >
+                    {busy === st.id ? "Проверяю…" : "Сохранить"}
+                  </button>
+                </div>
+                <div className="mt-2 flex items-center gap-3 text-[0.75rem]">
+                  <a href={st.url} target="_blank" rel="noreferrer" className="font-medium" style={{ color: "var(--accent)" }}>
+                    {k ? "Открыть" : "Получить ключ"} на {st.name} ↗
+                  </a>
+                  {k ? (
+                    <button disabled={!!busy} onClick={() => void save(st.id, null)} className="ml-auto" style={{ color: "var(--danger)" }}>
+                      Отключить
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </Sheet>
   );

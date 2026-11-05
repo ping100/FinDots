@@ -4,18 +4,24 @@ import { createClient } from "@/lib/supabase/client";
 
 export interface Candidate {
   url: string;
-  source: "off" | "openverse" | "wikimedia";
+  source: "pixabay" | "pexels" | "off" | "openverse" | "wikimedia";
   title: string;
 }
 
-export const SOURCE_LABEL: Record<Candidate["source"], string> = { off: "Open Food Facts", openverse: "Openverse", wikimedia: "Wikimedia" };
+export const SOURCE_LABEL: Record<Candidate["source"], string> = {
+  pixabay: "Pixabay",
+  pexels: "Pexels",
+  off: "Фото упаковки",
+  openverse: "Openverse",
+  wikimedia: "Wikimedia",
+};
 
 /** Варианты картинок для продукта (поиск идёт на сервере). */
-export async function findImages(name: string, code: string, custom = false): Promise<{ query: string; candidates: Candidate[] }> {
+export async function findImages(name: string, code: string, custom = false): Promise<{ query: string; stock: boolean; candidates: Candidate[] }> {
   const res = await fetch(`/api/admin/food-image?q=${encodeURIComponent(name)}&code=${encodeURIComponent(code)}${custom ? "&custom=1" : ""}`);
-  const data = (await res.json().catch(() => null)) as { query?: string; candidates?: Candidate[]; error?: string } | null;
+  const data = (await res.json().catch(() => null)) as { query?: string; stock?: boolean; candidates?: Candidate[]; error?: string } | null;
   if (!res.ok || !data?.candidates) throw new Error(data?.error ?? "Не получилось найти картинки");
-  return { query: data.query ?? name, candidates: data.candidates };
+  return { query: data.query ?? name, stock: !!data.stock, candidates: data.candidates };
 }
 
 /** Названия по-английски одним запросом (для автоподбора). */

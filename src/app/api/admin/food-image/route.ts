@@ -9,11 +9,20 @@ export const maxDuration = 30;
 const UA = { "User-Agent": "Dots/1.0 (dotsapp.vercel.app)" };
 
 /** Откуда можно брать картинки через наш сервер (у них нет CORS, а нам нужно сжать). */
-const HOSTS = ["images.openfoodfacts.org", "static.openfoodfacts.org", "api.openverse.org", "upload.wikimedia.org", "thumb.wikimedia.org"];
+const HOSTS = [
+  "images.openfoodfacts.org",
+  "static.openfoodfacts.org",
+  "api.openverse.org",
+  "upload.wikimedia.org",
+  "thumb.wikimedia.org",
+  "pixabay.com",
+  "cdn.pixabay.com",
+  "images.pexels.com",
+];
 
 export interface Candidate {
   url: string;
-  source: "off" | "openverse" | "wikimedia";
+  source: "pixabay" | "pexels" | "off" | "openverse" | "wikimedia";
   title: string;
 }
 
@@ -79,6 +88,60 @@ function ladder(q: string, alt: string | null): string[] {
   const out = alt ? [...main, ...steps(alt).reverse()] : main;
   return [...new Set(out)];
 }
+
+type Db = Awaited<ReturnType<typeof createClient>>;
+type Keys = { pixabay?: string; pexels?: string };
+
+async function photoKeys(supabase: Db): Promise<Keys> {
+  const { data } = await supabase.rpc("admin_photo_keys_full");
+  const out: Keys = {};
+  for (const r of (data ?? []) as { provider: keyof Keys; key_enc: string }[]) {
+    try {
+      out[r.provider] = decryptApiKey(r.key_enc);
+    } catch {
+      // Ключ не расшифровался (сменили секрет) — как будто его нет.
+    }
+  }
+  return out;
+}
+
+/** Pixabay: фото еды, понимает запросы по-русски. Картинки нужно копировать к себе — так и делаем. */
+async function fromPixabay(key: string, q: string): Promise<Candidate[]> {
+  const ru = /[а-яё]/i.test(q);
+  const url = `https://pixabay.com/api/?key=${encodeURIComponent(key)}&q=${encodeURIComponent(q)}&lang=${ru ? "ru" : "en"}&image_type=photo&safesearch=true&per_page=12&order=popular`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(8000) }).catch(() => null);
+  const d = res?.ok ? ((await res.json().catch(() => null)) as { hits?: { webformatURL?: string; tags?: string }[] } | null) : null;
+  return (d?.hits ?? [])
+    .filter((h) => h.webformatURL?.startsWith("https://pixabay.com/") || h.webformatURL?.startsWith("https://cdn.pixabay.com/"))
+    .map((h) => ({ url: h.webformatURL!, source: "pixabay" as const, title: String(h.tags ?? "").slice(0, 80) }));
+}
+
+/** Pexels: красивые фото, поиск лучше по-английски. */
+async function fromPexels(key: string, q: string): Promise<Candidate[]> {
+  const ru = /[а-яё]/i.test(q);
+  const url = `https://api.pexels.com/v1/search?query=${encodeURIComponent(q)}&per_page=12${ru ? "&locale=ru-RU" : ""}`;
+  const res = await fetch(url, { headers: { Authorization: key }, signal: AbortSignal.timeout(8000) }).catch(() => null);
+  const d = res?.ok ? ((await res.json().catch(() => null)) as { photos?: { src?: { medium?: string }; alt?: string; photographer?: string }[] } | null) : null;
+  return (d?.photos ?? [])
+    .filter((ph) => ph.src?.medium?.startsWith("https://images.pexels.com/"))
+    .map((ph) => ({ url: ph.src!.medium!, source: "pexels" as const, title: `${ph.alt ?? ""}${ph.photographer ? ` · ${ph.photographer}` : ""}`.slice(0, 80) }));
+}
+
+/** Перебрать запросы от точного к общему, пока не наберётся хотя бы min вариантов. */
+async function collect(attempts: string[], find: (q: string) => Promise<Candidate[]>, min: number, seen: Set<string>) {
+  const out: Candidate[] = [];
+  for (const a of attempts.slice(0, 3)) {
+    for (const c of await find(a)) if (!seen.has(c.url)) (seen.add(c.url), out.push(c));
+    if (out.length >= min) break;
+  }
+  return out;
+}
+
+const mix = (a: Candidate[], b: Candidate[]) => {
+  const out: Candidate[] = [];
+  for (let i = 0; i < Math.max(a.length, b.length); i++) for (const c of [a[i], b[i]]) if (c) out.push(c);
+  return out;
+};
 
 async function fromOff(code: string): Promise<Candidate[]> {
   if (!/^[0-9]{8,14}$/.test(code) || /^99[0-9]{12}$/.test(code)) return [];
@@ -154,17 +217,30 @@ export async function GET(request: NextRequest) {
   const q = en ?? name;
   // По длинному названию фотобанки часто ничего не знают («Круассан с
   // куриной грудкой» — пусто, «круассан» — есть). Пробуем короче, пока не найдём.
-  const rest: Candidate[] = [];
+  const keys = await photoKeys(supabase);
   const seen = new Set<string>();
-  for (const attempt of ladder(q, en ? name : null).slice(0, 4)) {
-    const [ov, wm] = await Promise.all([fromOpenverse(attempt), fromWikimedia(attempt)]);
-    // Чередуем источники.
-    for (let i = 0; i < Math.max(ov.length, wm.length); i++) {
-      for (const c of [ov[i], wm[i]]) if (c && !seen.has(c.url)) (seen.add(c.url), rest.push(c));
+  const ru = ladder(custom ? q : name, null);
+  const enSteps = en ? ladder(en, null) : ru;
+  // Сначала красивые фотостоки: Pixabay ищет по-русски, Pexels — по-английски.
+  const [pb, px] = await Promise.all([
+    keys.pixabay ? collect(ru, (a) => fromPixabay(keys.pixabay!, a), 6, seen) : Promise.resolve([]),
+    keys.pexels ? collect(enSteps, (a) => fromPexels(keys.pexels!, a), 6, seen) : Promise.resolve([]),
+  ]);
+  const stock = mix(pb, px);
+  // Мало красивых — добавляем свободные фото из Openverse и Wikimedia.
+  let open: Candidate[] = [];
+  if (stock.length < 6) {
+    for (const attempt of ladder(q, en ? name : null).slice(0, 4)) {
+      const [ov, wm] = await Promise.all([fromOpenverse(attempt), fromWikimedia(attempt)]);
+      open = [...open, ...mix(ov, wm).filter((c) => !seen.has(c.url) && seen.add(c.url))];
+      if (open.length >= 6) break;
     }
-    if (rest.length >= 6) break;
   }
-  return NextResponse.json({ query: q, candidates: [...off, ...rest].slice(0, 18) });
+  return NextResponse.json({
+    query: q,
+    stock: !!(keys.pixabay || keys.pexels),
+    candidates: [...stock.slice(0, 12), ...off, ...open].slice(0, 21),
+  });
 }
 
 /**

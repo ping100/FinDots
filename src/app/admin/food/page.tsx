@@ -79,11 +79,12 @@ export default function AdminFoodPage() {
     void load();
   }, [load]);
 
-  const act = async (barcode: string, status: Row["status"], fix?: Partial<Product>) => {
+  /** Возвращает текст ошибки или null, если всё сохранилось. */
+  const act = async (barcode: string, status: Row["status"], fix?: Partial<Product>): Promise<string | null> => {
     setProblem(null);
     if (fix?.unit) {
       const u = await createClient().rpc("admin_food_product_unit", { p_barcode: barcode, p_unit: fix.unit });
-      if (u.error) return setProblem(u.error.message);
+      if (u.error) return u.error.message;
     }
     const { error } = await createClient().rpc("admin_food_product_set", {
       p_barcode: barcode,
@@ -92,13 +93,11 @@ export default function AdminFoodPage() {
         ? { p_name: fix.name, p_brand: fix.brand ?? "", p_kcal: fix.kcal, p_protein: fix.protein, p_fat: fix.fat, p_carbs: fix.carbs, p_pack_grams: fix.pack_grams }
         : {}),
     });
-    if (error) {
-      setProblem(error.message);
-      return;
-    }
-    // Убираем из списка сразу, счётчики догонят.
-    setRows((prev) => (prev ? prev.filter((r) => r.barcode !== barcode || status === tab) : prev));
+    if (error) return error.message;
+    // Убираем из списка сразу (если ушёл из вкладки), счётчики догонят.
+    if (tab !== "all" && tab !== "noimage") setRows((prev) => (prev ? prev.filter((r) => r.barcode !== barcode || status === tab) : prev));
     void load();
+    return null;
   };
 
   const shown = useMemo(() => {
@@ -256,7 +255,7 @@ export default function AdminFoodPage() {
   );
 }
 
-function ProductCard({ row, onAct, onPicture }: { row: Row; onAct: (barcode: string, status: Row["status"], fix?: Partial<Product>) => Promise<void>; onPicture: () => void }) {
+function ProductCard({ row, onAct, onPicture }: { row: Row; onAct: (barcode: string, status: Row["status"], fix?: Partial<Product>) => Promise<string | null>; onPicture: () => void }) {
   const [editing, setEditing] = useState(false);
   // Человек мог вписать цифры не на 100 г, а на упаковку — тут это поправить.
   const [base, setBase] = useState<Base>(BASE_100);
@@ -293,11 +292,34 @@ function ProductCard({ row, onAct, onPicture }: { row: Row; onAct: (barcode: str
         code = scan.code;
       }
       if (scan?.image && !row.image_url) await saveImage(code, scan.image).catch(() => undefined);
-      await onAct(code, status, fix);
+      const error = await onAct(code, status, fix);
+      if (error) return setScanProblem(error);
       setScan(null);
+      // Сохранилось — закрываем форму, иначе кажется, что ничего не произошло,
+      // а выбор «на всю упаковку» пересчитал бы сохранённое ещё раз.
+      if (fix) {
+        setEditing(false);
+        setBase(BASE_100);
+        setSaved(true);
+      }
     } finally {
       setBusy(false);
     }
+  };
+  const [saved, setSaved] = useState(false);
+  useEffect(() => {
+    if (!saved) return;
+    const t = setTimeout(() => setSaved(false), 2500);
+    return () => clearTimeout(t);
+  }, [saved]);
+  // Открыли «Исправить» — в форме то, что сейчас в базе, на 100 г.
+  const startEdit = () => {
+    setF({ name: row.name, brand: row.brand ?? "", kcal: String(row.kcal), protein: String(row.protein), fat: String(row.fat), carbs: String(row.carbs), pack: row.pack_grams ? String(row.pack_grams) : "" });
+    setBase(BASE_100);
+    setUnit(unitOf(row));
+    setScan(null);
+    setScanProblem(null);
+    setEditing(true);
   };
   const field = (key: keyof typeof f, label: string, wide = false) => (
     <label className={`block ${wide ? "col-span-2" : ""}`}>
@@ -383,6 +405,16 @@ function ProductCard({ row, onAct, onPicture }: { row: Row; onAct: (barcode: str
         </div>
       ) : null}
 
+      {saved ? (
+        <p className="mt-2 text-[0.75rem] font-semibold" style={{ color: "#16a34a" }}>
+          ✓ Сохранено
+        </p>
+      ) : null}
+      {!editing && scanProblem ? (
+        <p className="mt-2 text-[0.75rem]" style={{ color: "var(--danger)" }}>
+          {scanProblem}
+        </p>
+      ) : null}
       <div className="mt-3 flex gap-2">
         {editing ? (
           <>
@@ -416,7 +448,7 @@ function ProductCard({ row, onAct, onPicture }: { row: Row; onAct: (barcode: str
                 <Icon name="check" size={14} /> Одобрить
               </button>
             ) : null}
-            <button disabled={busy} onClick={() => setEditing(true)} className="flex items-center gap-1 rounded-xl px-3 py-2 text-[0.8125rem] disabled:opacity-50" style={{ background: "var(--surface-2)" }}>
+            <button disabled={busy} onClick={startEdit} className="flex items-center gap-1 rounded-xl px-3 py-2 text-[0.8125rem] disabled:opacity-50" style={{ background: "var(--surface-2)" }}>
               <Icon name="edit" size={13} /> Исправить
             </button>
             {row.status !== "rejected" ? (

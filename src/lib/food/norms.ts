@@ -54,3 +54,18 @@ export function scaleItem<T extends { grams: number | null; kcal: number; protei
   const r = (x: number) => Math.round(x * k * 10) / 10;
   return { ...item, grams, kcal: Math.round(item.kcal * k), protein: r(item.protein), fat: r(item.fat), carbs: r(item.carbs) };
 }
+
+/**
+ * Норма с тренировками: сожжённое прибавляется к калориям. Добавка идёт
+ * в основном в углеводы (топливо для тренировок), немного в жиры и белок.
+ */
+export function withBurned(norm: Norm | null, burned: number): Norm | null {
+  if (!norm || !(burned > 0)) return norm;
+  return {
+    ...norm,
+    kcal: norm.kcal + Math.round(burned),
+    protein: norm.protein + Math.round((burned * 0.15) / 4),
+    fat: norm.fat + Math.round((burned * 0.25) / 9),
+    carbs: norm.carbs + Math.round((burned * 0.6) / 4),
+  };
+}

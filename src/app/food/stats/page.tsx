@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useFood } from "@/components/food/DataProvider";
 import { FoodHeader } from "@/components/food/Shell";
+import { useBurnedByDay } from "@/components/food/Workouts";
 import { normFor, totals } from "@/lib/food/norms";
 import { WEEKDAY_HEADS, addDays, dayNumber, shortDay, startOfWeek, today } from "@/lib/tasks/dates";
 
@@ -27,6 +28,10 @@ export default function FoodStats() {
   const avg = logged.length ? totals(logged.map((d) => byDay.get(d)!)) : null;
   const div = Math.max(logged.length, 1);
   const max = Math.max(norm?.kcal ?? 0, ...days.map((d) => byDay.get(d)?.kcal ?? 0), 1) * 1.1;
+  // Норма дня с тренировками: сожжённое прибавляется.
+  const burnedBy = useBurnedByDay();
+  const limitOf = (d: string) => (norm ? norm.kcal + (burnedBy.get(d) ?? 0) : 0);
+  const weekBurned = days.reduce((s, d) => s + (burnedBy.get(d) ?? 0), 0);
 
   // Что ешь чаще всего — за всю историю на телефоне.
   const top = useMemo(() => {
@@ -74,7 +79,7 @@ export default function FoodStats() {
           <div className="absolute inset-0 grid grid-cols-7 items-end gap-2">
             {days.map((d) => {
               const kcal = byDay.get(d)?.kcal ?? 0;
-              const over = norm && kcal > norm.kcal * 1.1;
+              const over = norm && kcal > limitOf(d) * 1.1;
               return (
                 <button key={d} onClick={() => setPicked(picked === d ? null : d)} className="flex h-full flex-col justify-end" aria-label={`${shortDay(d)}: ${fmt(kcal)} ккал`}>
                   <span
@@ -109,10 +114,15 @@ export default function FoodStats() {
         <Stat title="В среднем за день" value={avg ? `${fmt(avg.kcal / div)} ккал` : "—"} hint={logged.length ? `по ${logged.length} дн. с записями` : "на этой неделе пусто"} />
         <Stat
           title="Дней в норме"
-          value={norm ? `${logged.filter((d) => (byDay.get(d)?.kcal ?? 0) <= norm.kcal * 1.1).length} из ${logged.length}` : "—"}
-          hint={norm ? "не больше нормы +10%" : "укажите норму в настройках"}
+          value={norm ? `${logged.filter((d) => (byDay.get(d)?.kcal ?? 0) <= limitOf(d) * 1.1).length} из ${logged.length}` : "—"}
+          hint={norm ? "не больше нормы +10%, с тренировками" : "укажите норму в настройках"}
         />
       </div>
+      {weekBurned > 0 ? (
+        <div className="mt-3">
+          <Stat title="🔥 Сожжено на тренировках" value={`${fmt(weekBurned)} ккал`} hint="за эту неделю, прибавлено к норме" />
+        </div>
+      ) : null}
 
       {avg ? (
         <div className="food-card mt-3 rounded-3xl p-4">

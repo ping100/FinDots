@@ -10,7 +10,8 @@ import { Button, Sheet } from "@/components/ui";
 import { useFood } from "@/components/food/DataProvider";
 import { FoodHeader, useFoodUI } from "@/components/food/Shell";
 import { WaterCard } from "@/components/food/Water";
-import { normFor, scaleItem, totals } from "@/lib/food/norms";
+import { normFor, scaleItem, totals, withBurned } from "@/lib/food/norms";
+import { useBurnedByDay } from "@/components/food/Workouts";
 import { MEALS, type FoodEntry, type Meal } from "@/lib/food/types";
 import { WEEKDAY_HEADS, addDays, dayLabel, dayNumber, startOfWeek, today } from "@/lib/tasks/dates";
 
@@ -20,8 +21,12 @@ export default function FoodToday() {
   const { entries, settings } = useFood();
   const { day, setDay, openAdd } = useFoodUI();
   const [editing, setEditing] = useState<FoodEntry | null>(null);
-  const norm = normFor(settings);
+  const base = normFor(settings);
   const now = today();
+  // Тренировки за день прибавляются к норме.
+  const burnedBy = useBurnedByDay();
+  const burned = burnedBy.get(day) ?? 0;
+  const norm = withBurned(base, burned);
 
   const byDay = useMemo(() => {
     const m = new Map<string, FoodEntry[]>();
@@ -34,10 +39,10 @@ export default function FoodToday() {
   return (
     <div className="mx-auto w-full max-w-md px-4 pb-32">
       <FoodHeader title={day === now ? "Сегодня" : dayLabel(day)} sub="Yumdots" />
-      <WeekStrip day={day} onPick={setDay} byDay={byDay} goal={norm?.kcal ?? null} />
+      <WeekStrip day={day} onPick={setDay} byDay={byDay} goal={base?.kcal ?? null} burnedBy={burnedBy} />
 
       <div className="food-card mt-3 rounded-3xl p-4">
-        <Ring eaten={sum.kcal} goal={norm?.kcal ?? null} />
+        <Ring eaten={sum.kcal} goal={norm?.kcal ?? null} burned={burned} />
         {norm ? (
           <div className="mt-4 grid grid-cols-3 gap-3">
             <Macro label="Белки" value={sum.protein} goal={norm.protein} color="#ef4444" />
@@ -63,6 +68,21 @@ export default function FoodToday() {
       {/* Вода — только за сегодня: стаканы считаются по дням. */}
       {/* Сон — только напоминания в настройках, на главном экране он не нужен. */}
       {day === now ? <WaterCard /> : null}
+
+      <Link href="/food/activity" className="food-card mt-3 flex items-center gap-2.5 rounded-3xl p-3.5 transition active:scale-[0.99]">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-xl" style={{ background: "color-mix(in srgb, #f97316 16%, transparent)" }}>
+          🔥
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[0.9375rem] font-semibold">
+            Активность{burned > 0 ? <span className="tabular-nums" style={{ color: "#f97316" }}> · −{fmt(burned)} ккал</span> : null}
+          </span>
+          <span className="block text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+            {burned > 0 ? "Сожжённое уже прибавлено к норме" : "Тренировка или шаги прибавятся к норме еды"}
+          </span>
+        </span>
+        <Icon name="chevron-right" size={16} className="opacity-40" />
+      </Link>
 
       <div className="mt-3 space-y-3">
         {MEALS.map((m) => {
@@ -121,7 +141,19 @@ export default function FoodToday() {
 }
 
 /** Неделя кружками: под каждым днём точка, если в норме, и красная, если сверх. */
-function WeekStrip({ day, onPick, byDay, goal }: { day: string; onPick: (d: string) => void; byDay: Map<string, FoodEntry[]>; goal: number | null }) {
+function WeekStrip({
+  day,
+  onPick,
+  byDay,
+  goal,
+  burnedBy,
+}: {
+  day: string;
+  onPick: (d: string) => void;
+  byDay: Map<string, FoodEntry[]>;
+  goal: number | null;
+  burnedBy: Map<string, number>;
+}) {
   const [week, setWeek] = useState(startOfWeek(day));
   useEffect(() => setWeek(startOfWeek(day)), [day]);
   const now = today();
@@ -136,7 +168,8 @@ function WeekStrip({ day, onPick, byDay, goal }: { day: string; onPick: (d: stri
           const kcal = totals(byDay.get(d) ?? []).kcal;
           const on = d === day;
           const future = d > now;
-          const dot = kcal > 0 ? (goal && kcal > goal * 1.1 ? "#ef4444" : "#22c55e") : null;
+          const limit = goal ? goal + (burnedBy.get(d) ?? 0) : null;
+          const dot = kcal > 0 ? (limit && kcal > limit * 1.1 ? "#ef4444" : "#22c55e") : null;
           return (
             <button
               key={d}
@@ -167,7 +200,7 @@ function WeekStrip({ day, onPick, byDay, goal }: { day: string; onPick: (d: stri
 }
 
 /** Кольцо: сколько съедено из нормы. Сверх нормы — кольцо краснеет. */
-function Ring({ eaten, goal }: { eaten: number; goal: number | null }) {
+function Ring({ eaten, goal, burned }: { eaten: number; goal: number | null; burned: number }) {
   const size = 176;
   const r = 74;
   const len = 2 * Math.PI * r;
@@ -218,6 +251,11 @@ function Ring({ eaten, goal }: { eaten: number; goal: number | null }) {
       {goal ? (
         <p className="mt-1 text-[0.8125rem] tabular-nums" style={{ color: "var(--muted)" }}>
           Съедено {fmt(eaten)} из {fmt(goal)} ккал
+          {burned > 0 ? (
+            <span className="ml-1 rounded-full px-1.5 py-0.5 text-[0.6875rem] font-semibold" style={{ background: "color-mix(in srgb, #f97316 14%, transparent)", color: "#f97316" }}>
+              🔥 +{fmt(burned)}
+            </span>
+          ) : null}
         </p>
       ) : null}
     </div>

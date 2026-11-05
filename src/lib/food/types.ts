@@ -24,6 +24,22 @@ export interface FoodEntry {
   created_at: string;
 }
 
+/** Тренировка или шаги за день: сожжённое прибавляется к норме еды. */
+export interface Workout {
+  id: string;
+  user_id: string;
+  day: string;
+  /** Вид из KINDS (walk, run…) или steps. */
+  kind: string;
+  minutes: number | null;
+  steps: number | null;
+  kcal: number;
+  /** calc — посчитали по виду и минутам, tracker — вписали с часов, steps — по шагам. */
+  source: "calc" | "tracker" | "steps";
+  note: string | null;
+  created_at: string;
+}
+
 export interface FoodSettings {
   user_id: string;
   sex: "female" | "male" | null;

@@ -8,7 +8,7 @@ import { applyLook } from "@/lib/look";
 import { scaleFactor } from "@/lib/textScale";
 import { addDays, today } from "@/lib/tasks/dates";
 import type { Profile } from "@/lib/types";
-import type { DraftItem, FoodEntry, FoodSettings, Meal, Source } from "@/lib/food/types";
+import type { DraftItem, FoodEntry, FoodSettings, Meal, Source, Workout } from "@/lib/food/types";
 import {
   isNetworkError,
   lastUser,
@@ -28,6 +28,8 @@ export interface FoodStore {
   profile: Profile | null;
   settings: FoodSettings | null;
   entries: FoodEntry[];
+  /** Тренировки и шаги: сожжённое за день прибавляется к норме. */
+  workouts: Workout[];
   /** Изменений, ждущих связи. */
   pendingCount: number;
 
@@ -37,6 +39,10 @@ export interface FoodStore {
   /** Вернуть удалённое (кнопка «Вернуть» во всплывашке). */
   restoreEntry: (entry: FoodEntry) => Promise<void>;
   saveSettings: (patch: Partial<FoodSettings>) => Promise<void>;
+  addWorkout: (w: Omit<Workout, "id" | "user_id" | "created_at">) => Promise<void>;
+  updateWorkout: (id: string, patch: Partial<Workout>) => Promise<void>;
+  deleteWorkout: (id: string) => Promise<void>;
+  restoreWorkout: (w: Workout) => Promise<void>;
   saveProfile: (patch: Partial<Profile>) => Promise<void>;
 }
 
@@ -47,6 +53,8 @@ interface Snapshot {
   profile: Profile | null;
   settings: FoodSettings | null;
   entries: FoodEntry[];
+  /** В старых снимках его нет. */
+  workouts?: Workout[];
 }
 
 const human = (message: string) =>
@@ -56,17 +64,17 @@ const human = (message: string) =>
       ? "Нет доступа к этим данным, попробуйте войти заново"
       : message;
 
-/** Наложить отложенные изменения на список с сервера. */
-function applyOps(list: FoodEntry[], ops: OutOp[]): FoodEntry[] {
+/** Наложить отложенные изменения на список с сервера (еда или тренировки). */
+function applyOps<T extends { id: string }>(list: T[], ops: OutOp[], table = "food_entries"): T[] {
   let out = list;
   for (const op of ops) {
-    if (op.t === "upsert" && op.table === "food_entries") {
-      for (const row of op.rows as unknown as FoodEntry[]) {
+    if (op.t === "upsert" && op.table === table) {
+      for (const row of op.rows as unknown as T[]) {
         out = out.some((e) => e.id === row.id) ? out.map((e) => (e.id === row.id ? { ...e, ...row } : e)) : [...out, row];
       }
-    } else if (op.t === "update" && op.table === "food_entries") {
-      out = out.map((e) => (e.id === op.match.id ? ({ ...e, ...op.patch } as FoodEntry) : e));
-    } else if (op.t === "delete" && op.table === "food_entries") {
+    } else if (op.t === "update" && op.table === table) {
+      out = out.map((e) => (e.id === op.match.id ? ({ ...e, ...op.patch } as T) : e));
+    } else if (op.t === "delete" && op.table === table) {
       out = out.filter((e) => e.id !== op.match.id);
     }
   }
@@ -97,6 +105,7 @@ export function FoodProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [settings, setSettings] = useState<FoodSettings | null>(null);
   const [entries, setEntries] = useState<FoodEntry[]>([]);
+  const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [outbox, setOutbox] = useState<OutOp[]>([]);
   const outboxRef = useRef<OutOp[]>([]);
   outboxRef.current = outbox;
@@ -111,6 +120,17 @@ export function FoodProvider({ children }: { children: ReactNode }) {
         .order("day")
         .order("created_at")
         .limit(5000),
+    [supabase],
+  );
+  const fetchWorkouts = useCallback(
+    () =>
+      supabase()
+        .from("food_workouts")
+        .select("*")
+        .gte("day", addDays(today(), -HISTORY_DAYS))
+        .order("day")
+        .order("created_at")
+        .limit(3000),
     [supabase],
   );
 
@@ -136,6 +156,7 @@ export function FoodProvider({ children }: { children: ReactNode }) {
         setProfile(snap.profile);
         setSettings(settingsFromOps(snap.settings, queued));
         setEntries(applyOps(snap.entries, queued));
+        setWorkouts(applyOps(snap.workouts ?? [], queued, "food_workouts"));
       }
       setReady(true);
       return !!snap;
@@ -144,10 +165,11 @@ export function FoodProvider({ children }: { children: ReactNode }) {
       await fromSnapshot();
       return;
     }
-    const [p, s, e] = await Promise.all([
+    const [p, s, e, w] = await Promise.all([
       supabase().from("profiles").select("*").eq("id", uid).single(),
       supabase().from("food_settings").select("*").eq("user_id", uid).maybeSingle(),
       fetchEntries(),
+      fetchWorkouts(),
     ]);
     const firstError = [p, s, e].find((r) => r.error)?.error;
     if (firstError && isNetworkError(firstError.message) && (await fromSnapshot())) return;
@@ -156,12 +178,15 @@ export function FoodProvider({ children }: { children: ReactNode }) {
     setSettings(settingsFromOps((s.data as FoodSettings | null) ?? null, queued));
     const list = (e.data ?? []) as FoodEntry[];
     setEntries(applyOps(list, queued));
+    // Тренировки не главное: если их не удалось загрузить, еда всё равно работает.
+    const wl = (w.data ?? []) as Workout[];
+    setWorkouts(applyOps(wl, queued, "food_workouts"));
     setReady(true);
     if (!firstError) {
-      snapRef.current = { profile: (p.data as Profile) ?? null, settings: (s.data as FoodSettings | null) ?? null, entries: list };
+      snapRef.current = { profile: (p.data as Profile) ?? null, settings: (s.data as FoodSettings | null) ?? null, entries: list, workouts: wl };
       void writeSnapshot("food", uid, snapRef.current);
     }
-  }, [fetchEntries, supabase]);
+  }, [fetchEntries, fetchWorkouts, supabase]);
 
   useEffect(() => {
     void load();
@@ -173,16 +198,22 @@ export function FoodProvider({ children }: { children: ReactNode }) {
   }, [profile]);
 
   const refresh = useCallback(async () => {
-    const [e, s] = await Promise.all([fetchEntries(), userId ? supabase().from("food_settings").select("*").eq("user_id", userId).maybeSingle() : null]);
+    const [e, s, w] = await Promise.all([
+      fetchEntries(),
+      userId ? supabase().from("food_settings").select("*").eq("user_id", userId).maybeSingle() : null,
+      fetchWorkouts(),
+    ]);
     if (e.error) return;
     const list = (e.data ?? []) as FoodEntry[];
     setEntries(applyOps(list, outboxRef.current));
+    const wl = w.error ? null : ((w.data ?? []) as Workout[]);
+    if (wl) setWorkouts(applyOps(wl, outboxRef.current, "food_workouts"));
     if (s && !s.error) setSettings(settingsFromOps((s.data as FoodSettings | null) ?? null, outboxRef.current));
     if (userId) {
-      snapRef.current = { ...snapRef.current, entries: list, settings: s && !s.error ? ((s.data as FoodSettings | null) ?? null) : snapRef.current.settings };
+      snapRef.current = { ...snapRef.current, entries: list, workouts: wl ?? snapRef.current.workouts, settings: s && !s.error ? ((s.data as FoodSettings | null) ?? null) : snapRef.current.settings };
       void writeSnapshot("food", userId, snapRef.current);
     }
-  }, [fetchEntries, supabase, userId]);
+  }, [fetchEntries, fetchWorkouts, supabase, userId]);
 
   const updateOutbox = useCallback(
     (change: (ops: OutOp[]) => OutOp[]) => {
@@ -309,6 +340,40 @@ export function FoodProvider({ children }: { children: ReactNode }) {
     [settings, userId, write],
   );
 
+  const addWorkout: FoodStore["addWorkout"] = useCallback(
+    async (w) => {
+      if (!userId) return;
+      const row: Workout = { ...w, id: crypto.randomUUID(), user_id: userId, created_at: new Date().toISOString() };
+      setWorkouts((prev) => [...prev, row]);
+      await write([{ t: "upsert", table: "food_workouts", rows: [row as unknown as Record<string, unknown>] }]);
+    },
+    [userId, write],
+  );
+
+  const updateWorkout: FoodStore["updateWorkout"] = useCallback(
+    async (id, patch) => {
+      setWorkouts((prev) => prev.map((w) => (w.id === id ? { ...w, ...patch } : w)));
+      await write([{ t: "update", table: "food_workouts", match: { id }, patch }]);
+    },
+    [write],
+  );
+
+  const deleteWorkout: FoodStore["deleteWorkout"] = useCallback(
+    async (id) => {
+      setWorkouts((prev) => prev.filter((w) => w.id !== id));
+      await write([{ t: "delete", table: "food_workouts", match: { id } }]);
+    },
+    [write],
+  );
+
+  const restoreWorkout: FoodStore["restoreWorkout"] = useCallback(
+    async (w) => {
+      setWorkouts((prev) => (prev.some((x) => x.id === w.id) ? prev : [...prev, w]));
+      await write([{ t: "upsert", table: "food_workouts", rows: [w as unknown as Record<string, unknown>] }]);
+    },
+    [write],
+  );
+
   const saveProfile: FoodStore["saveProfile"] = useCallback(
     async (patch) => {
       if (!userId) return;
@@ -321,10 +386,11 @@ export function FoodProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<FoodStore>(
     () => ({
-      ready, error, userId, profile, settings, entries, pendingCount: outbox.length,
-      addEntries, updateEntry, deleteEntry, restoreEntry, saveSettings, saveProfile,
+      ready, error, userId, profile, settings, entries, workouts, pendingCount: outbox.length,
+      addEntries, updateEntry, deleteEntry, restoreEntry, saveSettings,
+      addWorkout, updateWorkout, deleteWorkout, restoreWorkout, saveProfile,
     }),
-    [ready, error, userId, profile, settings, entries, outbox.length, addEntries, updateEntry, deleteEntry, restoreEntry, saveSettings, saveProfile],
+    [ready, error, userId, profile, settings, entries, workouts, outbox.length, addEntries, updateEntry, deleteEntry, restoreEntry, saveSettings, addWorkout, updateWorkout, deleteWorkout, restoreWorkout, saveProfile],
   );
 
   return <FoodContext.Provider value={value}>{children}</FoodContext.Provider>;

@@ -13,6 +13,7 @@ import { AddFood } from "./AddFood";
 
 const TABS = [
   { href: "/food", label: "Сегодня", icon: "food" },
+  { href: "/food/activity", label: "Активность", icon: "flame" },
   { href: "/food/stats", label: "Итоги", icon: "chart" },
   { href: "/food/settings", label: "Настройки", icon: "gear" },
 ];

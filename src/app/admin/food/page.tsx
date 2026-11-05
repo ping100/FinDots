@@ -278,6 +278,9 @@ function ProductCard({ row, onAct, onPicture }: { row: Row; onAct: (barcode: str
   const est = row.protein * 4 + row.fat * 9 + row.carbs * 4;
   const gBase = baseGrams(base, f.pack);
   const odd = row.protein + row.fat + row.carbs > 100 || (est > 0 && Math.abs(est - row.kcal) > Math.max(60, row.kcal * 0.3));
+  // Готовое исправление, если цифры сходятся при пересчёте с упаковки.
+  const quickFix = odd ? fixFor(row) : null;
+  const [autoEstimate, setAutoEstimate] = useState(false);
   // Отсканированный штрихкод: привязываем при сохранении, фото упаковки — если своей картинки нет.
   const [scan, setScan] = useState<Scanned | null>(null);
   const [scanProblem, setScanProblem] = useState<string | null>(null);
@@ -356,9 +359,39 @@ function ProductCard({ row, onAct, onPicture }: { row: Row; onAct: (barcode: str
         {row.pack_grams ? <span style={{ color: "var(--muted)" }}> · упаковка {row.pack_grams} {ul(unitOf(row))}</span> : null}
       </p>
       {odd ? (
-        <p className="mt-1 text-[0.6875rem] font-medium" style={{ color: "#d97706" }}>
-          ⚠️ Калории не сходятся с БЖУ (по БЖУ ≈ {Math.round(est)} ккал), проверьте
-        </p>
+        <div className="mt-1">
+          <p className="text-[0.6875rem] font-medium leading-snug" style={{ color: "#d97706" }}>
+            ⚠️{" "}
+            {row.protein + row.fat + row.carbs > 100
+              ? `Б + Ж + У = ${Math.round(row.protein + row.fat + row.carbs)} г на 100 ${ul(unitOf(row))} — больше 100 так не бывает`
+              : `Калории не сходятся с БЖУ: по БЖУ ≈ ${Math.round(est)} ккал на 100 ${ul(unitOf(row))}`}
+          </p>
+          {!editing ? (
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {quickFix ? (
+                <button
+                  disabled={busy}
+                  onClick={() => void run(row.status, quickFix.fix)}
+                  className="rounded-lg px-2.5 py-1.5 text-left text-[0.6875rem] font-semibold disabled:opacity-50"
+                  style={{ background: "color-mix(in srgb, #22c55e 14%, transparent)", color: "#16a34a" }}
+                >
+                  ✓ Исправить: {quickFix.label}
+                </button>
+              ) : null}
+              <button
+                disabled={busy}
+                onClick={() => {
+                  startEdit();
+                  setAutoEstimate(true);
+                }}
+                className="rounded-lg px-2.5 py-1.5 text-[0.6875rem] font-semibold disabled:opacity-50"
+                style={{ background: "color-mix(in srgb, var(--accent) 12%, transparent)", color: "var(--accent)" }}
+              >
+                🤖 Подобрать по названию
+              </button>
+            </div>
+          ) : null}
+        </div>
       ) : null}
 
       {editing ? (
@@ -380,6 +413,8 @@ function ProductCard({ row, onAct, onPicture }: { row: Row; onAct: (barcode: str
             }}
           />
           <Estimate
+            auto={autoEstimate}
+            onAutoDone={() => setAutoEstimate(false)}
             name={f.name}
             brand={f.brand}
             grams={n(f.pack)}
@@ -1183,7 +1218,24 @@ type Estimated = { kcal: number; protein: number; fat: number; carbs: number; un
  * «🤖 Подобрать КБЖУ»: нейросеть оценивает калории и БЖУ на 100 г по
  * названию (и марке), а по весу порции показываем, сколько это на порцию.
  */
-function Estimate({ name, brand, grams, unit, onResult }: { name: string; brand: string; grams: number; unit: Unit; onResult: (r: Estimated) => void }) {
+function Estimate({
+  name,
+  brand,
+  grams,
+  unit,
+  onResult,
+  auto,
+  onAutoDone,
+}: {
+  name: string;
+  brand: string;
+  grams: number;
+  unit: Unit;
+  onResult: (r: Estimated) => void;
+  /** Запустить сразу (кнопка «Подобрать по названию» в предупреждении). */
+  auto?: boolean;
+  onAutoDone?: () => void;
+}) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1212,6 +1264,12 @@ function Estimate({ name, brand, grams, unit, onResult }: { name: string; brand:
       setBusy(false);
     }
   };
+  useEffect(() => {
+    if (!auto || !name.trim()) return;
+    onAutoDone?.();
+    void run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auto]);
   return (
     <div className="mb-2.5">
       <button
@@ -1238,4 +1296,35 @@ function Estimate({ name, brand, grams, unit, onResult }: { name: string; brand:
       ) : null}
     </div>
   );
+}
+
+/**
+ * Если цифры сходятся при пересчёте с упаковки — готовое исправление.
+ * Частая ошибка: БЖУ или калории вписаны на всю упаковку, а не на 100 г.
+ */
+function fixFor(row: Row): { label: string; fix: Partial<Product> } | null {
+  const sum = (p: number, f: number, c: number) => p + f + c;
+  const kcalOf = (p: number, f: number, c: number) => p * 4 + f * 9 + c * 4;
+  const fits = (kcal: number, p: number, f: number, c: number) => {
+    const e = kcalOf(p, f, c);
+    return kcal > 0 && kcal <= 950 && sum(p, f, c) <= 100 && Math.abs(e - kcal) <= Math.max(40, kcal * 0.2);
+  };
+  const r1 = (x: number) => Math.round(x * 10) / 10;
+  const base = { name: row.name, brand: row.brand, pack_grams: row.pack_grams };
+  const u = ul(unitOf(row));
+  const pack = Number(row.pack_grams) || 0;
+  if (pack > 0 && pack !== 100) {
+    const k = 100 / pack;
+    const [p, f, c] = [r1(row.protein * k), r1(row.fat * k), r1(row.carbs * k)];
+    if (fits(row.kcal, p, f, c)) return { label: `БЖУ были на упаковку → на 100 ${u}: Б ${p} · Ж ${f} · У ${c}`, fix: { ...base, kcal: row.kcal, protein: p, fat: f, carbs: c } };
+    const kc = r1(row.kcal * k);
+    if (fits(kc, row.protein, row.fat, row.carbs)) return { label: `калории были на упаковку → ${kc} ккал на 100 ${u}`, fix: { ...base, kcal: kc, protein: row.protein, fat: row.fat, carbs: row.carbs } };
+    if (fits(kc, p, f, c)) return { label: `всё было на упаковку → ${kc} ккал · Б ${p} · Ж ${f} · У ${c} на 100 ${u}`, fix: { ...base, kcal: kc, protein: p, fat: f, carbs: c } };
+  }
+  // БЖУ правдоподобны, а калории нет — считаем калории по БЖУ.
+  if (sum(row.protein, row.fat, row.carbs) <= 100 && sum(row.protein, row.fat, row.carbs) > 0) {
+    const kc = Math.round(kcalOf(row.protein, row.fat, row.carbs));
+    if (kc <= 950) return { label: `калории по БЖУ → ${kc} ккал на 100 ${u}`, fix: { ...base, kcal: kc, protein: row.protein, fat: row.fat, carbs: row.carbs } };
+  }
+  return null;
 }

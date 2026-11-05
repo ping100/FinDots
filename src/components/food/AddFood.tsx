@@ -7,6 +7,8 @@ import { scaleItem, totals } from "@/lib/food/norms";
 import { MEALS, type DraftItem, type Meal, type Product, type Source } from "@/lib/food/types";
 import { useFood } from "./DataProvider";
 import { BarcodeFlow, itemFrom } from "./Barcode";
+import { UnitToggle } from "./UnitToggle";
+import { guessUnit, ul, unitOf, type Unit } from "@/lib/food/units";
 import { DishRow, FoodSearch, ProductRow, norm, ownDishes, portion, usePics, useProducts } from "./Search";
 
 type ListTab = "often" | "recent" | "products";
@@ -163,7 +165,7 @@ export function AddFood({ open, day, meal: startMeal, onClose, onSaved }: { open
   };
 
   const sum = totals(items);
-  const title = step === "review" ? "Проверьте, что получилось" : step === "text" ? "Опишите словами" : step === "manual" ? "Вручную" : step === "barcode" ? "Штрихкод" : step === "product" ? "Сколько съели" : "Что вы съели?";
+  const title = step === "review" ? "Проверьте, что получилось" : step === "text" ? "Опишите словами" : step === "manual" ? "Вручную" : step === "barcode" ? "Штрихкод" : step === "product" ? (chosen && unitOf(chosen) === "ml" ? "Сколько выпили" : "Сколько съели") : "Что вы съели?";
 
   return (
     <Sheet
@@ -518,10 +520,18 @@ function ItemRow({ item, onChange, onRemove }: { item: DraftItem; onChange: (it:
               const g = num(grams);
               if (g > 0 && g !== item.grams) onChange(scaleItem(item, g));
             }}
-            aria-label="Вес, г"
+            aria-label={unitOf(item) === "ml" ? "Объём, мл" : "Вес, г"}
           />
-          <span style={{ color: "var(--muted)" }}>г</span>
         </label>
+        {/* Нажать — сменить граммы на миллилитры и обратно. */}
+        <button
+          onClick={() => onChange({ ...item, unit: unitOf(item) === "ml" ? "g" : "ml" })}
+          className="-ml-1 rounded-md px-1 underline decoration-dotted underline-offset-2"
+          style={{ color: "var(--muted)" }}
+          aria-label="Граммы или миллилитры"
+        >
+          {ul(unitOf(item))}
+        </button>
         <span className="font-semibold tabular-nums" style={{ color: "var(--accent)" }}>
           {Math.round(item.kcal)} ккал
         </span>
@@ -536,15 +546,18 @@ function ItemRow({ item, onChange, onRemove }: { item: DraftItem; onChange: (it:
 function ManualForm({ onAdd, onBack }: { onAdd: (it: DraftItem) => void; onBack: () => void }) {
   const [name, setName] = useState("");
   const [grams, setGrams] = useState("");
+  const [unitPick, setUnitPick] = useState<Unit | null>(null);
+  const unit = unitPick ?? guessUnit(name);
   const [kcal, setKcal] = useState("");
   const [p, setP] = useState("");
   const [f, setF] = useState("");
   const [c, setC] = useState("");
   const ok = name.trim() && num(kcal) > 0;
-  const small = (label: string, value: string, set: (v: string) => void) => (
+  const small = (label: string, value: string, set: (v: string) => void, extra?: React.ReactNode) => (
     <label className="block">
-      <span className="mb-1 block text-[0.75rem]" style={{ color: "var(--muted)" }}>
+      <span className="mb-1 flex items-center justify-between text-[0.75rem]" style={{ color: "var(--muted)" }}>
         {label}
+        {extra}
       </span>
       <input inputMode="decimal" className={inputClass} style={inputStyle} value={value} onChange={(e) => set(e.target.value)} placeholder="0" />
     </label>
@@ -553,7 +566,7 @@ function ManualForm({ onAdd, onBack }: { onAdd: (it: DraftItem) => void; onBack:
     <div className="pb-3">
       <input autoFocus className={`${inputClass} mb-2`} style={inputStyle} value={name} maxLength={120} onChange={(e) => setName(e.target.value)} placeholder="Название, например «Сырники»" />
       <div className="mb-2 grid grid-cols-2 gap-2">
-        {small("Вес, г", grams, setGrams)}
+        {small(unit === "ml" ? "Объём" : "Вес", grams, setGrams, <UnitToggle small value={unit} onChange={setUnitPick} />)}
         {small("Калории, ккал", kcal, setKcal)}
       </div>
       <div className="mb-3 grid grid-cols-3 gap-2">
@@ -567,7 +580,7 @@ function ManualForm({ onAdd, onBack }: { onAdd: (it: DraftItem) => void; onBack:
         </Button>
         <Button
           disabled={!ok}
-          onClick={() => onAdd({ name: name.trim(), grams: num(grams) || null, kcal: num(kcal), protein: num(p), fat: num(f), carbs: num(c) })}
+          onClick={() => onAdd({ name: name.trim(), grams: num(grams) || null, unit, kcal: num(kcal), protein: num(p), fat: num(f), carbs: num(c) })}
         >
           Добавить
         </Button>

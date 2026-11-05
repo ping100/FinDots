@@ -8,6 +8,8 @@ import { Denied, Problem } from "@/components/admin/shared";
 import { AdminHeader } from "@/components/admin/Tools";
 import { Sheet, inputClass, inputStyle } from "@/components/ui";
 import { FoodPic } from "@/components/food/FoodPic";
+import { UnitToggle } from "@/components/food/UnitToggle";
+import { guessUnit, ul, unitOf, type Unit } from "@/lib/food/units";
 import { SOURCE_LABEL, findImages, imageLink, removeImage, saveImage, translate, type Candidate } from "@/lib/food/images";
 import type { Product } from "@/lib/food/types";
 import { BASE_100, PerBasePicker, baseGrams, per100, type Base } from "@/components/food/PerBase";
@@ -75,6 +77,10 @@ export default function AdminFoodPage() {
 
   const act = async (barcode: string, status: Row["status"], fix?: Partial<Product>) => {
     setProblem(null);
+    if (fix?.unit) {
+      const u = await createClient().rpc("admin_food_product_unit", { p_barcode: barcode, p_unit: fix.unit });
+      if (u.error) return setProblem(u.error.message);
+    }
     const { error } = await createClient().rpc("admin_food_product_set", {
       p_barcode: barcode,
       p_status: status,
@@ -245,6 +251,7 @@ function ProductCard({ row, onAct, onPicture }: { row: Row; onAct: (barcode: str
   const [editing, setEditing] = useState(false);
   // Человек мог вписать цифры не на 100 г, а на упаковку — тут это поправить.
   const [base, setBase] = useState<Base>(BASE_100);
+  const [unit, setUnit] = useState<Unit>(unitOf(row));
   const [busy, setBusy] = useState(false);
   const [f, setF] = useState({
     name: row.name,
@@ -302,8 +309,8 @@ function ProductCard({ row, onAct, onPicture }: { row: Row; onAct: (barcode: str
         ) : null}
       </div>
       <p className="mt-2 text-[0.8125rem] tabular-nums">
-        <b>{row.kcal} ккал</b> · Б {row.protein} · Ж {row.fat} · У {row.carbs} <span style={{ color: "var(--muted)" }}>на 100 г</span>
-        {row.pack_grams ? <span style={{ color: "var(--muted)" }}> · упаковка {row.pack_grams} г</span> : null}
+        <b>{row.kcal} ккал</b> · Б {row.protein} · Ж {row.fat} · У {row.carbs} <span style={{ color: "var(--muted)" }}>на 100 {ul(unitOf(row))}</span>
+        {row.pack_grams ? <span style={{ color: "var(--muted)" }}> · упаковка {row.pack_grams} {ul(unitOf(row))}</span> : null}
       </p>
       {odd ? (
         <p className="mt-1 text-[0.6875rem] font-medium" style={{ color: "#d97706" }}>
@@ -313,10 +320,16 @@ function ProductCard({ row, onAct, onPicture }: { row: Row; onAct: (barcode: str
 
       {editing ? (
         <div className="mt-3">
-          <PerBasePicker base={base} onChange={setBase} pack={f.pack} />
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <span className="text-[0.75rem]" style={{ color: "var(--muted)" }}>
+              Жидкость — в миллилитрах
+            </span>
+            <UnitToggle value={unit} onChange={setUnit} />
+          </div>
+          <PerBasePicker base={base} onChange={setBase} pack={f.pack} unit={unit} />
           {gBase && gBase !== 100 ? (
             <p className="mb-2 text-[0.75rem] tabular-nums" style={{ color: "var(--accent)" }}>
-              Сохранится на 100 г: {Math.round(per100(n(f.kcal), gBase))} ккал · Б {per100(n(f.protein), gBase)} · Ж {per100(n(f.fat), gBase)} · У {per100(n(f.carbs), gBase)}
+              Сохранится на 100 {ul(unit)}: {Math.round(per100(n(f.kcal), gBase))} ккал · Б {per100(n(f.protein), gBase)} · Ж {per100(n(f.fat), gBase)} · У {per100(n(f.carbs), gBase)}
             </p>
           ) : null}
         </div>
@@ -325,7 +338,7 @@ function ProductCard({ row, onAct, onPicture }: { row: Row; onAct: (barcode: str
         <div className="mt-1 grid grid-cols-2 gap-2">
           {field("name", "Название", true)}
           {field("brand", "Марка")}
-          {field("pack", "Упаковка, г")}
+          {field("pack", `Упаковка, ${ul(unit)}`)}
           {field("kcal", "Ккал")}
           {field("protein", "Белки")}
           {field("fat", "Жиры")}
@@ -350,6 +363,7 @@ function ProductCard({ row, onAct, onPicture }: { row: Row; onAct: (barcode: str
                   fat: per100(n(f.fat), gBase),
                   carbs: per100(n(f.carbs), gBase),
                   pack_grams: n(f.pack) || null,
+                  ...(unit !== unitOf(row) ? { unit } : {}),
                 })
               }
               className="flex-1 rounded-xl py-2 text-[0.8125rem] font-semibold text-white disabled:opacity-50"
@@ -596,11 +610,14 @@ function NewProduct({ open, onClose, onCreated }: { open: boolean; onClose: () =
   const empty = { name: "", brand: "", code: "", pack: "", kcal: "", protein: "", fat: "", carbs: "" };
   const [f, setF] = useState(empty);
   const [base, setBase] = useState<Base>(BASE_100);
+  const [unitPick, setUnitPick] = useState<Unit | null>(null);
+  const unit = unitPick ?? guessUnit(f.name);
   const [saving, setSaving] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   useEffect(() => {
     if (!open) return;
     setF(empty);
+    setUnitPick(null);
     setBase(BASE_100);
     setProblem(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -649,12 +666,13 @@ function NewProduct({ open, onClose, onCreated }: { open: boolean; onClose: () =
       p_carbs: Math.min(row.carbs, 100),
       p_pack_grams: row.pack_grams,
     });
+    if (!error) await createClient().rpc("admin_food_product_unit", { p_barcode: data as string, p_unit: unit });
     setSaving(false);
     if (error) {
       setProblem(error.message);
       return;
     }
-    onCreated({ ...row, barcode: data as string, source: "user", status: "verified", image_url: null, updated_at: new Date().toISOString(), checked_at: null });
+    onCreated({ ...row, unit, barcode: data as string, source: "user", status: "verified", image_url: null, updated_at: new Date().toISOString(), checked_at: null });
   };
   return (
     <Sheet
@@ -678,9 +696,15 @@ function NewProduct({ open, onClose, onCreated }: { open: boolean; onClose: () =
           {field("name", "Название", true, false)}
           {field("brand", "Марка", false, false)}
           {field("code", "Штрихкод, если есть")}
-          {field("pack", "Вес упаковки или порции, г", true)}
+          {field("pack", unit === "ml" ? "Объём упаковки или порции, мл" : "Вес упаковки или порции, г", true)}
         </div>
-        <PerBasePicker base={base} onChange={setBase} pack={f.pack} />
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <span className="text-[0.75rem]" style={{ color: "var(--muted)" }}>
+            Жидкость — в миллилитрах
+          </span>
+          <UnitToggle value={unit} onChange={setUnitPick} />
+        </div>
+        <PerBasePicker base={base} onChange={setBase} pack={f.pack} unit={unit} />
         <div className="grid grid-cols-2 gap-2">
           {field("kcal", "Ккал")}
           {field("protein", "Белки")}
@@ -689,7 +713,7 @@ function NewProduct({ open, onClose, onCreated }: { open: boolean; onClose: () =
         </div>
         {g && g !== 100 && n(f.kcal) > 0 ? (
           <p className="mt-2 text-[0.75rem] tabular-nums" style={{ color: "var(--accent)" }}>
-            Сохранится на 100 г: {kcal} ккал · Б {per100(n(f.protein), g)} · Ж {per100(n(f.fat), g)} · У {per100(n(f.carbs), g)}
+            Сохранится на 100 {ul(unit)}: {kcal} ккал · Б {per100(n(f.protein), g)} · Ж {per100(n(f.fat), g)} · У {per100(n(f.carbs), g)}
           </p>
         ) : null}
       </div>

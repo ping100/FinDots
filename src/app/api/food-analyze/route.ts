@@ -15,9 +15,10 @@ const SYSTEM_PROMPT = [
   "Ты помощник в приложении учёта калорий. По фото еды или описанию словами",
   "определи блюда и оцени вес порции, калории и БЖУ каждого.",
   "Ответ — только JSON без пояснений и без markdown:",
-  '{"items":[{"name":"Гречка отварная","grams":200,"kcal":220,"protein":8,"fat":2,"carbs":43}],"comment":"..."}',
-  "Правила: названия по-русски, коротко и понятно (2–4 слова). Вес в граммах",
-  "(для напитков — в мл как граммы). kcal — целое, БЖУ — граммы с одним знаком.",
+  '{"items":[{"name":"Гречка отварная","grams":200,"unit":"g","kcal":220,"protein":8,"fat":2,"carbs":43},{"name":"Кефир 2,5%","grams":250,"unit":"ml","kcal":133,"protein":7,"fat":6,"carbs":10}],"comment":"..."}',
+  "Правила: названия по-русски, коротко и понятно (2–4 слова). Вес в граммах, unit \"g\";",
+  "для напитков и жидкого (вода, сок, чай, кофе, молоко, кефир, бульон) — объём в мл",
+  "в поле grams и unit \"ml\". kcal — целое, БЖУ — граммы с одним знаком.",
   "Каждый отдельный продукт на тарелке — отдельный пункт (котлета и гарнир — два).",
   "Если вес указан в описании — бери его. Если не указан — оцени обычную порцию.",
   "Соусы и масло, если видны, — отдельным пунктом. Не выдумывай того, чего нет.",
@@ -29,7 +30,8 @@ const LABEL_PROMPT = [
   "Ты помощник в приложении учёта калорий. На фото — упаковка продукта или её",
   "этикетка с пищевой ценностью. Прочитай значения НА 100 г (или 100 мл).",
   "Ответ — только JSON без пояснений и без markdown:",
-  '{"name":"Йогурт клубничный 2,5%","brand":"Простоквашино","kcal":90,"protein":3,"fat":2.5,"carbs":13,"pack_grams":270}',
+  '{"name":"Йогурт клубничный 2,5%","brand":"Простоквашино","kcal":90,"protein":3,"fat":2.5,"carbs":13,"pack_grams":270,"unit":"g"}',
+  "unit — \"ml\", если продукт жидкий и значения на 100 мл (сок, молоко, напиток), иначе \"g\".",
   "name — по-русски, коротко, как на упаковке. brand — марка или пустая строка.",
   "kcal — целое; если указаны только кДж, раздели на 4,184. pack_grams — вес или",
   "объём упаковки, если виден, иначе null. Если указано на порцию, пересчитай на 100 г.",
@@ -55,7 +57,7 @@ function parseItems(text: string): { items: DraftItem[]; comment: string } | nul
     return Number.isFinite(n) && n >= 0 ? Math.min(n, max) : 0;
   };
   const items = data.items
-    .map((raw) => {
+    .map((raw): DraftItem | null => {
       const r = raw as Record<string, unknown>;
       const name = String(r.name ?? "").trim().slice(0, 120);
       if (!name) return null;
@@ -63,11 +65,12 @@ function parseItems(text: string): { items: DraftItem[]; comment: string } | nul
       return {
         name: name[0].toUpperCase() + name.slice(1),
         grams: grams || null,
+        unit: r.unit === "ml" ? "ml" : r.unit === "g" ? "g" : null,
         kcal: Math.round(num(r.kcal, 20000)),
         protein: Math.round(num(r.protein, 2000) * 10) / 10,
         fat: Math.round(num(r.fat, 2000) * 10) / 10,
         carbs: Math.round(num(r.carbs, 2000) * 10) / 10,
-      } satisfies DraftItem;
+      };
     })
     .filter((x): x is DraftItem => !!x)
     .slice(0, 15);
@@ -75,7 +78,7 @@ function parseItems(text: string): { items: DraftItem[]; comment: string } | nul
 }
 
 /** Пищевая ценность с этикетки на 100 г. */
-function parseLabel(text: string): { name: string; brand: string | null; kcal: number; protein: number; fat: number; carbs: number; pack_grams: number | null } | { error: string } {
+function parseLabel(text: string): { name: string; brand: string | null; kcal: number; protein: number; fat: number; carbs: number; pack_grams: number | null; unit: "g" | "ml" | null } | { error: string } {
   const closed = text.lastIndexOf("</think>");
   if (closed >= 0) text = text.slice(closed + 8);
   const start = text.indexOf("{");
@@ -102,6 +105,7 @@ function parseLabel(text: string): { name: string; brand: string | null; kcal: n
     fat: r(d.fat),
     carbs: r(d.carbs),
     pack_grams: num(d.pack_grams, 20000) || null,
+    unit: d.unit === "ml" ? "ml" : d.unit === "g" ? "g" : null,
   };
 }
 

@@ -6,6 +6,8 @@ import { Button, inputClass, inputStyle } from "@/components/ui";
 import type { DraftItem, Product } from "@/lib/food/types";
 import { BASE_100, PerBasePicker, baseGrams, per100, type Base } from "./PerBase";
 import { FoodPic } from "./FoodPic";
+import { UnitToggle } from "./UnitToggle";
+import { defaultPortion, guessUnit, ul, unitOf, type Unit } from "@/lib/food/units";
 
 type Phase = "scan" | "look" | "found" | "unknown" | "form" | "reading";
 
@@ -176,7 +178,7 @@ const fmt = (n: number) => (Math.round(n * 10) / 10).toString().replace(".", ","
 export function itemFrom(p: Product, grams: number): DraftItem {
   const k = grams / 100;
   const r = (x: number) => Math.round(x * k * 10) / 10;
-  return { name: p.brand && !p.name.toLowerCase().includes(p.brand.toLowerCase()) ? `${p.name}, ${p.brand}` : p.name, grams, kcal: Math.round(p.kcal * k), protein: r(p.protein), fat: r(p.fat), carbs: r(p.carbs) };
+  return { name: p.brand && !p.name.toLowerCase().includes(p.brand.toLowerCase()) ? `${p.name}, ${p.brand}` : p.name, grams, unit: unitOf(p), kcal: Math.round(p.kcal * k), protein: r(p.protein), fat: r(p.fat), carbs: r(p.carbs) };
 }
 
 async function shrink(file: File): Promise<string> {
@@ -210,9 +212,12 @@ export function BarcodeFlow({ onItem, onBack, start }: { onItem: (item: DraftIte
   const [phase, setPhase] = useState<Phase>(start ? "found" : "scan");
   const [code, setCode] = useState(start?.barcode ?? "");
   const [product, setProduct] = useState<Product | null>(start ?? null);
-  const [grams, setGrams] = useState(String(start?.pack_grams && start.pack_grams <= 300 ? start.pack_grams : 100));
+  const [grams, setGrams] = useState(String(start ? defaultPortion(start) : 100));
   const [problem, setProblem] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", brand: "", kcal: "", protein: "", fat: "", carbs: "", pack: "" });
+  // Граммы или мл: пока человек не выбрал сам, угадываем по названию.
+  const [unitPick, setUnitPick] = useState<Unit | null>(null);
+  const formUnit = unitPick ?? guessUnit(form.name);
   // На сколько грамм вписаны цифры (с этикетки нейросеть уже пересчитала на 100 г).
   const [base, setBase] = useState<Base>(BASE_100);
   const g = baseGrams(base, form.pack);
@@ -230,7 +235,7 @@ export function BarcodeFlow({ onItem, onBack, start }: { onItem: (item: DraftIte
       const data = (await res.json().catch(() => null)) as { product?: Product; notFound?: boolean; error?: string } | null;
       if (data?.product) {
         setProduct(data.product);
-        setGrams(String(data.product.pack_grams && data.product.pack_grams <= 300 ? data.product.pack_grams : 100));
+        setGrams(String(defaultPortion(data.product)));
         setPhase("found");
       } else if (data?.notFound) setPhase("unknown");
       else throw new Error(data?.error ?? "Не получилось найти, попробуйте ещё раз");
@@ -248,6 +253,7 @@ export function BarcodeFlow({ onItem, onBack, start }: { onItem: (item: DraftIte
       const image = await shrink(f);
       const res = await fetch("/api/food-analyze", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ image, label: true }) });
       const data = (await res.json().catch(() => null)) as { product?: Omit<Product, "barcode" | "source">; error?: string } | null;
+      if (data?.product?.unit) setUnitPick(data.product.unit);
       if (!res.ok || !data?.product) throw new Error(data?.error ?? "Не получилось прочитать этикетку");
       const p = data.product;
       setForm({ name: p.name, brand: p.brand ?? "", kcal: String(p.kcal), protein: String(p.protein), fat: String(p.fat), carbs: String(p.carbs), pack: p.pack_grams ? String(p.pack_grams) : "" });
@@ -271,6 +277,7 @@ export function BarcodeFlow({ onItem, onBack, start }: { onItem: (item: DraftIte
       fat: per100(num(form.fat), g),
       carbs: per100(num(form.carbs), g),
       pack_grams: num(form.pack) || null,
+      unit: formUnit,
       source: fromLabel ? "label" : "user",
     };
     setSaving(true);
@@ -283,7 +290,7 @@ export function BarcodeFlow({ onItem, onBack, start }: { onItem: (item: DraftIte
       const saved = data?.existed && data.product ? data.product : p;
       setExisted(!!data?.existed);
       setProduct(saved);
-      setGrams(String(saved.pack_grams && saved.pack_grams <= 300 ? saved.pack_grams : 100));
+      setGrams(String(defaultPortion(saved)));
       setPhase("found");
     } catch (e) {
       setProblem(e instanceof Error ? e.message : String(e));
@@ -316,7 +323,8 @@ export function BarcodeFlow({ onItem, onBack, start }: { onItem: (item: DraftIte
   if (phase === "found" && product) {
     const g = num(grams);
     const it = itemFrom(product, g || 0);
-    const chips = [50, 100, 150, 200].filter((x) => x !== product.pack_grams);
+    const chips = (unitOf(product) === "ml" ? [100, 200, 250, 330, 500] : [50, 100, 150, 200]).filter((x) => x !== product.pack_grams);
+    const u = ul(unitOf(product));
     return (
       <div className="pb-3">
         <div className="food-card mb-3 flex gap-3 rounded-3xl p-3.5">
@@ -339,16 +347,16 @@ export function BarcodeFlow({ onItem, onBack, start }: { onItem: (item: DraftIte
             </p>
           ) : null}
           <p className="mt-1.5 text-[0.75rem] tabular-nums" style={{ color: "var(--muted)" }}>
-            На 100 г: {product.kcal} ккал · Б {fmt(product.protein)} · Ж {fmt(product.fat)} · У {fmt(product.carbs)}
+            На 100 {u}: {product.kcal} ккал · Б {fmt(product.protein)} · Ж {fmt(product.fat)} · У {fmt(product.carbs)}
           </p>
           </div>
         </div>
         <p className="mb-1.5 text-[0.8125rem]" style={{ color: "var(--muted)" }}>
-          Сколько съели
+          {unitOf(product) === "ml" ? "Сколько выпили" : "Сколько съели"}
         </p>
         <div className="mb-2 flex items-center gap-2">
-          <input inputMode="decimal" className={`${inputClass} w-28 text-center text-[1.125rem] font-semibold tabular-nums`} style={inputStyle} value={grams} onChange={(e) => setGrams(e.target.value)} aria-label="Граммы" />
-          <span style={{ color: "var(--muted)" }}>г</span>
+          <input inputMode="decimal" className={`${inputClass} w-28 text-center text-[1.125rem] font-semibold tabular-nums`} style={inputStyle} value={grams} onChange={(e) => setGrams(e.target.value)} aria-label={unitOf(product) === "ml" ? "Миллилитры" : "Граммы"} />
+          <span style={{ color: "var(--muted)" }}>{u}</span>
           <span className="ml-auto text-right">
             <span className="block text-[1.5rem] font-bold leading-none tabular-nums" style={{ color: "var(--accent)" }}>
               {it.kcal}
@@ -361,12 +369,12 @@ export function BarcodeFlow({ onItem, onBack, start }: { onItem: (item: DraftIte
         <div className="mb-4 flex flex-wrap gap-1.5">
           {product.pack_grams ? (
             <button onClick={() => setGrams(String(product.pack_grams))} className="rounded-full px-3 py-1.5 text-[0.8125rem] font-medium" style={{ background: "var(--surface-2)", color: "var(--accent)" }}>
-              Вся упаковка · {product.pack_grams} г
+              Вся упаковка · {product.pack_grams} {u}
             </button>
           ) : null}
           {chips.map((x) => (
             <button key={x} onClick={() => setGrams(String(x))} className="rounded-full px-3 py-1.5 text-[0.8125rem]" style={{ background: "var(--surface-2)" }}>
-              {x} г
+              {x} {u}
             </button>
           ))}
         </div>
@@ -407,6 +415,7 @@ export function BarcodeFlow({ onItem, onBack, start }: { onItem: (item: DraftIte
             variant="ghost"
             onClick={() => {
               setFromLabel(false);
+              setUnitPick(null);
               setBase(BASE_100);
               setPhase("form");
             }}
@@ -441,11 +450,17 @@ export function BarcodeFlow({ onItem, onBack, start }: { onItem: (item: DraftIte
       <p className="mb-2 text-[0.8125rem] leading-snug" style={{ color: "var(--muted)" }}>
         {fromLabel ? "Проверьте, всё ли прочиталось верно. Нейросеть уже пересчитала на 100 г" : "Перепишите цифры с упаковки как есть"}
       </p>
-      <PerBasePicker base={base} onChange={setBase} pack={form.pack} />
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="text-[0.75rem]" style={{ color: "var(--muted)" }}>
+          Это жидкость? Тогда в миллилитрах
+        </span>
+        <UnitToggle value={formUnit} onChange={setUnitPick} />
+      </div>
+      <PerBasePicker base={base} onChange={setBase} pack={form.pack} unit={formUnit} />
       <div className="mb-3 grid grid-cols-2 gap-2">
         {field("name", "Название", true)}
         {field("brand", "Марка")}
-        {field("pack", "Вес упаковки, г")}
+        {field("pack", formUnit === "ml" ? "Объём упаковки, мл" : "Вес упаковки, г")}
         {field("kcal", "Калории, ккал")}
         {field("protein", "Белки, г")}
         {field("fat", "Жиры, г")}
@@ -453,7 +468,7 @@ export function BarcodeFlow({ onItem, onBack, start }: { onItem: (item: DraftIte
       </div>
       {g && g !== 100 && num(form.kcal) > 0 ? (
         <p className="-mt-1 mb-3 rounded-2xl px-3 py-2 text-[0.75rem] tabular-nums" style={{ background: "var(--surface-2)" }}>
-          На 100 г получится: <b>{Math.round(per100(num(form.kcal), g))} ккал</b> · Б {fmt(per100(num(form.protein), g))} · Ж {fmt(per100(num(form.fat), g))} · У {fmt(per100(num(form.carbs), g))}
+          На 100 {ul(formUnit)} получится: <b>{Math.round(per100(num(form.kcal), g))} ккал</b> · Б {fmt(per100(num(form.protein), g))} · Ж {fmt(per100(num(form.fat), g))} · У {fmt(per100(num(form.carbs), g))}
         </p>
       ) : null}
       <div className="flex gap-2">

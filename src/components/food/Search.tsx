@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { DraftItem, FoodEntry, Meal, Product } from "@/lib/food/types";
 import { itemFrom } from "./Barcode";
 import { FoodPic } from "./FoodPic";
+import { defaultPortion, ul, unitOf } from "@/lib/food/units";
 
 /** Для поиска: регистр и «ё» не важны. */
 export const norm = (s: string) => s.toLowerCase().replace(/ё/g, "е").trim();
@@ -27,7 +28,7 @@ export function ownDishes(entries: FoodEntry[], meal?: Meal): Dish[] {
   for (const e of entries) {
     const key = norm(e.name);
     const prev = map.get(key);
-    const item: DraftItem = { name: e.name, grams: e.grams, kcal: Number(e.kcal), protein: Number(e.protein), fat: Number(e.fat), carbs: Number(e.carbs) };
+    const item: DraftItem = { name: e.name, grams: e.grams, unit: e.unit ?? null, kcal: Number(e.kcal), protein: Number(e.protein), fat: Number(e.fat), carbs: Number(e.carbs) };
     const here = meal && e.meal === meal ? 1 : 0;
     if (!prev) map.set(key, { item, times: 1, inMeal: here, last: e.created_at });
     else {
@@ -43,7 +44,7 @@ export function ownDishes(entries: FoodEntry[], meal?: Meal): Dish[] {
 }
 
 /** Порция продукта по умолчанию: упаковка, если она не больше 300 г, иначе 100 г. */
-export const portion = (p: Product) => (p.pack_grams && p.pack_grams <= 300 ? p.pack_grams : 100);
+export const portion = (p: Product) => defaultPortion(p);
 
 // Общая база продуктов: грузим один раз за сессию, проверенные первыми.
 let cache: Product[] | null = null;
@@ -160,7 +161,7 @@ export function DishRow({ d, pic, onOpen, onAdd }: { d: Dish; pic?: string; onOp
       pic={pic}
       name={it.name}
       kcal={it.kcal}
-      kcalHint={it.grams ? `за ${it.grams} г` : undefined}
+      kcalHint={it.grams ? `за ${it.grams} ${ul(unitOf(it))}` : undefined}
       sub={`Б ${fmt(it.protein)} · Ж ${fmt(it.fat)} · У ${fmt(it.carbs)}${d.times > 1 ? ` · ели ${times(d.times)}` : ""}`}
       onOpen={onOpen}
       onAdd={onAdd}
@@ -175,7 +176,7 @@ export function ProductRow({ p, onOpen, onAdd }: { p: Product; onOpen: () => voi
       name={p.name}
       badge={p.status === "verified"}
       kcal={p.kcal}
-      kcalHint="на 100 г"
+      kcalHint={`на 100 ${ul(unitOf(p))}`}
       sub={`${p.brand ? `${p.brand} · ` : ""}Б ${fmt(p.protein)} · Ж ${fmt(p.fat)} · У ${fmt(p.carbs)}`}
       onOpen={onOpen}
       onAdd={onAdd}

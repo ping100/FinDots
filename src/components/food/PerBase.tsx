@@ -24,7 +24,8 @@ export function per100(value: number, grams: number): number {
   return grams > 0 ? Math.round(((value * 100) / grams) * 10) / 10 : value;
 }
 
-export function PerBasePicker({ base, onChange, pack }: { base: Base; onChange: (b: Base) => void; pack: string }) {
+export function PerBasePicker({ base, onChange, pack, unit = "g" }: { base: Base; onChange: (b: Base) => void; pack: string; unit?: "g" | "ml" }) {
+  const u = unit === "ml" ? "мл" : "г";
   const chip = (on: boolean) =>
     `rounded-full px-3 py-1.5 text-[0.8125rem] font-medium transition active:scale-95 ${on ? "text-white" : ""}`;
   const style = (on: boolean) => (on ? { background: "var(--accent)" } : { background: "var(--surface-2)" });
@@ -35,10 +36,10 @@ export function PerBasePicker({ base, onChange, pack }: { base: Base; onChange: 
       </p>
       <div className="flex flex-wrap items-center gap-1.5">
         <button className={chip(base.kind === "100")} style={style(base.kind === "100")} onClick={() => onChange({ ...base, kind: "100" })}>
-          на 100 г
+          на 100 {u}
         </button>
         <button className={chip(base.kind === "pack")} style={style(base.kind === "pack")} onClick={() => onChange({ ...base, kind: "pack" })}>
-          на всю упаковку{n(pack) ? ` · ${n(pack)} г` : ""}
+          на всю упаковку{n(pack) ? ` · ${n(pack)} ${u}` : ""}
         </button>
         <label className={`${chip(base.kind === "custom")} flex items-center gap-1`} style={style(base.kind === "custom")}>
           на
@@ -51,12 +52,12 @@ export function PerBasePicker({ base, onChange, pack }: { base: Base; onChange: 
             onFocus={() => onChange({ ...base, kind: "custom" })}
             onChange={(e) => onChange({ kind: "custom", grams: e.target.value })}
           />
-          г
+          {u}
         </label>
       </div>
       {base.kind === "pack" && !n(pack) ? (
         <p className="mt-1 text-[0.6875rem]" style={{ color: "var(--danger)" }}>
-          Впишите вес упаковки
+          {unit === "ml" ? "Впишите объём упаковки" : "Впишите вес упаковки"}
         </p>
       ) : null}
     </div>

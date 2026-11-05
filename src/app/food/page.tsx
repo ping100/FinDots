@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { UnitToggle } from "@/components/food/UnitToggle";
+import { ul, unitOf, type Unit } from "@/lib/food/units";
 import Link from "next/link";
 import { Icon } from "@/lib/icons";
 import { Button, Sheet } from "@/components/ui";
@@ -97,7 +99,7 @@ export default function FoodToday() {
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-[0.875rem]">{e.name}</span>
                           <span className="block text-[0.6875rem] tabular-nums" style={{ color: "var(--muted)" }}>
-                            {e.grams ? `${fmt(e.grams)} г · ` : ""}Б {Math.round(e.protein)} · Ж {Math.round(e.fat)} · У {Math.round(e.carbs)}
+                            {e.grams ? `${fmt(e.grams)} ${ul(unitOf(e))} · ` : ""}Б {Math.round(e.protein)} · Ж {Math.round(e.fat)} · У {Math.round(e.carbs)}
                           </span>
                         </span>
                         <span className="text-[0.875rem] font-semibold tabular-nums">{fmt(e.kcal)}</span>
@@ -251,8 +253,10 @@ function EntrySheet({ entry, onClose }: { entry: FoodEntry | null; onClose: () =
   const [grams, setGrams] = useState("");
   const [meal, setMeal] = useState<Meal>("lunch");
   const [name, setName] = useState("");
+  const [unit, setUnit] = useState<Unit>("g");
   useEffect(() => {
     if (!entry) return;
+    setUnit(unitOf(entry));
     setGrams(entry.grams ? String(entry.grams) : "");
     setMeal(entry.meal);
     setName(entry.name);
@@ -263,6 +267,7 @@ function EntrySheet({ entry, onClose }: { entry: FoodEntry | null; onClose: () =
 
   const save = async () => {
     const patch: Partial<FoodEntry> = { meal, name: name.trim() || entry.name };
+    if (unit !== unitOf(entry)) patch.unit = unit;
     if (g > 0 && g !== entry.grams) Object.assign(patch, { grams: Math.round(g), kcal: next.kcal, protein: next.protein, fat: next.fat, carbs: next.carbs });
     onClose();
     await updateEntry(entry.id, patch);
@@ -278,8 +283,9 @@ function EntrySheet({ entry, onClose }: { entry: FoodEntry | null; onClose: () =
       <input className="mb-3 w-full rounded-2xl border px-4 py-3 outline-none" style={{ background: "var(--surface-2)", borderColor: "var(--border)" }} value={name} maxLength={120} onChange={(e) => setName(e.target.value)} aria-label="Название" />
       {entry.grams ? (
         <label className="mb-3 block">
-          <span className="mb-1.5 block text-sm" style={{ color: "var(--muted)" }}>
-            Вес, г
+          <span className="mb-1.5 flex items-center justify-between text-sm" style={{ color: "var(--muted)" }}>
+            {unit === "ml" ? "Объём, мл" : "Вес, г"}
+            <UnitToggle small value={unit} onChange={setUnit} />
           </span>
           <input inputMode="decimal" className="w-full rounded-2xl border px-4 py-3 outline-none" style={{ background: "var(--surface-2)", borderColor: "var(--border)" }} value={grams} onChange={(e) => setGrams(e.target.value)} />
         </label>

@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
   if (own.data) return NextResponse.json({ product: own.data as Product });
 
   const res = await fetch(
-    `https://world.openfoodfacts.org/api/v2/product/${code}.json?fields=product_name,product_name_ru,brands,nutriments,product_quantity,image_front_small_url,image_front_url`,
+    `https://world.openfoodfacts.org/api/v2/product/${code}.json?fields=product_name,product_name_ru,brands,nutriments,product_quantity,product_quantity_unit,quantity,image_front_small_url,image_front_url`,
     { headers: { "User-Agent": "Dots/1.0 (dotsapp.vercel.app)" }, next: { revalidate: 86400 }, signal: AbortSignal.timeout(8000) },
   ).catch(() => null);
   const data = res?.ok ? ((await res.json().catch(() => null)) as { status?: number; product?: Record<string, unknown> } | null) : null;
@@ -58,6 +58,8 @@ export async function GET(request: NextRequest) {
     pack_grams: num(p.product_quantity) && num(p.product_quantity)! <= 20000 ? num(p.product_quantity) : null,
     source: "off",
     image_url: offImage(p),
+    // У напитков объём в мл: «1 l», «500 ml».
+    unit: /^(ml|l|cl|dl)$/i.test(String(p.product_quantity_unit ?? "")) || /\d\s*(ml|мл|l|л)(?![a-zа-я])/i.test(String(p.quantity ?? "")) ? "ml" : null,
   };
   await supabase.rpc("food_product_add", {
     p_barcode: product.barcode, p_name: product.name, p_brand: product.brand, p_kcal: product.kcal, p_protein: product.protein,
@@ -65,6 +67,7 @@ export async function GET(request: NextRequest) {
   });
   // Фото упаковки из Open Food Facts — сразу картинкой продукта.
   if (product.image_url) await supabase.rpc("food_product_off_image", { p_barcode: code, p_url: product.image_url });
+  if (product.unit) await supabase.rpc("food_product_unit", { p_barcode: code, p_unit: product.unit });
   return NextResponse.json({ product });
 }
 
@@ -90,6 +93,7 @@ export async function POST(request: Request) {
     p_source: b?.source === "label" ? "label" : "user",
   });
   if (error) return NextResponse.json({ error: error.message }, { status: error.code === "P0001" ? 429 : 500 });
+  if (result === "added" && (b?.unit === "ml" || b?.unit === "g")) await supabase.rpc("food_product_unit", { p_barcode: code, p_unit: b.unit });
   if (result === "exists") {
     const { data } = await supabase.from("food_products").select("*").eq("barcode", code).maybeSingle();
     return NextResponse.json({ ok: true, existed: true, product: data as Product | null });

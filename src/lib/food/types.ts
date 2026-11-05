@@ -1,5 +1,7 @@
 /** Yumdots: что съедено и какая норма. */
 
+import type { Unit } from "./units";
+
 export type Meal = "breakfast" | "lunch" | "dinner" | "snack";
 export type Activity = "low" | "light" | "moderate" | "high" | "very_high";
 export type Goal = "lose" | "keep" | "gain";
@@ -17,6 +19,8 @@ export interface FoodEntry {
   fat: number;
   carbs: number;
   source: Source;
+  /** Граммы или миллилитры; пусто — по названию (unitOf). */
+  unit?: Unit | null;
   created_at: string;
 }
 
@@ -44,6 +48,7 @@ export interface Product {
   /** Вес упаковки, г — для «съел всю упаковку». */
   pack_grams: number | null;
   source: "off" | "user" | "label";
+  unit?: Unit | null;
   /** Картинка для списка (своя в food-images или фото упаковки из Open Food Facts). */
   image_url?: string | null;
   /** verified — «Проверено Dots» (одобрил админ). */
@@ -54,6 +59,7 @@ export interface Product {
 export interface DraftItem {
   name: string;
   grams: number | null;
+  unit?: Unit | null;
   kcal: number;
   protein: number;
   fat: number;

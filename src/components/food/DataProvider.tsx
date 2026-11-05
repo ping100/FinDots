@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
+import { unitOf } from "@/lib/food/units";
 import { applyLook } from "@/lib/look";
 import { scaleFactor } from "@/lib/textScale";
 import { addDays, today } from "@/lib/tasks/dates";
@@ -258,6 +259,8 @@ export function FoodProvider({ children }: { children: ReactNode }) {
         meal,
         name: it.name.trim().slice(0, 120) || "Блюдо",
         grams: it.grams && it.grams > 0 ? Math.round(it.grams) : null,
+        // Сохраняем как есть, чтобы потом не зависеть от угадывания по названию.
+        unit: unitOf(it),
         kcal: Math.max(0, Math.round(it.kcal)),
         protein: Math.max(0, Math.round(it.protein * 10) / 10),
         fat: Math.max(0, Math.round(it.fat * 10) / 10),

@@ -379,6 +379,17 @@ function ProductCard({ row, onAct, onPicture }: { row: Row; onAct: (barcode: str
               }
             }}
           />
+          <Estimate
+            name={f.name}
+            brand={f.brand}
+            grams={n(f.pack)}
+            unit={unit}
+            onResult={(r) => {
+              setF((x) => ({ ...x, kcal: String(r.kcal), protein: String(r.protein), fat: String(r.fat), carbs: String(r.carbs), pack: x.pack || (r.portion ? String(r.portion) : "") }));
+              setBase(BASE_100);
+              setUnit(r.unit);
+            }}
+          />
           <div className="mb-2 flex items-center justify-between gap-2">
             <span className="text-[0.75rem]" style={{ color: "var(--muted)" }}>
               Жидкость — в миллилитрах
@@ -789,6 +800,17 @@ function NewProduct({ open, onClose, onCreated }: { open: boolean; onClose: () =
           {field("code", "Штрихкод, если есть")}
           {field("pack", unit === "ml" ? "Объём упаковки или порции, мл" : "Вес упаковки или порции, г", true)}
         </div>
+        <Estimate
+          name={f.name}
+          brand={f.brand}
+          grams={n(f.pack)}
+          unit={unit}
+          onResult={(r) => {
+            setF((x) => ({ ...x, kcal: String(r.kcal), protein: String(r.protein), fat: String(r.fat), carbs: String(r.carbs), pack: x.pack || (r.portion ? String(r.portion) : "") }));
+            setBase(BASE_100);
+            setUnitPick(r.unit);
+          }}
+        />
         <div className="mb-2 flex items-center justify-between gap-2">
           <span className="text-[0.75rem]" style={{ color: "var(--muted)" }}>
             Жидкость — в миллилитрах
@@ -1151,6 +1173,69 @@ function ScanFill({
         </p>
       ) : null}
       {open ? <Scanner onCode={(c) => void look(c)} onClose={() => setOpen(false)} /> : null}
+    </div>
+  );
+}
+
+type Estimated = { kcal: number; protein: number; fat: number; carbs: number; unit: Unit; portion: number | null; comment: string };
+
+/**
+ * «🤖 Подобрать КБЖУ»: нейросеть оценивает калории и БЖУ на 100 г по
+ * названию (и марке), а по весу порции показываем, сколько это на порцию.
+ */
+function Estimate({ name, brand, grams, unit, onResult }: { name: string; brand: string; grams: number; unit: Unit; onResult: (r: Estimated) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const run = async () => {
+    setBusy(true);
+    setError(null);
+    setNote(null);
+    try {
+      const res = await fetch("/api/admin/food-estimate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, brand, grams: grams || null, unit }),
+      });
+      const d = (await res.json().catch(() => null)) as (Estimated & { error?: string }) | null;
+      if (!res.ok || !d || d.error) throw new Error(d?.error ?? "Не получилось подобрать");
+      onResult(d);
+      const g = grams || d.portion || 0;
+      const u = ul(d.unit);
+      setNote(
+        [d.comment, g ? `за ${g} ${u} ≈ ${Math.round((d.kcal * g) / 100)} ккал` : ""].filter(Boolean).join(" · ") +
+          ". Это оценка, поправьте, если знаете точнее",
+      );
+    } catch (e) {
+      setError(navigator.onLine ? (e instanceof Error ? e.message : String(e)) : "Без интернета не получится");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="mb-2.5">
+      <button
+        type="button"
+        disabled={busy || !name.trim()}
+        onClick={() => void run()}
+        className="flex w-full items-center justify-center gap-1.5 rounded-xl py-2 text-[0.8125rem] font-semibold disabled:opacity-50"
+        style={{ background: "color-mix(in srgb, var(--accent) 12%, transparent)", color: "var(--accent)" }}
+      >
+        {busy ? "Подбираю…" : "🤖 Подобрать КБЖУ по названию"}
+      </button>
+      {error ? (
+        <p className="mt-1 text-[0.6875rem]" style={{ color: "var(--danger)" }}>
+          {error}
+        </p>
+      ) : note ? (
+        <p className="mt-1 text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
+          {note}
+        </p>
+      ) : !name.trim() ? (
+        <p className="mt-1 text-[0.6875rem]" style={{ color: "var(--muted)" }}>
+          Впишите название, и нейросеть оценит калории на 100 г
+        </p>
+      ) : null}
     </div>
   );
 }

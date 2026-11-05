@@ -63,7 +63,12 @@ export async function autoModels(task: AiTask, limit = 4): Promise<string[]> {
     // Рассуждающие отвечают в разы дольше — для коротких задач хуже.
     (m.reasoning && m.reasoning.default_enabled !== false ? -2 : 0) +
     Math.min(2, (m.context_length ?? 0) / 64000);
-  const ranked = list.sort((a, b) => score(b) - score(a)).map((m) => m.id);
+  // Модели, которые рассуждают по умолчанию, присылают размышления вместо
+  // ответа и не укладываются в лимит — для фото берём их только если других нет.
+  const thinks = (m: OrModel) => m.reasoning?.default_enabled === true || /reasoning|thinking/i.test(m.id);
+  const plain = list.filter((m) => !thinks(m));
+  const pool = task === "vision" && plain.length ? plain : list;
+  const ranked = pool.sort((a, b) => score(b) - score(a)).map((m) => m.id);
   const fallback = task === "vision" ? VISION_FALLBACK : [DEFAULT_TEXT];
   const out = [...new Set([lastGood.get(task), ...ranked, ...fallback].filter((x): x is string => !!x))];
   return out.slice(0, limit);

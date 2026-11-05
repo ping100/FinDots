@@ -4,11 +4,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@/lib/icons";
 import { Button, Sheet, inputClass, inputStyle } from "@/components/ui";
 import { scaleItem, totals } from "@/lib/food/norms";
-import { MEALS, type DraftItem, type Meal, type Source } from "@/lib/food/types";
+import { MEALS, type DraftItem, type Meal, type Product, type Source } from "@/lib/food/types";
 import { useFood } from "./DataProvider";
 import { BarcodeFlow } from "./Barcode";
+import { FoodSearch } from "./Search";
 
-type Step = "pick" | "text" | "manual" | "busy" | "review" | "barcode";
+type Step = "pick" | "text" | "manual" | "busy" | "review" | "barcode" | "product";
 
 /** Сжать фото до ~1024 px по длинной стороне: нейросети хватает, трафика меньше. */
 async function shrink(file: File): Promise<string> {
@@ -53,6 +54,8 @@ export function AddFood({ open, day, meal: startMeal, onClose, onSaved }: { open
   const [comment, setComment] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [query, setQuery] = useState("");
+  const [chosen, setChosen] = useState<Product | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -64,6 +67,8 @@ export function AddFood({ open, day, meal: startMeal, onClose, onSaved }: { open
     setText("");
     setComment("");
     setProblem(null);
+    setQuery("");
+    setChosen(null);
   }, [open, startMeal]);
 
   // Недавнее: последние разные блюда, свежие первыми.
@@ -88,9 +93,10 @@ export function AddFood({ open, day, meal: startMeal, onClose, onSaved }: { open
       const data = (await res.json().catch(() => null)) as { items?: DraftItem[]; comment?: string; error?: string } | null;
       if (!res.ok || !data?.items) throw new Error(data?.error ?? "Не получилось распознать, попробуйте ещё раз");
       if (!data.items.length) throw new Error(data.comment || "Не нашёл на фото еды. Попробуйте другое фото или опишите словами");
-      setItems(data.items);
+      // Уже что-то в списке (нажали «Добавить ещё») — дописываем, а не заменяем.
+      if (!items.length) setSource(src);
+      setItems((prev) => [...prev, ...data.items!]);
       setComment(data.comment ?? "");
-      setSource(src);
       setStep("review");
     } catch (e) {
       setProblem(navigator.onLine ? (e instanceof Error ? e.message : String(e)) : "Без интернета распознать не получится. Добавьте вручную");
@@ -141,7 +147,7 @@ export function AddFood({ open, day, meal: startMeal, onClose, onSaved }: { open
   };
 
   const sum = totals(items);
-  const title = step === "review" ? "Проверьте, что получилось" : step === "text" ? "Опишите словами" : step === "manual" ? "Вручную" : step === "barcode" ? "Штрихкод" : "Что вы съели?";
+  const title = step === "review" ? "Проверьте, что получилось" : step === "text" ? "Опишите словами" : step === "manual" ? "Вручную" : step === "barcode" ? "Штрихкод" : step === "product" ? "Сколько съели" : "Что вы съели?";
 
   return (
     <Sheet
@@ -151,7 +157,14 @@ export function AddFood({ open, day, meal: startMeal, onClose, onSaved }: { open
       footer={
         step === "review" ? (
           <div className="flex gap-2 pb-2">
-            <Button variant="ghost" className="!w-auto shrink-0 px-5" onClick={() => setStep("pick")}>
+            <Button
+              variant="ghost"
+              className="!w-auto shrink-0 px-5"
+              onClick={() => {
+                setItems([]);
+                setStep("pick");
+              }}
+            >
               Назад
             </Button>
             <Button onClick={() => void save()} disabled={saving || !items.length}>
@@ -185,7 +198,59 @@ export function AddFood({ open, day, meal: startMeal, onClose, onSaved }: { open
 
       <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => void onPhoto(e.target.files?.[0])} />
 
+      {step === "pick" && items.length ? (
+        <button
+          onClick={() => setStep("review")}
+          className="mb-2.5 flex w-full items-center gap-2 rounded-2xl px-3.5 py-2.5 text-left text-[0.8125rem] font-medium transition active:scale-[0.98]"
+          style={{ background: "color-mix(in srgb, var(--accent) 12%, transparent)", color: "var(--accent)" }}
+        >
+          <Icon name="chevron-left" size={15} />
+          <span className="flex-1">К списку: {items.length} · {Math.round(sum.kcal)} ккал</span>
+        </button>
+      ) : null}
+
       {step === "pick" ? (
+        <label className="mb-3 flex items-center gap-2 rounded-2xl px-3.5" style={{ background: "var(--surface-2)" }}>
+          <Icon name="search" size={17} style={{ color: "var(--muted)" }} />
+          <input
+            enterKeyHint="search"
+            className="min-w-0 flex-1 bg-transparent py-3 text-[0.9375rem] outline-none"
+            value={query}
+            maxLength={80}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Найти: гречка, круассан…"
+            aria-label="Найти блюдо или продукт"
+          />
+          {query ? (
+            <button onClick={() => setQuery("")} aria-label="Очистить" className="flex h-7 w-7 items-center justify-center rounded-full opacity-60 active:opacity-100">
+              <Icon name="close" size={14} />
+            </button>
+          ) : null}
+        </label>
+      ) : null}
+
+      {step === "pick" && query.trim() ? (
+        <FoodSearch
+          query={query}
+          entries={entries}
+          onDish={(it) => {
+            setItems((prev) => [...prev, it]);
+            if (!items.length) setSource("repeat");
+            setComment("");
+            setStep("review");
+          }}
+          onProduct={(p) => {
+            setChosen(p);
+            setStep("product");
+          }}
+          onText={() => {
+            setText(query.trim());
+            void recognize({ text: query.trim() }, "text");
+          }}
+        />
+      ) : null}
+
+      {step === "pick" && !query.trim() ? (
         <div className="space-y-2.5 pb-3">
           <button
             onClick={() => fileRef.current?.click()}
@@ -215,8 +280,8 @@ export function AddFood({ open, day, meal: startMeal, onClose, onSaved }: { open
                   <button
                     key={r.name}
                     onClick={() => {
-                      setItems([r]);
-                      setSource("repeat");
+                      setItems((prev) => [...prev, r]);
+                      if (!items.length) setSource("repeat");
                       setComment("");
                       setStep("review");
                     }}
@@ -281,6 +346,20 @@ export function AddFood({ open, day, meal: startMeal, onClose, onSaved }: { open
         />
       ) : null}
 
+      {step === "product" && chosen ? (
+        <BarcodeFlow
+          key={chosen.barcode}
+          start={chosen}
+          onBack={() => setStep(items.length ? "review" : "pick")}
+          onItem={(it) => {
+            setItems((prev) => [...prev, it]);
+            if (!items.length) setSource("barcode");
+            setComment("");
+            setStep("review");
+          }}
+        />
+      ) : null}
+
       {step === "busy" ? (
         <div className="flex flex-col items-center pb-6 pt-2 text-center">
           {photo ? (
@@ -326,7 +405,10 @@ export function AddFood({ open, day, meal: startMeal, onClose, onSaved }: { open
             </p>
           ) : null}
           <button
-            onClick={() => setStep("manual")}
+            onClick={() => {
+              setQuery("");
+              setStep("pick");
+            }}
             className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-2xl py-2.5 text-[0.8125rem] font-medium transition active:scale-[0.98]"
             style={{ border: "1.5px dashed var(--border)", color: "var(--muted)" }}
           >

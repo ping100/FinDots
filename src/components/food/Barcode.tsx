@@ -204,11 +204,12 @@ async function shrink(file: File): Promise<string> {
  * сколько грамм съели. Нет продукта — снять этикетку (прочитает нейросеть)
  * или ввести вручную; продукт сохраняется в общую базу для всех.
  */
-export function BarcodeFlow({ onItem, onBack }: { onItem: (item: DraftItem) => void; onBack: () => void }) {
-  const [phase, setPhase] = useState<Phase>("scan");
-  const [code, setCode] = useState("");
-  const [product, setProduct] = useState<Product | null>(null);
-  const [grams, setGrams] = useState("100");
+export function BarcodeFlow({ onItem, onBack, start }: { onItem: (item: DraftItem) => void; onBack: () => void; start?: Product }) {
+  // start — продукт уже выбран (из поиска): сразу к граммам, без сканера.
+  const [phase, setPhase] = useState<Phase>(start ? "found" : "scan");
+  const [code, setCode] = useState(start?.barcode ?? "");
+  const [product, setProduct] = useState<Product | null>(start ?? null);
+  const [grams, setGrams] = useState(String(start?.pack_grams && start.pack_grams <= 300 ? start.pack_grams : 100));
   const [problem, setProblem] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", brand: "", kcal: "", protein: "", fat: "", carbs: "", pack: "" });
   // На сколько грамм вписаны цифры (с этикетки нейросеть уже пересчитала на 100 г).
@@ -366,8 +367,8 @@ export function BarcodeFlow({ onItem, onBack }: { onItem: (item: DraftItem) => v
           ))}
         </div>
         <div className="flex gap-2">
-          <Button variant="ghost" className="!w-auto shrink-0 px-5" onClick={() => setPhase("scan")}>
-            Другой
+          <Button variant="ghost" className="!w-auto shrink-0 px-5" onClick={() => (start ? onBack() : setPhase("scan"))}>
+            {start ? "Назад" : "Другой"}
           </Button>
           <Button disabled={!(g > 0)} onClick={() => onItem(it)}>
             Добавить

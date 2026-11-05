@@ -11,6 +11,7 @@ import { FoodPic } from "@/components/food/FoodPic";
 import { UnitToggle } from "@/components/food/UnitToggle";
 import { guessUnit, ul, unitOf, type Unit } from "@/lib/food/units";
 import { per100Of } from "@/lib/food/suggest";
+import { Scanner } from "@/components/food/Barcode";
 import type { FoodEntry } from "@/lib/food/types";
 import { SOURCE_LABEL, findImages, imageLink, removeImage, saveImage, translate, type Candidate } from "@/lib/food/images";
 import type { Product } from "@/lib/food/types";
@@ -246,7 +247,8 @@ export default function AdminFoodPage() {
         onClose={() => setAdding(false)}
         onCreated={(row) => {
           setAdding(false);
-          setPicking(row);
+          // Картинка уже есть (фото упаковки) — выбирать не нужно.
+          if (!row.image_url) setPicking(row);
           void load();
         }}
       />
@@ -277,10 +279,22 @@ function ProductCard({ row, onAct, onPicture }: { row: Row; onAct: (barcode: str
   const est = row.protein * 4 + row.fat * 9 + row.carbs * 4;
   const gBase = baseGrams(base, f.pack);
   const odd = row.protein + row.fat + row.carbs > 100 || (est > 0 && Math.abs(est - row.kcal) > Math.max(60, row.kcal * 0.3));
+  // Отсканированный штрихкод: привязываем при сохранении, фото упаковки — если своей картинки нет.
+  const [scan, setScan] = useState<Scanned | null>(null);
+  const [scanProblem, setScanProblem] = useState<string | null>(null);
   const run = async (status: Row["status"], fix?: Partial<Product>) => {
     setBusy(true);
+    setScanProblem(null);
     try {
-      await onAct(row.barcode, status, fix);
+      let code = row.barcode;
+      if (scan && scan.code !== row.barcode) {
+        const { error } = await createClient().rpc("admin_food_product_barcode", { p_old: row.barcode, p_new: scan.code });
+        if (error) return setScanProblem(error.message);
+        code = scan.code;
+      }
+      if (scan?.image && !row.image_url) await saveImage(code, scan.image).catch(() => undefined);
+      await onAct(code, status, fix);
+      setScan(null);
     } finally {
       setBusy(false);
     }
@@ -327,6 +341,22 @@ function ProductCard({ row, onAct, onPicture }: { row: Row; onAct: (barcode: str
 
       {editing ? (
         <div className="mt-3">
+          <ScanFill
+            current={scan?.code ?? (noCode(row.barcode) ? null : row.barcode)}
+            self={row.barcode}
+            note={scan?.note ?? null}
+            problem={scanProblem}
+            onFound={(s) => {
+              setScan(s);
+              setScanProblem(null);
+              if (s.product) {
+                const p = s.product;
+                setF({ name: p.name, brand: p.brand ?? "", kcal: String(p.kcal), protein: String(p.protein), fat: String(p.fat), carbs: String(p.carbs), pack: p.pack_grams ? String(p.pack_grams) : f.pack });
+                setBase(BASE_100);
+                setUnit(p.unit ?? guessUnit(p.name));
+              }
+            }}
+          />
           <div className="mb-2 flex items-center justify-between gap-2">
             <span className="text-[0.75rem]" style={{ color: "var(--muted)" }}>
               Жидкость — в миллилитрах
@@ -619,12 +649,14 @@ function NewProduct({ open, onClose, onCreated }: { open: boolean; onClose: () =
   const [base, setBase] = useState<Base>(BASE_100);
   const [unitPick, setUnitPick] = useState<Unit | null>(null);
   const unit = unitPick ?? guessUnit(f.name);
+  const [scan, setScan] = useState<Scanned | null>(null);
   const [saving, setSaving] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   useEffect(() => {
     if (!open) return;
     setF(empty);
     setUnitPick(null);
+    setScan(null);
     setBase(BASE_100);
     setProblem(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -674,12 +706,14 @@ function NewProduct({ open, onClose, onCreated }: { open: boolean; onClose: () =
       p_pack_grams: row.pack_grams,
     });
     if (!error) await createClient().rpc("admin_food_product_unit", { p_barcode: data as string, p_unit: unit });
+    // Фото упаковки из Open Food Facts — сразу картинкой.
+    const image = !error && scan?.image && scan.code === f.code ? await saveImage(data as string, scan.image).catch(() => null) : null;
     setSaving(false);
     if (error) {
       setProblem(error.message);
       return;
     }
-    onCreated({ ...row, unit, barcode: data as string, source: "user", status: "verified", image_url: null, updated_at: new Date().toISOString(), checked_at: null });
+    onCreated({ ...row, unit, barcode: data as string, source: "user", status: "verified", image_url: image, updated_at: new Date().toISOString(), checked_at: null });
   };
   return (
     <Sheet
@@ -699,6 +733,24 @@ function NewProduct({ open, onClose, onCreated }: { open: boolean; onClose: () =
           Сразу попадёт в общую базу с отметкой «Проверено Dots». Штрихкод нужен только для упаковок: яблоку или домашнему блюду он не нужен. После сохранения подберём картинку.
         </p>
         {problem ? <Problem text={problem} /> : null}
+        <ScanFill
+          current={f.code || null}
+          note={scan?.note ?? null}
+          problem={null}
+          onFound={(sc) => {
+            setScan(sc);
+            const p = sc.product;
+            setF((x) =>
+              p
+                ? { name: p.name, brand: p.brand ?? "", code: sc.code, pack: p.pack_grams ? String(p.pack_grams) : "", kcal: String(p.kcal), protein: String(p.protein), fat: String(p.fat), carbs: String(p.carbs) }
+                : { ...x, code: sc.code },
+            );
+            if (p) {
+              setBase(BASE_100);
+              setUnitPick(p.unit ?? null);
+            }
+          }}
+        />
         <div className="mb-2 grid grid-cols-2 gap-2">
           {field("name", "Название", true, false)}
           {field("brand", "Марка", false, false)}
@@ -992,5 +1044,81 @@ function MyDishes({ open, onClose, onAdded }: { open: boolean; onClose: () => vo
         )}
       </div>
     </Sheet>
+  );
+}
+
+type Scanned = { code: string; product: Product | null; image: string | null; note: string };
+
+/**
+ * «📷 Штрихкод»: сканируем упаковку, смотрим в базе Dots и Open Food Facts
+ * (ничего не сохраняя) и отдаём найденное — форма подставит название, КБЖУ,
+ * объём и фото. Не нашлось — привяжется только сам код.
+ */
+function ScanFill({
+  current,
+  self,
+  note,
+  problem,
+  onFound,
+}: {
+  current: string | null;
+  self?: string;
+  note: string | null;
+  problem: string | null;
+  onFound: (s: Scanned) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const look = async (code: string) => {
+    setOpen(false);
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/food-barcode?code=${code}&peek=1`);
+      const d = (await res.json().catch(() => null)) as { product?: Product; own?: boolean; notFound?: boolean; error?: string } | null;
+      if (d?.own && d.product && d.product.barcode !== self) {
+        setError(`Этот штрихкод уже есть в базе: «${d.product.name}»`);
+        return;
+      }
+      if (d?.product) {
+        onFound({ code, product: d.product, image: d.product.image_url ?? null, note: d.own ? "Данные из базы Dots" : "Подтянуто из Open Food Facts, проверьте цифры" });
+      } else if (d?.notFound) {
+        onFound({ code, product: null, image: null, note: "В Open Food Facts его нет. Привяжется только штрихкод, цифры впишите сами" });
+      } else throw new Error(d?.error ?? "Не получилось найти");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="mb-2.5 rounded-xl px-3 py-2" style={{ background: "var(--surface-2)" }}>
+      <div className="flex items-center gap-2">
+        <span className="min-w-0 flex-1 text-[0.75rem]">
+          <span style={{ color: "var(--muted)" }}>Штрихкод: </span>
+          <b className="tabular-nums">{current ?? "нет"}</b>
+        </span>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => setOpen(true)}
+          className="shrink-0 rounded-lg px-2.5 py-1.5 text-[0.75rem] font-semibold text-white disabled:opacity-60"
+          style={{ background: "var(--accent)" }}
+        >
+          {busy ? "Ищу…" : "📷 Сканировать"}
+        </button>
+      </div>
+      {error || problem ? (
+        <p className="mt-1 text-[0.6875rem] leading-snug" style={{ color: "var(--danger)" }}>
+          {error ?? problem}
+        </p>
+      ) : note ? (
+        <p className="mt-1 text-[0.6875rem] leading-snug" style={{ color: "var(--accent)" }}>
+          {note}
+        </p>
+      ) : null}
+      {open ? <Scanner onCode={(c) => void look(c)} onClose={() => setOpen(false)} /> : null}
+    </div>
   );
 }

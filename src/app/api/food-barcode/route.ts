@@ -32,8 +32,10 @@ export async function GET(request: NextRequest) {
   if (!user) return NextResponse.json({ error: "Нужна авторизация" }, { status: 401 });
 
   // Отклонённый модерацией — как будто его нет: можно добавить заново.
+  // peek=1 — только посмотреть (админ привязывает штрихкод): ничего не сохраняем.
+  const peek = request.nextUrl.searchParams.get("peek") === "1";
   const own = await supabase.from("food_products").select("*").eq("barcode", code).neq("status", "rejected").maybeSingle();
-  if (own.data) return NextResponse.json({ product: own.data as Product });
+  if (own.data) return NextResponse.json({ product: own.data as Product, own: true });
 
   const res = await fetch(
     `https://world.openfoodfacts.org/api/v2/product/${code}.json?fields=product_name,product_name_ru,brands,nutriments,product_quantity,product_quantity_unit,quantity,image_front_small_url,image_front_url`,
@@ -61,6 +63,7 @@ export async function GET(request: NextRequest) {
     // У напитков объём в мл: «1 l», «500 ml».
     unit: /^(ml|l|cl|dl)$/i.test(String(p.product_quantity_unit ?? "")) || /\d\s*(ml|мл|l|л)(?![a-zа-я])/i.test(String(p.quantity ?? "")) ? "ml" : null,
   };
+  if (peek) return NextResponse.json({ product });
   await supabase.rpc("food_product_add", {
     p_barcode: product.barcode, p_name: product.name, p_brand: product.brand, p_kcal: product.kcal, p_protein: product.protein,
     p_fat: product.fat, p_carbs: product.carbs, p_pack_grams: product.pack_grams, p_source: "off",

@@ -12,7 +12,7 @@ import { defaultPortion, guessUnit, ul, unitOf, type Unit } from "@/lib/food/uni
 type Phase = "scan" | "look" | "found" | "unknown" | "form" | "reading";
 
 /** Сканер на весь экран: камера, рамка, ручной ввод цифр. */
-function Scanner({ onCode, onClose }: { onCode: (code: string) => void; onClose: () => void }) {
+export function Scanner({ onCode, onClose }: { onCode: (code: string) => void; onClose: () => void }) {
   const video = useRef<HTMLVideoElement | null>(null);
   const frame = useRef<HTMLDivElement | null>(null);
   const [problem, setProblem] = useState<string | null>(null);

@@ -1,8 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
-import { Icon } from "@/lib/icons";
 import { SettingsHeading } from "@/components/SettingsHeading";
 import { Button, Field, FieldGroup, Sheet, inputClass, inputStyle } from "@/components/ui";
 import { Chips, PREP, Row } from "@/components/tasks/WellnessSettings";
@@ -14,31 +12,6 @@ const SLEEP = "#6366f1";
  * Сон в Yumdots: время отбоя и напоминания «скоро спать» / «пора спать».
  * Данные прежние (wellness_settings) — переехал только экран из Todots.
  */
-export function SleepRow() {
-  const { settings } = useWellness();
-  if (!settings?.sleep_on) return null;
-  const todayIso = ((new Date().getDay() + 6) % 7) + 1;
-  const tonight = settings.sleep_days.includes(todayIso);
-  return (
-    <Link href="/food/settings" className="food-card mt-3 flex items-center gap-2.5 rounded-3xl px-3.5 py-3 transition active:scale-[0.99]">
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-white" style={{ background: SLEEP }}>
-        <Icon name="moon" size={19} />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-[0.9375rem] font-semibold">{tonight ? `Отбой в ${settings.sleep_at}` : "Сегодня без отбоя"}</span>
-        <span className="block text-[0.6875rem]" style={{ color: "var(--muted)" }}>
-          {tonight
-            ? settings.sleep_prep_min
-              ? `Напомню за ${settings.sleep_prep_min} мин отложить телефон`
-              : "Напомню, когда пора спать"
-            : `Напоминания ${daysLabel(settings.sleep_days)}`}
-        </span>
-      </span>
-      <Icon name="chevron-right" size={16} className="opacity-30" />
-    </Link>
-  );
-}
-
 export function SleepSettings() {
   const { settings, save } = useWellness();
   const [open, setOpen] = useState(false);

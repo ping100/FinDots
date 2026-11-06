@@ -55,7 +55,7 @@ function Row({ app, line, extra }: { app: OrbitApp; line: Line | null | undefine
         ) : line === null ? (
           <>
             <span className="block text-[0.75rem]" style={{ color: "var(--ink-2)" }}>
-              {app.name}
+              {app.label}
             </span>
             <span className="block text-[0.875rem] font-medium">Не удалось загрузить — откройте приложение</span>
           </>

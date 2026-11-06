@@ -6,6 +6,8 @@ export interface OrbitApp {
   id: string;
   href: string;
   name: string;
+  /** Подпись под шаром: что делает приложение, по-русски. */
+  label: string;
   what: string;
   icon: string;
   color: string;
@@ -62,7 +64,7 @@ export function Orbit({
                 <div className="orbit-upright">
                   <Link
                     href={app.href}
-                    aria-label={`${app.name} — ${app.what}`}
+                    aria-label={`${app.label} (${app.name})`}
                     className="orbit-link animate-orbit-in block h-full w-full"
                     style={{ animationDelay: `${delay + 120 + i * 130}ms` }}
                   >
@@ -75,7 +77,7 @@ export function Orbit({
                     <span
                       className="absolute left-1/2 top-full mt-1.5 flex -translate-x-1/2 flex-col items-center whitespace-nowrap leading-tight"
                     >
-                      <span className={`font-bold ${compact ? "text-[0.8125rem]" : "text-[0.9375rem]"}`}>{app.name}</span>
+                      <span className={`font-bold ${compact ? "text-[0.8125rem]" : "text-[0.9375rem]"}`}>{app.label}</span>
                       {rating && !compact ? (
                         <span
                           className="animate-fade flex items-center gap-0.5 text-[0.6875rem] font-semibold tabular-nums"

@@ -162,7 +162,7 @@ export function HomeApps({ delay }: { delay: number }) {
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-[0.9375rem]">
-                    {app.name} <span style={{ color: "var(--muted)" }}>· {app.what}</span>
+                    {app.label} <span style={{ color: "var(--muted)" }}>· {app.name}</span>
                   </span>
                   <span className="mt-0.5 block text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
                     {last ? "Хотя бы одно приложение должно остаться" : app.hint}
@@ -190,7 +190,7 @@ export function HomeApps({ delay }: { delay: number }) {
             >
               <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: app.color }} />
               <span className="min-w-0 flex-1">
-                <span className="block text-[0.9375rem]">{app.name}</span>
+                <span className="block text-[0.9375rem]">{app.label}</span>
                 <span className="mt-0.5 block text-[0.6875rem] leading-snug" style={{ color: "var(--muted)" }}>
                   {app.summary}
                 </span>

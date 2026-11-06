@@ -803,8 +803,10 @@ function Flower({ d, size, pick, late, life = false, wx = null }: BodyProps & { 
         const isOv = k === ov;
         // Возраст лепестка после овуляции: у каждого свой, чтобы сохли не разом.
         const age = lifeWait ? 0.85 : ageK > 0 ? clamp01(ageK * 1.5 - ((i * 7) % 10) * 0.05 - (past ? 0 : 0.1)) : 0;
-        const len = (78 + (isToday ? 18 : 0) + (isOv ? 16 : 0)) * k0 * o * wave * (1 - 0.32 * age);
-        const w = 15 * k0 * wide * (isToday ? 1.15 : isOv ? 1.25 : 1) * narrow * (1 - 0.25 * age);
+        // Будущие дни ещё не раскрылись: чем дальше день, тем лепесток меньше и уже.
+        const bud = !life && !past && !isToday ? clamp01((k - day) / 4) : 0;
+        const len = (78 + (isToday ? 18 : 0) + (isOv ? 16 : 0)) * k0 * o * wave * (1 - 0.32 * age) * (1 - 0.3 * bud);
+        const w = 15 * k0 * wide * (isToday ? 1.15 : isOv ? 1.25 : 1) * narrow * (1 - 0.25 * age) * (1 - 0.4 * bud);
         const twist = age * 0.9;
         // Пока бутон раскрывается, лепестки ещё закручены спиралью.
         const a = ((k - 0.5) / N) * 360 + curlT * 28 * g + sway + (1 - growK) * 40;

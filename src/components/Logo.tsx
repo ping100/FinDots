@@ -1,8 +1,9 @@
 import { useId } from "react";
 
 /**
- * Знак Dots — три кружка, по одному на приложение: зелёный — Findots,
- * синий — Todots, розовый — FemDots. Цвета зашиты, а не берутся из темы:
+ * Знак Dots — четыре кружка ромбом, по одному на приложение, как на
+ * главной: зелёный сверху — Findots, синий справа — Todots, розовый
+ * снизу — FemDots, оранжевый слева — Yumdots. Цвета зашиты, а не берутся из темы:
  * логотип должен оставаться одним и тем же и в светлой, и в тёмной.
  * Кружки объёмные: перелив от светлого блика сверху слева к тени снизу
  * справа. id градиентов свои у каждого знака (useId), чтобы несколько
@@ -22,10 +23,12 @@ import { useId } from "react";
 // дыхания в 1,3 с тот же сдвиг незаметен и кружки гаснут разом.
 // slow — задержки для долгой сборки на главной: там знак — главный герой
 // экрана, и каждый кружок успевает прилететь сам по себе.
+// dx/dy — откуда кружок прилетает при сборке: из центра ромба (50, 46).
 const DOTS = [
-  { app: "money", cx: 50, cy: 29.3, hi: "#86efac", color: "#22c55e", lo: "#15803d", dx: 0, dy: 22, delay: 0, slow: 0, wait: 0 },
-  { app: "tasks", cx: 31.8, cy: 62.5, hi: "#bfdbfe", color: "#60a5fa", lo: "#1d4ed8", dx: 18.2, dy: -11.1, delay: 90, slow: 170, wait: 210 },
-  { app: "fem", cx: 68.2, cy: 62.5, hi: "#fbcfe8", color: "#ec4899", lo: "#be185d", dx: -18.2, dy: -11.1, delay: 180, slow: 340, wait: 420 },
+  { app: "money", cx: 50, cy: 22, hi: "#86efac", color: "#22c55e", lo: "#15803d", dx: 0, dy: 24, delay: 0, slow: 0, wait: 0 },
+  { app: "tasks", cx: 74, cy: 46, hi: "#bfdbfe", color: "#60a5fa", lo: "#1d4ed8", dx: -24, dy: 0, delay: 90, slow: 170, wait: 210 },
+  { app: "fem", cx: 50, cy: 70, hi: "#fbcfe8", color: "#ec4899", lo: "#be185d", dx: 0, dy: -24, delay: 180, slow: 340, wait: 420 },
+  { app: "food", cx: 26, cy: 46, hi: "#fed7aa", color: "#f97316", lo: "#c2410c", dx: 24, dy: 0, delay: 270, slow: 510, wait: 630 },
 ] as const;
 
 /** Приглушённый кружок чужого приложения — виден и на светлом, и на тёмном. */
@@ -43,7 +46,7 @@ export function Logo({
   animated?: boolean | "long";
   breathing?: boolean;
   /** Знак внутри приложения: его кружок цветной, остальные приглушены. */
-  focus?: "money" | "tasks" | "fem";
+  focus?: "money" | "tasks" | "fem" | "food";
 }) {
   const uid = useId().replace(/:/g, "");
   return (
@@ -51,7 +54,7 @@ export function Logo({
     <svg
       width={size}
       height={size}
-      viewBox="17.5 13.4 65 65"
+      viewBox="11 7 78 78"
       role="img"
       aria-label="Dots"
       className={animated === "long" ? "animate-logo-spin" : undefined}

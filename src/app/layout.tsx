@@ -26,9 +26,9 @@ const onest = Onest({
   variable: "--font-onest",
 });
 
-const TITLE = "Dots — деньги и задачи";
+const TITLE = "Dots — финансы, дела, цикл и калории";
 // Это же — подпись под ссылкой в мессенджерах: коротко, что внутри.
-const DESCRIPTION = "Личные финансы и список дел под одним входом: сколько можно потратить сегодня и что сегодня сделать";
+const DESCRIPTION = "Учёт средств, список дел, женский календарь и учёт калорий под одним входом";
 
 export const metadata: Metadata = {
   // Без metadataBase относительные пути в og остаются относительными, а
@@ -49,13 +49,13 @@ export const metadata: Metadata = {
     url: "/",
     // Новое имя файла, а не замена старого: мессенджеры надолго запоминают
     // картинку по адресу и показывали бы прежнюю, с «Findots».
-    images: [{ url: "/og-dots.png", width: 1200, height: 630, alt: "Dots — деньги и задачи" }],
+    images: [{ url: "/og-dots-4.png", width: 1200, height: 630, alt: "Dots — финансы, дела, цикл и калории" }],
   },
   twitter: {
     card: "summary_large_image",
     title: TITLE,
     description: DESCRIPTION,
-    images: ["/og-dots.png"],
+    images: ["/og-dots-4.png"],
   },
 };
 

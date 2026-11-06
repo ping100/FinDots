@@ -1,7 +1,7 @@
 {
-  "name": "Dots — деньги и задачи",
+  "name": "Dots — финансы, дела, цикл и калории",
   "short_name": "Dots",
-  "description": "Личные финансы и список дел под одним входом",
+  "description": "Учёт средств, список дел, женский календарь и учёт калорий под одним входом",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -43,8 +43,8 @@
       ]
     },
     {
-      "name": "Деньги",
-      "short_name": "Деньги",
+      "name": "Учёт средств",
+      "short_name": "Финансы",
       "url": "/money",
       "icons": [
         {
@@ -55,9 +55,21 @@
       ]
     },
     {
-      "name": "Задачи",
-      "short_name": "Задачи",
+      "name": "Список дел",
+      "short_name": "Дела",
       "url": "/tasks",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Учёт калорий",
+      "short_name": "Калории",
+      "url": "/food",
       "icons": [
         {
           "src": "/icons/icon-192.png",

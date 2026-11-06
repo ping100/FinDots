@@ -19,10 +19,10 @@ const LIST_TABS: { id: ListTab; label: string }[] = [
   { id: "products", label: "Продукты" },
 ];
 
-type Step = "pick" | "text" | "manual" | "busy" | "review" | "barcode" | "product";
+type Step = "pick" | "find" | "text" | "manual" | "busy" | "review" | "barcode" | "product";
 
 /** Сжать фото до ~1024 px по длинной стороне: нейросети хватает, трафика меньше. */
-async function shrink(file: File): Promise<string> {
+export async function shrink(file: File): Promise<string> {
   const url = URL.createObjectURL(file);
   try {
     const img = await new Promise<HTMLImageElement>((ok, fail) => {
@@ -41,6 +41,9 @@ async function shrink(file: File): Promise<string> {
     URL.revokeObjectURL(url);
   }
 }
+
+/** «Вы часто едите на обед». */
+const MEAL_ON: Record<Meal, string> = { breakfast: "на завтрак", lunch: "на обед", dinner: "на ужин", snack: "на перекус" };
 
 const num = (s: string) => {
   const n = Number(s.replace(",", ".").replace(/\s/g, ""));
@@ -94,6 +97,12 @@ export function AddFood({ open, day, meal: startMeal, onClose, onSaved }: { open
     if (tab === "recent") return all.sort((a, b) => b.last.localeCompare(a.last)).slice(0, 40);
     return all.sort((a, b) => b.inMeal - a.inMeal || b.times - a.times || b.last.localeCompare(a.last)).slice(0, 40);
   }, [entries, meal, tab]);
+
+  // На первом экране — пять самых частых в этот приём пищи.
+  const often = useMemo(
+    () => ownDishes(entries, meal).filter((d) => d.inMeal > 0).sort((a, b) => b.inMeal - a.inMeal || b.times - a.times || b.last.localeCompare(a.last)).slice(0, 5),
+    [entries, meal],
+  );
 
   /** Добавить в список, не уходя из выбора; источник — по первому блюду. */
   const addItem = (it: DraftItem, src: Source) => {
@@ -167,7 +176,7 @@ export function AddFood({ open, day, meal: startMeal, onClose, onSaved }: { open
   };
 
   const sum = totals(items);
-  const title = step === "review" ? "Проверьте, что получилось" : step === "text" ? "Опишите словами" : step === "manual" ? "Вручную" : step === "barcode" ? "Штрихкод" : step === "product" ? (chosen && unitOf(chosen) === "ml" ? "Сколько выпили" : "Сколько съели") : "Что вы съели?";
+  const title = step === "review" ? "Проверьте, что получилось" : step === "text" ? "Опишите словами" : step === "manual" ? "Вручную" : step === "barcode" ? "Штрихкод" : step === "product" ? (chosen && unitOf(chosen) === "ml" ? "Сколько выпили" : "Сколько съели") : step === "find" ? "Найти блюдо" : "Что вы съели?";
 
   return (
     <Sheet
@@ -191,7 +200,7 @@ export function AddFood({ open, day, meal: startMeal, onClose, onSaved }: { open
               {saving ? "Сохраняю…" : dup && dupOk ? "Да, записать ещё раз" : `Сохранить · ${Math.round(sum.kcal)} ккал`}
             </Button>
           </div>
-        ) : step === "pick" && items.length ? (
+        ) : (step === "pick" || step === "find") && items.length ? (
           <div className="pb-2">
             <Button onClick={() => setStep("review")}>
               Готово · {items.length} · {Math.round(sum.kcal)} ккал
@@ -224,10 +233,13 @@ export function AddFood({ open, day, meal: startMeal, onClose, onSaved }: { open
 
       <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => void onPhoto(e.target.files?.[0])} />
 
-      {step === "pick" ? (
+      {step === "find" ? (
         <label className="mb-2.5 flex items-center gap-2 rounded-2xl px-3.5" style={{ background: "var(--surface-2)" }}>
-          <Icon name="search" size={17} style={{ color: "var(--muted)" }} />
+          <button onClick={() => (setQuery(""), setStep("pick"))} aria-label="Назад" className="-ml-1.5 flex h-8 w-8 items-center justify-center rounded-full" style={{ color: "var(--muted)" }}>
+            <Icon name="chevron-left" size={18} />
+          </button>
           <input
+            autoFocus
             enterKeyHint="search"
             className="min-w-0 flex-1 bg-transparent py-3 text-[0.9375rem] outline-none"
             value={query}
@@ -244,7 +256,7 @@ export function AddFood({ open, day, meal: startMeal, onClose, onSaved }: { open
         </label>
       ) : null}
 
-      {step === "pick" && query.trim() ? (
+      {step === "find" && query.trim() ? (
         <FoodSearch
           query={query}
           entries={entries}
@@ -266,17 +278,47 @@ export function AddFood({ open, day, meal: startMeal, onClose, onSaved }: { open
         />
       ) : null}
 
-      {step === "pick" && !query.trim() ? (
+      {step === "pick" ? (
         <div className="pb-3">
-          {/* Способы добавить — одним рядом, чтобы список ниже было видно. */}
-          <div className="grid grid-cols-4 gap-2">
-            <Action emoji="📷" label="Фото" hot onClick={() => fileRef.current?.click()} />
-            <Action emoji="🏷️" label="Штрихкод" onClick={() => setStep("barcode")} />
-            <Action emoji="💬" label="Словами" onClick={() => setStep("text")} />
-            <Action emoji="✏️" label="Вручную" onClick={() => setStep("manual")} />
+          {/* Сначала — как записать: крупно, чтобы не искать глазами. */}
+          <div className="grid grid-cols-2 gap-2">
+            <Tile big emoji="📷" label="Сфотографировать тарелку" hint="Посчитаю калории по фото" onClick={() => fileRef.current?.click()} />
+            <Tile emoji="🔍" label="Найти" hint="Продукты и ваши блюда" onClick={() => setStep("find")} />
+            <Tile emoji="🏷️" label="Штрихкод" hint="С упаковки" onClick={() => setStep("barcode")} />
+            <Tile emoji="💬" label="Словами" hint="«Гречка и котлета»" onClick={() => setStep("text")} />
+            <Tile emoji="✏️" label="Вручную" hint="Свои цифры" onClick={() => setStep("manual")} />
           </div>
 
-          <div className="mt-3.5 flex gap-1 rounded-2xl p-1" style={{ background: "var(--surface-2)" }} role="tablist">
+          {often.length ? (
+            <>
+              <p className="mb-0.5 mt-4 text-[0.75rem] font-semibold uppercase tracking-wide" style={{ color: "var(--muted)" }}>
+                Вы часто едите {MEAL_ON[meal]}
+              </p>
+              <ul>
+                {often.map((d) => (
+                  <DishRow
+                    key={d.item.name}
+                    d={d}
+                    pic={pics.get(norm(d.item.name))}
+                    onOpen={() => {
+                      addItem(d.item, "repeat");
+                      setStep("review");
+                    }}
+                    onAdd={() => addItem(d.item, "repeat")}
+                  />
+                ))}
+              </ul>
+              <button onClick={() => setStep("find")} className="mt-1 w-full rounded-2xl py-2.5 text-[0.8125rem] font-medium" style={{ background: "var(--surface-2)" }}>
+                Все мои блюда и продукты
+              </button>
+            </>
+          ) : null}
+        </div>
+      ) : null}
+
+      {step === "find" && !query.trim() ? (
+        <div className="pb-3">
+          <div className="flex gap-1 rounded-2xl p-1" style={{ background: "var(--surface-2)" }} role="tablist">
             {LIST_TABS.map((t) => (
               <button
                 key={t.id}
@@ -291,7 +333,7 @@ export function AddFood({ open, day, meal: startMeal, onClose, onSaved }: { open
             ))}
           </div>
 
-          <div className="mt-1 min-h-[40vh]">
+          <div className="mt-1 min-h-[50vh]">
             {tab !== "products" ? (
               dishes.length ? (
                 <ul>
@@ -471,19 +513,24 @@ export function AddFood({ open, day, meal: startMeal, onClose, onSaved }: { open
   );
 }
 
-function Action({ emoji, label, hot, onClick }: { emoji: string; label: string; hot?: boolean; onClick: () => void }) {
+function Tile({ emoji, label, hint, big, onClick }: { emoji: string; label: string; hint: string; big?: boolean; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="flex flex-col items-center gap-0.5 rounded-2xl py-2.5 text-[0.75rem] font-medium transition active:scale-95"
+      className={`flex flex-col justify-between rounded-3xl p-3.5 text-left transition active:scale-[0.97] ${big ? "col-span-2 min-h-[104px]" : "min-h-[92px]"}`}
       style={
-        hot
-          ? { background: "linear-gradient(135deg, #fb923c, #f97316 45%, #ef4444)", color: "#fff", boxShadow: "0 8px 20px -10px rgba(249,115,22,.8)" }
+        big
+          ? { background: "linear-gradient(135deg, #fb923c, #f97316 45%, #ef4444)", color: "#fff", boxShadow: "0 10px 24px -12px rgba(249,115,22,.9)" }
           : { background: "var(--surface-2)" }
       }
     >
-      <span className="text-[1.375rem] leading-none">{emoji}</span>
-      {label}
+      <span className={big ? "text-[1.875rem] leading-none" : "text-[1.5rem] leading-none"}>{emoji}</span>
+      <span>
+        <span className={`block font-semibold ${big ? "text-[1rem]" : "text-[0.9375rem]"}`}>{label}</span>
+        <span className="block text-[0.6875rem]" style={{ color: big ? "rgba(255,255,255,.85)" : "var(--muted)" }}>
+          {hint}
+        </span>
+      </span>
     </button>
   );
 }
@@ -497,7 +544,7 @@ function Empty({ text }: { text: string }) {
 }
 
 /** Блюдо в списке перед сохранением: название и вес правятся, калории пересчитываются. */
-function ItemRow({ item, onChange, onRemove }: { item: DraftItem; onChange: (it: DraftItem) => void; onRemove: () => void }) {
+export function ItemRow({ item, onChange, onRemove }: { item: DraftItem; onChange: (it: DraftItem) => void; onRemove: () => void }) {
   const [grams, setGrams] = useState(item.grams ? String(item.grams) : "");
   useEffect(() => setGrams(item.grams ? String(item.grams) : ""), [item.grams]);
   return (

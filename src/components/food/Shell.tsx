@@ -15,6 +15,7 @@ import { AddFood } from "./AddFood";
 
 const TABS = [
   { href: "/food", label: "Сегодня", icon: "food" },
+  { href: "/food/chat", label: "Чат", icon: "chat" },
   { href: "/food/activity", label: "Активность", icon: "flame" },
   { href: "/food/stats", label: "Итоги", icon: "chart" },
   { href: "/food/settings", label: "Настройки", icon: "gear" },
@@ -110,7 +111,7 @@ export function FoodShell({ children }: { children: ReactNode }) {
                   <Icon name={tab.icon} size={21} />
                   <span className="text-[0.625rem]">{tab.label}</span>
                 </Link>
-                {index === 0 ? (
+                {index === 1 ? (
                   <button
                     onClick={() => openAdd()}
                     aria-label="Добавить еду"

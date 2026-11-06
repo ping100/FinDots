@@ -1342,3 +1342,11 @@ input[type="date"]::-webkit-date-and-time-value {
 .barcode-line {
   animation: barcode-line 1.8s ease-in-out infinite;
 }
+
+/* Горизонтальная лента без полосы прокрутки (подсказки в чате Yumdots). */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

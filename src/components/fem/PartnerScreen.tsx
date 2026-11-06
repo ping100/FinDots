@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import { today } from "@/lib/tasks/dates";
 import { Icon } from "@/lib/icons";
-import { FEM_GRADIENT, MOODS, PHASE_COLOR, SYMPTOMS, cycleInfo, upcomingFertile, type Phase } from "@/lib/fem/cycle";
+import { FEM_GRADIENT, MOODS, PHASE_COLOR, SYMPTOMS, cycleInfo, endOverdue, upcomingFertile, withAssumedEnd, type Phase } from "@/lib/fem/cycle";
 import { range, short } from "@/lib/fem/format";
 import { Sheet, Switch } from "@/components/ui";
 import { useFem } from "./DataProvider";
@@ -77,7 +77,8 @@ const PARTNER_PHASE: Record<Phase, { title: string; about: string; tips: string[
  * она поделилась; отключиться можно в любой момент.
  */
 export function PartnerScreen() {
-  const { partner, leavePartner, setPartnerRemind, setPartnerHint, setPartnerNudge, profile, saveProfile, signals, userId, settings, proposeIntimacy } = useFem();
+  const { partner, leavePartner, setPartnerRemind, setPartnerHint, setPartnerNudge, profile, saveProfile, signals, userId, settings, proposeIntimacy, sendSignal } = useFem();
+  const [askedMark, setAskedMark] = useState(false);
   const now = today();
   const [confirm, setConfirm] = useState(false);
   const [prefs, setPrefs] = useState(false);
@@ -91,19 +92,17 @@ export function PartnerScreen() {
     window.scrollTo({ top: 0 });
   };
   const unanswered = unread(signals, userId).length;
-  const info = useMemo(
-    () =>
-      partner
-        ? cycleInfo(
-            partner.periods,
-            { cycle_length: partner.cycle_length, period_length: partner.period_length },
-            now,
-            // Способ контрацепции партнёру не виден — только «гормональная или нет».
-            { lhDays: partner.lh_days ?? [], mucusDays: partner.mucus_days ?? [], method: partner.hormonal ? "pop" : "none" },
-          )
-        : null,
-    [partner, now],
-  );
+  // Она могла забыть отметить конец месячных: если обычная длина уже прошла,
+  // считаем их закончившимися в её обычный срок и честно об этом говорим.
+  const { info, assumedLen } = useMemo(() => {
+    if (!partner) return { info: null, assumedLen: 0 };
+    const base = { cycle_length: partner.cycle_length, period_length: partner.period_length };
+    // Способ контрацепции партнёру не виден — только «гормональная или нет».
+    const sig = { lhDays: partner.lh_days ?? [], mucusDays: partner.mucus_days ?? [], method: partner.hormonal ? ("pop" as const) : ("none" as const) };
+    const raw = cycleInfo(partner.periods, base, now, sig);
+    if (!endOverdue(raw)) return { info: raw, assumedLen: 0 };
+    return { info: cycleInfo(withAssumedEnd(partner.periods, raw.periodLength, now), base, now, sig), assumedLen: raw.periodLength };
+  }, [partner, now]);
   if (!partner || !info) return null;
   const name = partner.owner_name;
   const phase = info.phase ? PARTNER_PHASE[info.phase] : null;
@@ -200,6 +199,26 @@ export function PartnerScreen() {
       ) : (
       <>
       {info.phase && !partner.paused ? <DayHero phase={info.phase} day={now} who="partner" goal={partner.goal} /> : null}
+
+      {assumedLen && !partner.paused ? (
+        <div className="fem-card mb-3 rounded-3xl px-4 py-3.5">
+          <p className="text-[0.875rem] font-semibold">🌸 Месячные, скорее всего, уже закончились</p>
+          <p className="mt-0.5 text-[0.75rem] leading-snug" style={{ color: "var(--muted)" }}>
+            Обычно у {name} они идут {assumedLen} {plural(assumedLen, "день", "дня", "дней")}, а конец она пока не отметила. Показываем так, будто закончились в обычный срок.
+          </p>
+          <button
+            disabled={askedMark}
+            onClick={() => {
+              setAskedMark(true);
+              void sendSignal("msg", "Напоминаю: отметь, пожалуйста, закончились ли месячные 🌸 Так прогноз будет точнее").catch(() => setAskedMark(false));
+            }}
+            className="mt-2.5 w-full rounded-2xl py-2.5 text-[0.8125rem] font-semibold disabled:opacity-70"
+            style={askedMark ? { background: "var(--surface-2)", color: "var(--muted)" } : { background: FEM_GRADIENT, color: "#fff" }}
+          >
+            {askedMark ? "✓ Напомнили во «Вместе»" : "Деликатно напомнить ей отметить"}
+          </button>
+        </div>
+      ) : null}
 
       <TogetherStrip name={name} onOpen={() => pick("together")} className="mb-3" />
 

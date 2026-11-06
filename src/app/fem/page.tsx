@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Icon } from "@/lib/icons";
 import { addDays, today } from "@/lib/tasks/dates";
-import { FEM_GRADIENT, PHASE_COLOR, PHASE_TEXT, cycleHealth, cycleInfo, signalsFrom, upcomingFertile } from "@/lib/fem/cycle";
+import { FEM_GRADIENT, PHASE_COLOR, PHASE_TEXT, cycleHealth, cycleInfo, endOverdue, signalsFrom, upcomingFertile } from "@/lib/fem/cycle";
 import { TogetherStrip } from "@/components/fem/Together";
 import { ForecastCard, PregnancyCheck } from "@/components/fem/Insights";
 import { PartnerJoin } from "@/components/fem/PartnerShare";
@@ -34,6 +34,25 @@ export default function FemToday() {
   const goal = settings!.goal;
   const method = settings!.method;
   const [busy, setBusy] = useState(false);
+  // «Ещё идут» — не спрашивать до завтра. Ключ по отметке и дню.
+  const askKey = info.current ? `fem-end-ask-${info.current.id}` : "";
+  const [skipped, setSkipped] = useState<string | null>(() => {
+    try {
+      return askKey ? localStorage.getItem(askKey) : null;
+    } catch {
+      return null;
+    }
+  });
+  const askEnd = endOverdue(info) && !info.pregnancy && skipped !== now;
+  const endOn = async (day: string) => {
+    if (!info.current || busy) return;
+    setBusy(true);
+    try {
+      await endPeriod(info.current.id, day);
+    } finally {
+      setBusy(false);
+    }
+  };
   const phase = info.phase ? PHASE_TEXT[info.phase] : null;
   // Окно этого цикла уже прошло — показываем ближайшее, следующего.
   const fw = useMemo(() => upcomingFertile(info, now), [info, now]);
@@ -67,7 +86,43 @@ export default function FemToday() {
           </p>
         ) : null}
 
-        {info.pregnancy ? null : (
+        {askEnd && info.current ? (
+          <div className="mt-4 rounded-2xl px-4 py-3.5" style={{ background: "var(--surface-2)" }}>
+            <p className="text-[0.9375rem] font-semibold">{info.hormonal ? "Кровотечение ещё идёт?" : "Месячные ещё идут?"}</p>
+            <p className="mt-0.5 text-[0.75rem] leading-snug" style={{ color: "var(--muted)" }}>
+              Обычно у вас {info.periodLength} {plural(info.periodLength, "день", "дня", "дней")}, а сегодня уже {info.cycleDay}-й. Если закончились, отметьте когда — прогноз станет точнее.
+            </p>
+            <div className="mt-2.5 grid grid-cols-2 gap-2">
+              {addDays(now, -1) >= info.current.start_date ? (
+                <button disabled={busy} onClick={() => void endOn(addDays(now, -1))} className="rounded-xl py-2.5 text-[0.8125rem] font-semibold text-white disabled:opacity-60" style={{ background: FEM_GRADIENT }}>
+                  Закончились вчера
+                </button>
+              ) : null}
+              <button disabled={busy} onClick={() => void endOn(now)} className="rounded-xl py-2.5 text-[0.8125rem] font-semibold disabled:opacity-60" style={{ background: "var(--surface)" }}>
+                Сегодня последний день
+              </button>
+              <Link href="/fem/calendar" replace className="flex items-center justify-center rounded-xl py-2.5 text-[0.8125rem] font-medium" style={{ background: "var(--surface)" }}>
+                Другой день
+              </Link>
+              <button
+                onClick={() => {
+                  setSkipped(now);
+                  try {
+                    localStorage.setItem(askKey, now);
+                  } catch {
+                    // Без хранилища спросим ещё раз при следующем открытии — не страшно.
+                  }
+                }}
+                className="rounded-xl py-2.5 text-[0.8125rem] font-medium"
+                style={{ background: "var(--surface)", color: "var(--muted)" }}
+              >
+                Ещё идут
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {info.pregnancy || askEnd ? null : (
         <button
           onClick={(e) => {
             if (!info.current) {
@@ -94,7 +149,7 @@ export default function FemToday() {
               : "Начались месячные"}
         </button>
         )}
-        {info.pregnancy ? null : (
+        {info.pregnancy || askEnd ? null : (
         <p className="mt-2 text-center text-[0.6875rem]" style={{ color: "var(--muted)" }}>
           Другой день — отметьте в{" "}
           <Link href="/fem/calendar" replace className="underline">

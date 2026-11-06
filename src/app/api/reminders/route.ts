@@ -248,7 +248,7 @@ function dayLong(iso: string): string {
  * FemDots. В скрытом режиме на экране блокировки — ни слова о цикле:
  * телефон могут увидеть другие.
  */
-type FemKind = "period" | "fertile" | "pill" | "ring_out" | "ring_in" | "patch_change" | "patch_off" | "patch_on" | "injection";
+type FemKind = "period" | "period_end" | "fertile" | "pill" | "ring_out" | "ring_in" | "patch_change" | "patch_off" | "patch_on" | "injection";
 
 /** Кольцо, пластырь, укол — что сделать сегодня. */
 const METHOD_PUSH: Partial<Record<FemKind, { title: string; body: string }>> = {
@@ -274,6 +274,14 @@ function femPush(row: { kind: FemKind; mark: string; days_left: number; until_da
     return {
       title: "🌸 Скоро месячные",
       body: `Ожидаются ${when} — около ${dayLong(row.mark)}. Возьмите с собой всё нужное`,
+      url: "/fem",
+      tag,
+    };
+  }
+  if (row.kind === "period_end") {
+    return {
+      title: "🌸 Месячные закончились?",
+      body: `Обычно они идут у вас ${row.days_left} дн., а конец пока не отмечен. Отметьте в один тап — прогноз станет точнее`,
       url: "/fem",
       tag,
     };

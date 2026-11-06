@@ -749,3 +749,25 @@ export function upcomingFertile(info: CycleInfo, now: string) {
   const to = addDays(info.fertileEnd, shift);
   return { from, to, ovulation: addDays(info.ovulation, shift), now: now >= from && now <= to, shifted: shift > 0 };
 }
+
+/**
+ * Конец месячных, скорее всего, забыли отметить: обычная длина уже прошла,
+ * а отметка всё ещё открыта.
+ */
+export function endOverdue(info: CycleInfo): boolean {
+  return !!info.current && !info.current.end_date && (info.cycleDay ?? 0) > info.periodLength;
+}
+
+/**
+ * Для партнёра: незакрытые месячные, которые идут дольше обычного, считаем
+ * закончившимися в её обычный срок. Так фаза и советы уже про следующую
+ * фазу, а не «7-й день месячных».
+ */
+export function withAssumedEnd(periods: FemPeriod[], periodLength: number, today: string): FemPeriod[] {
+  const list = sorted(periods).filter((p) => p.start_date <= today);
+  const last = list[list.length - 1];
+  if (!last || last.end_date) return periods;
+  if (daysBetween(last.start_date, today) + 1 <= periodLength) return periods;
+  const end = addDays(last.start_date, periodLength - 1);
+  return periods.map((p) => (p.id === last.id ? { ...p, end_date: end } : p));
+}

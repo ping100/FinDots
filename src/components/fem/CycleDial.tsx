@@ -562,7 +562,7 @@ function Flower({ d, size, pick, late, life = false, wx = null }: BodyProps & { 
                 <stop offset="0%" stop-color="#0f766e"/><stop offset="60%" stop-color="#14b8a6"/><stop offset="100%" stop-color="#99f6e4"/></linearGradient>`
             : `<linearGradient id="${uid}-${p}" x1="0" y1="1" x2="0" y2="0">
             <stop offset="0%" stop-color="${PHASE_COLOR[p]}"/>
-            <stop offset="100%" style="stop-color: color-mix(in srgb, ${PHASE_COLOR[p]} 68%, #fff)"/></linearGradient>`,
+            <stop offset="100%" style="stop-color: color-mix(in srgb, ${PHASE_COLOR[p]} 86%, #fff)"/></linearGradient>`,
         )
         .join("") +
       `<radialGradient id="${uid}-aura"><stop offset="0%" stop-color="${PHASE_COLOR.fertile}" stop-opacity=".5"/><stop offset="100%" stop-color="${PHASE_COLOR.fertile}" stop-opacity="0"/></radialGradient>
@@ -813,7 +813,8 @@ function Flower({ d, size, pick, late, life = false, wx = null }: BodyProps & { 
         if (lifeWait) fronts[i].setAttribute("fill", `url(#${uid}-${phaseOf(k)}-dry)`);
         else if (life && !waiting) fronts[i].setAttribute("fill", `url(#${uid}-${phaseOf(k)}${age > 0.4 ? "-dry" : ""})`);
         fronts[i].setAttribute("transform", tr);
-        fronts[i].setAttribute("opacity", String(lifeWait ? (isToday ? 0.75 : 0.45) : isToday || isOv ? 1 : past ? 1 : 0.5 + 0.12 * o));
+        // Будущие дни — чуть легче прошедших, но плотные: полупрозрачные было плохо видно.
+        fronts[i].setAttribute("opacity", String(lifeWait ? (isToday ? 0.85 : 0.6) : isToday || isOv ? 1 : past ? 1 : 0.95));
         fronts[i].setAttribute("stroke", isToday || isOv ? "#fff" : "rgba(255,255,255,0.5)");
         fronts[i].setAttribute("stroke-width", String((isToday ? 2.5 : isOv ? 1.8 : 0.6) * k0));
         veins[i].setAttribute("d", `M0 ${-len * 0.14} Q ${w * 0.18 + twist * w * 0.5} ${-len * 0.5} ${twist * w * 1.1} ${-len * 0.8}`);
@@ -824,7 +825,7 @@ function Flower({ d, size, pick, late, life = false, wx = null }: BodyProps & { 
         const ab = (k / N) * 360 + curlT * 34 * g + sway * 0.6;
         backs[i].setAttribute("d", age > 0 ? petalCurlD(len * 1.06 + 6 * k0, w * 1.25, twist * 0.7) : petalD(len * 1.06 + 6 * k0, w * 1.25));
         backs[i].setAttribute("transform", `translate(${C} ${C}) rotate(${ab}) translate(0 ${-R0 + 8 * k0})`);
-        backs[i].setAttribute("opacity", String((lifeWait ? 0.05 : past ? 0.24 : 0.1) * g));
+        backs[i].setAttribute("opacity", String((lifeWait ? 0.12 : past ? 0.55 : 0.42) * g));
         const rad = (a * Math.PI) / 180;
         const reach = R0 - 6 * k0 + len;
         tips[i] = { x: C + Math.sin(rad) * reach, y: C - Math.cos(rad) * reach, a };

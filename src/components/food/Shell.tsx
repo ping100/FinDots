@@ -18,7 +18,6 @@ const TABS = [
   { href: "/food/chat", label: "Чат", icon: "chat" },
   { href: "/food/activity", label: "Активность", icon: "flame" },
   { href: "/food/stats", label: "Итоги", icon: "chart" },
-  { href: "/food/settings", label: "Настройки", icon: "gear" },
 ];
 
 interface FoodUI {
@@ -141,6 +140,7 @@ export function FoodShell({ children }: { children: ReactNode }) {
 
 /** Шапка экранов Yumdots: заголовок и кружок «домой» к развилке Dots. */
 export function FoodHeader({ title, sub, action }: { title: string; sub?: string; action?: ReactNode }) {
+  const pathname = usePathname();
   return (
     <header className="flex items-center justify-between gap-3 py-3">
       <div className="min-w-0">
@@ -153,6 +153,17 @@ export function FoodHeader({ title, sub, action }: { title: string; sub?: string
       </div>
       <div className="flex shrink-0 items-center gap-2">
         {action}
+        {/* Настройки — шестерёнкой в шапке: внизу по два пункта с каждой стороны от «+». */}
+        {pathname !== "/food/settings" ? (
+          <Link
+            href="/food/settings"
+            aria-label="Настройки"
+            className="flex h-10 w-10 items-center justify-center rounded-full transition active:scale-95"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--muted)" }}
+          >
+            <Icon name="gear" size={18} />
+          </Link>
+        ) : null}
         <Link
           href="/"
           aria-label="На главную Dots"

@@ -13,6 +13,8 @@ export interface Profile {
   text_scale: "small" | "medium" | "large";
   /** Приветствие после регистрации уже показывали. */
   onboarding_seen: boolean;
+  /** Какие инструкции «Как пользоваться» уже показаны: money, tasks, fem, food. */
+  guides_seen?: string[];
   /** Разрешён ли ИИ-разбор бюджета — переключает администратор. */
   access_ai: boolean;
   /** Курсы валют подтягиваются сами (Нацбанк РК). */

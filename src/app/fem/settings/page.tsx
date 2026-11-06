@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { FemGuide, HowToRow } from "@/components/AppGuides";
 import { today } from "@/lib/tasks/dates";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -38,6 +39,7 @@ import { Sheet } from "@/components/ui";
 export default function FemSettingsPage() {
   const router = useRouter();
   const { profile, settings, periods, partner, saveSettings, saveProfile, deleteAll } = useFem();
+  const [guide, setGuide] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [checking, setChecking] = useState(false);
   const [updateNote, setUpdateNote] = useState<string | null>(null);
@@ -244,11 +246,13 @@ export default function FemSettingsPage() {
 
       <SettingsHeading>Помощь</SettingsHeading>
       <div className="fem-card mb-4 overflow-hidden rounded-2xl">
+        <HowToRow onClick={() => setGuide(true)} />
         <PrivacyLink from="/fem/settings" />
         <TermsLink from="/fem/settings" />
       </div>
       <SupportRow />
       <ReviewRow app="fem" />
+      <FemGuide open={guide} onClose={() => setGuide(false)} />
 
       <SettingsHeading>Приложения</SettingsHeading>
       <HomeLink />

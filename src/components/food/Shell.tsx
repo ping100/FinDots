@@ -1,6 +1,8 @@
 "use client";
 
 import { Fragment, createContext, useCallback, useContext, useState, type ReactNode } from "react";
+import { FoodGuide } from "../AppGuides";
+import { useFirstGuide } from "../Guide";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ConnectionStatus } from "@/components/ConnectionStatus";
@@ -38,7 +40,9 @@ export function useFoodUI(): FoodUI {
 /** Оболочка Yumdots: тёплая тема, нижняя панель с «+» посередине, окно добавления. */
 export function FoodShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { ready, error, pendingCount } = useFood();
+  const { ready, error, pendingCount, profile, saveProfile } = useFood();
+  // Инструкция — один раз, при первом входе в «Учёт калорий».
+  const guide = useFirstGuide("food", profile, saveProfile, ready);
   const [day, setDay] = useState(today);
   const [adding, setAdding] = useState<Meal | null>(null);
   const [note, setNote] = useState<{ text: string; undo?: () => void; key: number } | null>(null);
@@ -121,6 +125,7 @@ export function FoodShell({ children }: { children: ReactNode }) {
           </div>
         </nav>
 
+        <FoodGuide open={guide.open} onClose={guide.close} />
         <AddFood
           open={adding !== null}
           day={pathname === "/food" ? day : today()}

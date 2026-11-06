@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { FoodGuide, HowToRow } from "@/components/AppGuides";
 import { useRouter } from "next/navigation";
 import { THEMES, THEME_AUTO_HINT } from "@/lib/look";
 import { TEXT_SCALES } from "@/lib/textScale";
@@ -35,6 +36,7 @@ const parse = (s: string, min: number, max: number) => {
 export default function FoodSettingsPage() {
   const router = useRouter();
   const { profile, settings, saveSettings, saveProfile } = useFood();
+  const [guide, setGuide] = useState(false);
   const s: FoodSettings | null = settings;
   const [height, setHeight] = useState("");
   const [weight, setWeight] = useState("");
@@ -196,11 +198,13 @@ export default function FoodSettingsPage() {
 
       <SettingsHeading>Помощь</SettingsHeading>
       <Group>
+        <HowToRow onClick={() => setGuide(true)} />
         <PrivacyLink from="/food/settings" />
         <TermsLink from="/food/settings" />
       </Group>
       <SupportRow />
       <ReviewRow app="food" />
+      <FoodGuide open={guide} onClose={() => setGuide(false)} />
 
       <SettingsHeading>Приложения</SettingsHeading>
       <HomeLink />

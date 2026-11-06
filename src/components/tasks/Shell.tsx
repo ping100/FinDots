@@ -10,6 +10,8 @@ import {
   type ReactNode,
 } from "react";
 import Link from "next/link";
+import { TasksGuide } from "../AppGuides";
+import { useFirstGuide } from "../Guide";
 import { ConnectionStatus } from "@/components/ConnectionStatus";
 import { usePathname } from "next/navigation";
 import { Icon } from "@/lib/icons";
@@ -40,7 +42,9 @@ export function useAddAction(action: () => void) {
 
 export function Shell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { ready, error, pendingCount } = useStore();
+  const { ready, error, pendingCount, profile, saveProfile } = useStore();
+  // Инструкция — один раз, при первом входе в «Список дел».
+  const guide = useFirstGuide("tasks", profile, saveProfile, ready);
   const [addAction, setAddAction] = useState<(() => void) | null>(null);
 
   // Через функцию, иначе useState примет само действие за ленивый инициализатор.
@@ -117,6 +121,7 @@ export function Shell({ children }: { children: ReactNode }) {
           </div>
         </nav>
       </div>
+      <TasksGuide open={guide.open} onClose={guide.close} />
     </AddContext.Provider>
   );
 }

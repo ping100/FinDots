@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { HowToRow, TasksGuide } from "@/components/AppGuides";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/lib/icons";
 import { THEMES, THEME_AUTO_HINT } from "@/lib/look";
@@ -28,6 +29,7 @@ import { CURRENT_BUILD, applyUpdate, buildMoment, serverBuild } from "@/lib/upda
 export default function SettingsPage() {
   const router = useRouter();
   const { profile, categories, saveCategory, deleteCategory, saveProfile } = useStore();
+  const [guide, setGuide] = useState(false);
   const [editingCategory, setEditingCategory] = useState<TaskCategory | null | undefined>(undefined);
   const [checking, setChecking] = useState(false);
   const [updateNote, setUpdateNote] = useState<string | null>(null);
@@ -160,11 +162,13 @@ export default function SettingsPage() {
 
       <SettingsHeading>Помощь</SettingsHeading>
       <Group>
+        <HowToRow onClick={() => setGuide(true)} />
         <PrivacyLink from="/tasks/settings" />
         <TermsLink from="/tasks/settings" />
       </Group>
       <SupportRow />
       <ReviewRow app="tasks" />
+      <TasksGuide open={guide} onClose={() => setGuide(false)} />
 
       <SettingsHeading>Приложения</SettingsHeading>
       <HomeLink />

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { Profile } from "@/lib/types";
 import { Icon } from "@/lib/icons";
 import { Button, Sheet } from "./ui";
 
@@ -12,11 +13,11 @@ import { Button, Sheet } from "./ui";
  * картинкой втрое короче, чем словами.
  */
 
-type Step = { title: string; text: string; art: React.ReactNode };
+export type Step = { title: string; text: string; art: React.ReactNode };
 
 const DOT = { income: "#0d9488", wallet: "#3b82f6", expense: "#f59e0b", savings: "#0ea5e9" };
 
-function Dot({ color, icon, label, dim }: { color: string; icon: string; label?: string; dim?: boolean }) {
+export function Dot({ color, icon, label, dim }: { color: string; icon: string; label?: string; dim?: boolean }) {
   return (
     <span className="flex flex-col items-center gap-1" style={{ opacity: dim ? 0.35 : 1 }}>
       <span
@@ -35,7 +36,7 @@ function Dot({ color, icon, label, dim }: { color: string; icon: string; label?:
 }
 
 /** Стрелка «перетащи отсюда сюда» — тот же жест, что пальцем по экрану. */
-function Arrow() {
+export function Arrow() {
   return (
     <span className="flex items-center" style={{ color: "var(--muted)" }}>
       <svg width="44" height="18" viewBox="0 0 44 18" fill="none">
@@ -58,7 +59,7 @@ function Arrow() {
   );
 }
 
-function Scene({ children }: { children: React.ReactNode }) {
+export function Scene({ children }: { children: React.ReactNode }) {
   return (
     <div
       className="mb-4 flex min-h-[124px] items-center justify-center gap-3 rounded-2xl px-4 py-5"
@@ -161,6 +162,16 @@ const STEPS: Step[] = [
     ),
   },
   {
+    title: "Долги и платежи",
+    text: "В «Долгах» записывайте, кто должен вам и кому должны вы. Долг, который появился ещё до Dots, заносится как «Старый долг» — без списания с карты. У платежа в «Каждый месяц» можно указать день списания: он виден прямо под кружком.",
+    art: (
+      <Scene>
+        <Dot color="#ef4444" icon="family" label="долг" />
+        <Dot color={DOT.expense} icon="rent" label="до 15-го" />
+      </Scene>
+    ),
+  },
+  {
     title: "Установите как приложение",
     text: "Тогда Dots открывается сразу с экрана «Домой», без адресной строки браузера — быстрее и больше похоже на обычное приложение.",
     art: <InstallGuide />,
@@ -220,7 +231,41 @@ function InstallGuide() {
   );
 }
 
+/** Инструкция «Учёта средств» — после регистрации и в настройках. */
 export function Guide({ open, onClose }: { open: boolean; onClose: () => void }) {
+  return <GuideSheet open={open} onClose={onClose} steps={STEPS} />;
+}
+
+/** Последний шаг каждой инструкции — как поставить Dots на экран телефона. */
+export const INSTALL_STEP: Step = STEPS[STEPS.length - 1];
+
+/**
+ * Показать инструкцию приложения один раз — при первом входе. Что уже
+ * показано, хранится в профиле (guides_seen), а не в браузере: на другом
+ * телефоне второй раз не покажем.
+ */
+export function useFirstGuide(app: string, profile: Profile | null, saveProfile: (p: Partial<Profile>) => Promise<void>, ready = true) {
+  const [open, setOpen] = useState(false);
+  const done = useRef(false);
+  const seen = profile?.guides_seen ?? [];
+  const need = ready && !!profile && !seen.includes(app);
+  useEffect(() => {
+    if (!need || done.current) return;
+    // Чуть позже, чтобы экран успел появиться и не мигал под листом.
+    const t = setTimeout(() => {
+      done.current = true;
+      setOpen(true);
+    }, 800);
+    return () => clearTimeout(t);
+  }, [need]);
+  const close = () => {
+    setOpen(false);
+    if (profile && !seen.includes(app)) void saveProfile({ guides_seen: [...seen, app] }).catch(() => undefined);
+  };
+  return { open, show: () => setOpen(true), close };
+}
+
+export function GuideSheet({ open, onClose, steps: STEPS, title = "Как пользоваться" }: { open: boolean; onClose: () => void; steps: Step[]; title?: string }) {
   const [step, setStep] = useState(0);
 
   useEffect(() => {
@@ -233,7 +278,7 @@ export function Guide({ open, onClose }: { open: boolean; onClose: () => void })
   return (
     <Sheet
       open={open}
-      title={`Как пользоваться · ${step + 1} из ${STEPS.length}`}
+      title={`${title} · ${step + 1} из ${STEPS.length}`}
       onClose={onClose}
       footer={
         <div className="flex gap-2">

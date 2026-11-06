@@ -1,6 +1,8 @@
 "use client";
 
 import { ConnectionStatus } from "@/components/ConnectionStatus";
+import { FemGuide } from "../AppGuides";
+import { useFirstGuide } from "../Guide";
 import { useEffect, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -28,7 +30,9 @@ const TABS = [
  */
 export function FemShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { ready, error, settings, partner, signals, userId, pendingCount, share } = useFem();
+  const { ready, error, settings, partner, signals, userId, pendingCount, share, profile, saveProfile } = useFem();
+  // Инструкция — один раз, когда свой цикл уже настроен (не партнёру и не до знакомства).
+  const guide = useFirstGuide("fem", profile, saveProfile, ready && !!settings);
   // Есть партнёр — отдаём ему свою погоду для его цветка (только погоду, без города).
   const sharing = !!share?.accepted_at;
   useEffect(() => {
@@ -68,6 +72,7 @@ export function FemShell({ children }: { children: ReactNode }) {
       <div key={pathname} className="animate-page">
         {children}
       </div>
+      <FemGuide open={guide.open} onClose={guide.close} />
       <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 px-3">
         <div
           className="mx-auto flex max-w-md items-center justify-around rounded-[22px] px-1 py-1.5"

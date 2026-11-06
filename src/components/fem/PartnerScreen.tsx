@@ -204,7 +204,7 @@ export function PartnerScreen() {
         <div className="fem-card mb-3 rounded-3xl px-4 py-3.5">
           <p className="text-[0.875rem] font-semibold">🌸 Месячные, скорее всего, уже закончились</p>
           <p className="mt-0.5 text-[0.75rem] leading-snug" style={{ color: "var(--muted)" }}>
-            Обычно у {name} они идут {assumedLen} {plural(assumedLen, "день", "дня", "дней")}, а конец она пока не отметила. Показываем так, будто закончились в обычный срок.
+            Обычно они идут {assumedLen} {plural(assumedLen, "день", "дня", "дней")}, а конец пока не отмечен. Показываем так, будто закончились в обычный срок. Как только она отметит, всё обновится.
           </p>
           <button
             disabled={askedMark}

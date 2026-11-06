@@ -595,6 +595,25 @@ export function FemProvider({ children }: { children: ReactNode }) {
     if (!res.error) setSignals((res.data ?? []) as FemSignal[]);
   }, [supabase]);
 
+  // Её цикл у партнёра: обновляем, когда он вернулся в приложение, и раз в
+  // 2 минуты, пока экран открыт, — иначе её свежая отметка (например, конец
+  // месячных) видна только после перезапуска.
+  const watching = !!partner;
+  useEffect(() => {
+    if (!ready || !watching) return;
+    const refresh = () => {
+      if (document.visibilityState === "visible") void reloadShares().catch(() => undefined);
+    };
+    document.addEventListener("visibilitychange", refresh);
+    window.addEventListener("focus", refresh);
+    const timer = setInterval(refresh, 120_000);
+    return () => {
+      document.removeEventListener("visibilitychange", refresh);
+      window.removeEventListener("focus", refresh);
+      clearInterval(timer);
+    };
+  }, [ready, watching, reloadShares]);
+
   // Сигналы пары: при входе и раз в 30 секунд, пока экран открыт.
   const paired = !!partner || !!share?.partner_name;
   useEffect(() => {
